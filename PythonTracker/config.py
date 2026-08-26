@@ -2,8 +2,9 @@
 
 # 카메라
 CAMERA_INDEX = 0  # OpenCV 카메라 인덱스
-FRAME_WIDTH = 640
-FRAME_HEIGHT = 480
+# Intel Mac 실측(2026-08-26): 640x480에서 손 검출 중 ~15Hz로 하락 -> 480x360 적용 (docs/06 §2)
+FRAME_WIDTH = 480
+FRAME_HEIGHT = 360
 
 # UDP 송신 대상 (docs/02_protocol.md 준수)
 UDP_IP = "127.0.0.1"

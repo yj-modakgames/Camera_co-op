@@ -177,6 +177,8 @@ def main():
 
             for hand_landmarks, handedness_info in zip(hand_landmarks_list, handedness_list):
                 handedness = handedness_info[0].category_name  # "Left" | "Right"
+                # 셀피 flip 후 MediaPipe 판정은 실제 손과 반대 -> 반전 (docs/02 §2, 2026-08-26 Intel Mac 실측)
+                handedness = "Right" if handedness == "Left" else "Left"
                 seen_handedness.add(handedness)
                 hand_filters = filters.setdefault(handedness, {})
 

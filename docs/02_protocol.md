@@ -33,7 +33,7 @@
 | `seq` | uint | 0부터 증가 | 패킷 순번. 수신 측은 마지막 처리 seq 이하인 패킷을 폐기 (UDP 역전/중복 대응) |
 | `timestamp` | double | Unix epoch 초 | Python `time.time()`. 동일 머신이므로 Unity 측 epoch와 직접 비교해 레이턴시 측정 가능 |
 | `hands` | array | 0~2개 | 검출된 손. **미검출 시에도 빈 배열로 계속 전송** (heartbeat 겸용) |
-| `handedness` | string | `"Left"` \| `"Right"` | 사용자 기준 실제 손. 셀피 미러 처리 후의 MediaPipe 판정값 |
+| `handedness` | string | `"Left"` \| `"Right"` | 사용자 기준 실제 손. 셀피 미러(flip) 후 추론 시 MediaPipe 판정값이 실제 손과 반대로 나오므로 Python이 좌우 반전해 송신한다 (2026-08-26 Intel Mac·mediapipe 0.10.21 실물 검증. 다른 스택(mediapipe 1.0.1)에서는 재검증 필요) |
 | `landmarks` | float[63] | 아래 좌표계 | 21개 랜드마크 × (x,y,z) **평탄화 배열**. index i번 랜드마크 = `[i*3], [i*3+1], [i*3+2]` |
 | `pinch` | float | 비율 (무단위) | `dist2D(4,8) / dist2D(0,9)`. 손 크기로 정규화된 엄지-검지 거리 |
 
@@ -46,7 +46,7 @@
 ## 3. 좌표계 정의
 
 - **정규화 [0,1]**, 원점 = 화면 **좌상단**, x → 오른쪽, y → 아래쪽.
-- **셀피 미러 뷰 기준.** Python이 추론 전에 `cv2.flip(frame, 1)`을 적용한다. 따라서 사용자가 오른손을 오른쪽으로 움직이면 x가 증가하고, `handedness`도 사용자 실제 손과 일치한다.
+- **셀피 미러 뷰 기준.** Python이 추론 전에 `cv2.flip(frame, 1)`을 적용한다. 따라서 사용자가 오른손을 오른쪽으로 움직이면 x가 증가한다. `handedness`도 사용자 실제 손과 일치한다 (flip으로 반전된 MediaPipe 판정값을 Python이 다시 반전해 송신하기 때문. §2 참조).
 - z: MediaPipe 상대 깊이 (손목 기준, 음수 = 카메라 쪽). Phase 1에서는 사용하지 않고 전달만 한다.
 - Unity 화면 변환 (화면 원점 좌하단):
   ```

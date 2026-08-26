@@ -511,8 +511,8 @@ MonoBehaviour:
   receiver: {fileID: 1548678752}
   leftCursor: {fileID: 1010098474}
   rightCursor: {fileID: 16699913}
-  pinchThreshold: 0.3
-  pinchReleaseThreshold: 0.4
+  pinchThreshold: 0.4
+  pinchReleaseThreshold: 0.6
   pinchScale: 0.7
   leftColor: {r: 0.2, g: 0.6, b: 1, a: 1}
   rightColor: {r: 1, g: 0.6, b: 0.1, a: 1}
