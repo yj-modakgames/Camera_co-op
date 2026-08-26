@@ -55,7 +55,7 @@ main thread:  Update()에서 슬롯 확인 → JsonUtility 파싱 → seq 검사
 
 | 확장 | 붙는 위치 | 비고 |
 |---|---|---|
-| 드로잉 | `HandCursorController`의 public 이벤트 (`OnPinchStart/OnPinchMove/OnPinchEnd`) 구독 | 커서 컨트롤러는 수정 없이 이벤트 소비만 추가 |
+| 드로잉 | `HandCursorController`의 public 이벤트 (`OnPinchStart/OnPinchMove/OnPinchEnd`) 구독 | 커서 컨트롤러는 수정 없이 이벤트 소비만 추가 (단 lost 시 OnPinchEnd 발행 보장 수정 1건은 반영됨 — docs/07 §4) |
 | 멀티플레이 | Unity 내부에서 로컬 입력 → Netcode 동기화 계층 | UDP 프로토콜은 로컬 전용으로 유지. 원격 손 데이터는 별도 네트워크 계층이 담당 |
 | 제스처 추가 | Python `hand_tracker.py`의 pinch 계산부 옆에 병렬 추가, 프로토콜 `v` 버전 업 | `docs/02_protocol.md` 버전 정책 참조 |
 | 성능 개선 | Python LIVE_STREAM 전환, Unity 파싱 GC 절감 | 측정 후 필요 시에만 |

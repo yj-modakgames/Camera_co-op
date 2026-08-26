@@ -5,15 +5,18 @@
 ```
 Assets/_CameraCoop/
 ├── Scenes/HandTrackingTest.unity      # Phase 1 테스트 씬
+├── Scenes/DrawingTest.unity           # Phase 2 테스트 씬 (docs/07)
 ├── Scripts/
 │   ├── CameraCoop.Runtime.asmdef      # 런타임 어셈블리 (테스트 참조용)
 │   ├── Net/UdpHandReceiver.cs         # 수신 + 파싱 + lost 판정
 │   ├── Net/HandData.cs                # 프로토콜 DTO
-│   └── Input/HandCursorController.cs  # 커서 표현 + 핀치 판정
+│   ├── Input/HandCursorController.cs  # 커서 표현 + 핀치 판정
+│   └── Drawing/                       # 드로잉 컨트롤러 + 순수 로직 (docs/07)
 ├── Tests/EditMode/
 │   ├── CameraCoop.Tests.EditMode.asmdef  # 테스트 어셈블리 (Runtime + nunit 참조)
 │   └── ProtocolTests.cs               # 순수 로직 Edit Mode 테스트
-└── Prefabs/HandCursor.prefab          # 커서 UI (Image + CanvasGroup)
+├── Prefabs/HandCursor.prefab          # 커서 UI (Image + CanvasGroup)
+└── Materials/                         # 드로잉 스트로크/배경 머티리얼 (docs/07 §7)
 ```
 - Unity 6000.3.15f1, URP. **런타임 패키지 추가 없음.** tooling으로 `com.unity.pipeline`만 추가한다 (Unity CLI가 에디터에 붙기 위한 필수 패키지. 런타임 코드는 이 패키지에 의존하지 않으며, 제거해도 게임 동작에 영향 없음).
 - 씬 구성: `Canvas`(Screen Space - Overlay) 아래 커서 2개, 빈 GO `HandTracking`에 UdpHandReceiver + HandCursorController 부착. `EventSystem`·`GraphicRaycaster`는 넣지 않는다 — 커서는 UI raycast를 쓰지 않는다 (프리팹 Image의 `raycastTarget`도 off).
@@ -110,6 +113,7 @@ HandCursorController --(SerializeField)--> leftCursor/rightCursor (RectTransform
 | `PacketFilter.ShouldAccept(packet, lastSeq)` | HandData.cs | v 불일치 폐기, seq 역전/중복 폐기, 정상 통과 |
 | `HandScreenMapper.ToScreen(x, y, w, h)` | HandData.cs | 정규화 → 화면 좌표 (y 반전) 변환 |
 | `PinchStateMachine.Next(current, pinch, start, release)` | HandData.cs | 히스테리시스 경계값 판정 |
+| `StrokeLogic.Decide / ShouldAppendPoint / ShouldDiscardOnEnd` | StrokeLogic.cs | 스트로크 상태 전이, 점 추가 최소 간격, 점 2개 미만 폐기 (docs/07 §8) |
 
 - JsonUtility 파싱 왕복(스키마 v1 샘플 문자열 → DTO → 값 검증)도 Edit Mode 테스트에 포함한다.
 - MonoBehaviour(수신 스레드·커서 표현)는 Edit Mode 테스트 대상에서 제외하고 Play 모드 통합 검증(docs/05)으로 커버한다.

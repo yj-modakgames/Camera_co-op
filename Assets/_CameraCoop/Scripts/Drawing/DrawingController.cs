@@ -11,7 +11,7 @@ namespace CameraCoop
         [SerializeField] private HandCursorController cursorController;
         [SerializeField] private Camera drawCamera;
         [SerializeField] private float planeDistance = 5.0f;      // 카메라 -> 드로잉 평면 거리 (m)
-        [SerializeField] private float minPointDistance = 0.01f;  // 점 추가 최소 간격 (월드 단위)
+        [SerializeField, Min(0f)] private float minPointDistance = 0.01f;  // 점 추가 최소 간격 (월드 단위)
         [SerializeField] private float lineWidth = 0.02f;
         [SerializeField] private Material lineMaterial;           // vertex color를 곱하는 셰이더여야 함 (URP Particles/Unlit)
         [SerializeField] private Color leftStrokeColor = new Color(0.2f, 0.6f, 1f);   // 커서 색과 같은 계열
@@ -46,7 +46,7 @@ namespace CameraCoop
         {
             // Keyboard 부재(장치 없음) 방어. legacy Input API는 이 프로젝트에서 예외를 던진다.
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard[clearKey].wasPressedThisFrame)
+            if (clearKey != Key.None && keyboard != null && keyboard[clearKey].wasPressedThisFrame)
             {
                 ClearAll();
             }
