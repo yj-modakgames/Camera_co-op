@@ -22,16 +22,19 @@ PythonTracker/
 ├── config.py               # 모든 설정 상수 (단일 출처)
 ├── one_euro_filter.py      # OneEuroFilter 클래스
 ├── hand_tracker.py         # 메인 루프 (진입점)
+├── fake_hand.py            # 진단용 합성 패킷 송신기 (stdlib만, 웹캠 불필요)
 ├── requirements.txt
 └── README.md               # 설치·실행 방법
 ```
+
+`fake_hand.py`는 프로덕션 경로가 아니다. 프로토콜 v1 패킷을 만들어 보내 **커서 이상의 원인이 Unity인지 카메라·MediaPipe인지 가르는** 진단 도구다. `--selfcheck`로 패킷 스키마를 자체 검증하고, `--one`/`--empty`로 한 손·heartbeat 시나리오를 재현한다. 이 도구로 `PacketFilter.IsNewSession` 회귀(송신 측 재시작 후 커서 미복구)를 잡았다.
 
 ### config.py — 설정 항목 목록
 모듈 수준 상수로 정의한다. 클래스·파일 로딩 없음.
 
 | 상수 | 기본값 | 설명 |
 |---|---|---|
-| `CAMERA_INDEX` | 0 | OpenCV 카메라 인덱스. `cv2.CAP_DSHOW` 백엔드 사용 (Windows 초기화 지연 회피) |
+| `CAMERA_INDEX` | 0 | OpenCV 카메라 인덱스. 백엔드는 `hand_tracker.camera_backend()`가 OS별로 고른다 — Windows는 `cv2.CAP_DSHOW`(초기화 지연 회피), 그 외는 `cv2.CAP_ANY`(macOS → AVFoundation). **DSHOW는 Windows 전용이라 다른 OS에 넘기면 카메라가 열리지 않는다** |
 | `FRAME_WIDTH` / `FRAME_HEIGHT` | 640 / 480 | 캡처 해상도. 추론 속도 우선 |
 | `UDP_IP` / `UDP_PORT` | "127.0.0.1" / 5052 | `docs/02_protocol.md` 준수 |
 | `MODEL_PATH` | "models/hand_landmarker.task" | 스크립트 위치 기준 상대경로 |

@@ -66,18 +66,43 @@ def resolve_model_path():
     return os.path.join(script_dir, config.MODEL_PATH)
 
 
+def camera_backend():
+    # CAP_DSHOW는 Windows 전용(초기화 지연 회피). 다른 OS에 넘기면 카메라가 열리지 않으므로
+    # macOS/Linux는 CAP_ANY로 OpenCV가 백엔드를 고르게 둔다 (macOS -> AVFoundation).
+    return cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+
+
+def permission_hint():
+    # 카메라 권한 안내는 OS마다 경로가 달라 실행 플랫폼에 맞는 문구만 낸다.
+    if sys.platform == "darwin":
+        return (
+            "        macOS가 카메라 접근을 차단했을 수 있습니다. 권한은 실행 주체(터미널/IDE) 단위로 묻습니다.\n"
+            "  해결: 1) 웹캠 연결 확인  2) 카메라를 쓰는 다른 앱(Zoom 등) 종료\n"
+            "        3) 시스템 설정 > 개인정보 보호 및 보안 > 카메라에서 터미널/iTerm/VS Code 허용\n"
+            "        4) 권한을 켠 뒤에는 그 앱을 완전히 종료하고 다시 실행해야 적용된다\n"
+        )
+    if sys.platform == "win32":
+        return (
+            "        Windows 카메라 개인정보 설정에서 접근이 차단되었을 수 있습니다.\n"
+            "  해결: 1) 웹캠 연결 확인  2) 카메라를 쓰는 다른 앱(Zoom 등) 종료\n"
+            "        3) 설정 > 개인정보 및 보안 > 카메라에서 앱 접근 허용 확인\n"
+        )
+    return (
+        "        OS가 카메라 접근을 차단했을 수 있습니다.\n"
+        "  해결: 1) 웹캠 연결 확인  2) 카메라를 쓰는 다른 앱 종료\n"
+    )
+
+
 def open_camera():
-    cap = cv2.VideoCapture(config.CAMERA_INDEX, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(config.CAMERA_INDEX, camera_backend())
     if not cap.isOpened():
         cap.release()
         sys.exit(
             "[ERROR] 카메라를 열 수 없습니다 (index={}).\n"
             "  원인: 웹캠이 연결되지 않았거나, 다른 프로그램이 카메라를 점유 중이거나,\n"
-            "        Windows 카메라 개인정보 설정에서 접근이 차단되었을 수 있습니다.\n"
-            "  해결: 1) 웹캠 연결 확인  2) 카메라를 쓰는 다른 앱(Zoom 등) 종료\n"
-            "        3) 설정 > 개인정보 및 보안 > 카메라에서 앱 접근 허용 확인\n"
-            "        4) config.py의 CAMERA_INDEX 값을 다른 번호로 변경 후 재시도".format(
-                config.CAMERA_INDEX
+            "{}"
+            "        마지막으로 config.py의 CAMERA_INDEX 값을 다른 번호로 바꿔 재시도".format(
+                config.CAMERA_INDEX, permission_hint()
             )
         )
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.FRAME_WIDTH)
