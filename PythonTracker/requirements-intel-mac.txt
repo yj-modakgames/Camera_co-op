@@ -1,0 +1,27 @@
+# Intel Mac (x86_64) 전용 의존성. 상세 근거는 docs/06_handoff_macos.md §2.
+#
+# 왜 별도 파일인가:
+#   mediapipe 1.0.1 은 macosx_11_0_arm64 wheel 만 배포한다. Intel Mac 에서는 설치 자체가 실패한다.
+#   0.10.21 이 Intel macOS wheel(x86_64 / universal2)이 있는 마지막 버전이다.
+#
+# Tasks API 호환:
+#   HandLandmarker / HandLandmarkerOptions / RunningMode.VIDEO / detect_for_video /
+#   result.hand_landmarks / result.handedness 전부 동일하게 동작한다.
+#   0.10.21 스택에서 create_landmarker() + detect_for_video() 실제 호출과
+#   hand_tracker.py 전체 실행까지 검증했다 (2026-08-26). 코드 수정 불필요.
+#
+# Python 3.12 필요:
+#   0.10.21 의 wheel 은 cp39 / cp310 / cp311 / cp312 까지다. 3.13 이상에서는 설치되지 않는다.
+mediapipe==0.10.21
+
+# cv2 는 mediapipe 가 opencv-contrib-python 으로 끌고 온다. 버전을 고정하지 않는 이유:
+#   opencv 의 macOS x86_64 wheel 최소 OS 가 버전마다 다르다
+#   (4.11/4.12 -> macOS 13+, 4.10 -> 12+, 4.9 -> 10.16+).
+#   pip 가 실행 OS 에 맞는 것을 고르게 두는 편이 안전하고,
+#   mediapipe 의 numpy<2 제약이 상한을 잡아주므로 무제한 업그레이드도 아니다.
+#   opencv-python 5.0.0.93 을 함께 pin 하면 numpy 요구가 충돌한다
+#   (mediapipe: numpy<2 vs opencv-python 5.x: numpy>=2).
+#
+# hand_tracker.py 가 쓰는 cv2 API 는 VideoCapture / flip / cvtColor / imshow /
+# waitKey / circle / line / destroyAllWindows 로 전부 오래된 안정 API 라
+# 4.9 ~ 4.12 어디서든 동작한다.

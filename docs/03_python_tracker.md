@@ -12,6 +12,17 @@
 
 > 버전 주의: 두 wheel 모두 특정 CPython 버전에 묶이지 않으므로 3.12/3.14 어디서든 설치된다. 실제 검증은 3.14.4에서 수행했다 (`cv2 5.0.0`, `mediapipe 1.0.1`, `vision.HandLandmarker` import 확인). 의존성으로 `numpy 2.5.2`, `opencv-contrib-python`이 함께 설치된다.
 
+### Intel Mac (x86_64) 예외
+`mediapipe 1.0.1`은 `macosx_11_0_arm64` wheel만 배포하므로 **Intel Mac에서는 설치되지 않는다.** Intel은 `requirements-intel-mac.txt`를 쓴다.
+
+| 항목 | 값 | 근거 |
+|---|---|---|
+| Python | 3.12 고정 | mediapipe 0.10.21 wheel이 cp39~cp312까지 |
+| mediapipe | `0.10.21` | Intel macOS wheel이 있는 마지막 버전 |
+| cv2 | `opencv-contrib-python` (mediapipe 전이 의존, 버전 미고정) | opencv-python 5.x는 `numpy>=2`인데 mediapipe 0.10.21은 `numpy<2`라 충돌한다. Intel macOS wheel의 최소 OS도 버전마다 달라(4.11/4.12→13+, 4.10→12+, 4.9→10.16+) pip가 OS에 맞게 고르게 둔다 |
+
+**코드 수정은 필요 없다.** 0.10.21에도 Tasks API가 동일하게 있고, `create_landmarker()` → `detect_for_video()` 실제 호출과 `hand_tracker.py` 전체 실행까지 검증했다 (2026-08-26). 상세는 `docs/06_handoff_macos.md` §2.
+
 ## 2. 모듈 구성
 
 ```

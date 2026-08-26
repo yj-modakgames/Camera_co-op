@@ -23,22 +23,43 @@ Phase 1(웹캠 손동작 → Unity 손 커서)의 **코드와 씬은 전부 완�
 
 ---
 
-## 2. 시작 전 필수 확인 — Apple Silicon 여부
-
-**`mediapipe 1.0.1`은 macOS arm64 wheel만 존재한다.**
-
-```
-mediapipe-1.0.1-py3-none-macosx_11_0_arm64.whl   <- 이것뿐
-```
-
-- **Apple Silicon (M 시리즈) + macOS 11 이상**이어야 `requirements.txt`가 그대로 설치된다.
-- **Intel Mac이면 설치가 실패한다.** 그 경우 mediapipe 버전을 내려야 하고, 1.x는 Tasks API 전용이므로 API 호환을 다시 확인해야 한다 (docs/03 §3). 이건 별도 결정 사항이니 막히면 알려달라.
-- `opencv-python 5.0.0.93`은 arm64(macOS 13+)·x86_64(macOS 14+) 둘 다 있다.
+## 2. 시작 전 필수 확인 — CPU 아키텍처로 의존성이 갈린다
 
 ```bash
-uname -m        # arm64 이면 진행, x86_64 면 위 주의사항
-sw_vers         # ProductVersion 11 이상
+uname -m        # arm64 -> Apple Silicon / x86_64 -> Intel
+sw_vers         # ProductVersion
 ```
+
+**`mediapipe 1.0.1`은 macOS arm64 wheel만 배포한다** (`mediapipe-1.0.1-py3-none-macosx_11_0_arm64.whl`). 그래서 Intel Mac은 별도 경로를 쓴다.
+
+| | Apple Silicon (arm64) | **Intel (x86_64)** |
+|---|---|---|
+| requirements | `requirements.txt` | **`requirements-intel-mac.txt`** |
+| Python | 3.12 ~ 3.14 | **3.12 고정** |
+| mediapipe | 1.0.1 | **0.10.21** |
+| cv2 출처 | `opencv-python 5.0.0.93` | `opencv-contrib-python` (mediapipe가 끌고 옴) |
+| 최소 macOS | 11 | 11 (opencv가 OS에 맞춰 자동 선택) |
+
+### Intel Mac 상세
+
+**Python 3.12가 필요하다.** mediapipe 0.10.21의 wheel은 cp39/cp310/cp311/cp312까지다. macOS 기본 `python3`가 3.13 이상이면 설치가 안 된다.
+
+```bash
+brew install python@3.12          # 또는 python.org 설치본
+python3.12 --version
+```
+
+**코드 수정은 필요 없다.** 0.10.21에도 Tasks API가 그대로 있고, `hand_tracker.py`가 쓰는 표면 전체를 실제로 검증했다 (2026-08-26, Windows의 Python 3.12 venv):
+
+- `from mediapipe.tasks.python import vision, BaseOptions` 통과
+- `create_landmarker()` → `HandLandmarker` 생성 (커밋된 모델 파일 그대로 로드)
+- `detect_for_video()` → `HandLandmarkerResult`, `.hand_landmarks` / `.handedness` 존재
+- `HandLandmarkerOptions`의 `num_hands`·`min_*_confidence` 4개 필드 전부 수용
+- `draw_preview()` 통과, `hand_tracker.py` 전체 실행까지 정상 (카메라 부재 경로 exit 1)
+
+**opencv를 pin하지 않는 이유:** `opencv-python 5.0.0.93`을 함께 pin하면 **numpy 요구가 충돌한다** — mediapipe 0.10.21은 `numpy<2`, opencv-python 5.x는 `numpy>=2`. mediapipe가 `opencv-contrib-python`을 버전 무제한으로 끌고 오므로 pip가 실행 OS에 맞는 wheel을 고르게 둔다. Intel macOS x86_64 wheel의 최소 OS가 버전마다 다르기 때문이다 (4.11/4.12 → macOS 13+, 4.10 → 12+, 4.9 → 10.16+). `hand_tracker.py`가 쓰는 cv2 API는 전부 오래된 안정 API라 이 범위 어디서든 돈다.
+
+**주의:** Intel Mac은 CPU 추론이 Apple Silicon보다 느리다. 30Hz가 안 나오면 `config.py`의 `FRAME_WIDTH`/`FRAME_HEIGHT`를 낮추고(예: 480×360), 그래도 부족하면 `NUM_HANDS`를 1로 줄여 확인한다. 프레임레이트가 떨어지면 One Euro Filter의 체감 지연도 늘어나므로 §5-2 튜닝을 프레임레이트 확정 후에 해야 한다.
 
 ---
 
@@ -46,6 +67,7 @@ sw_vers         # ProductVersion 11 이상
 
 ### 3-1. Python
 
+Apple Silicon:
 ```bash
 cd /path/to/Camera_co-op
 python3 -m venv PythonTracker/.venv
@@ -53,11 +75,22 @@ PythonTracker/.venv/bin/python -m pip install --upgrade pip
 PythonTracker/.venv/bin/python -m pip install -r PythonTracker/requirements.txt
 ```
 
-설치 확인:
+**Intel — Python 3.12와 전용 requirements를 쓴다:**
+```bash
+cd /path/to/Camera_co-op
+python3.12 -m venv PythonTracker/.venv
+PythonTracker/.venv/bin/python -m pip install --upgrade pip
+PythonTracker/.venv/bin/python -m pip install -r PythonTracker/requirements-intel-mac.txt
+```
+
+설치 확인 (양쪽 공통):
 ```bash
 PythonTracker/.venv/bin/python -c "import cv2, mediapipe as mp; from mediapipe.tasks.python import vision; print(cv2.__version__, mp.__version__, hasattr(vision,'HandLandmarker'))"
 ```
-기대 출력: `5.0.0 1.0.1 True`
+- Apple Silicon 기대 출력: `5.0.0 1.0.1 True`
+- Intel 기대 출력: `4.11.0 0.10.21 True` (cv2 버전은 macOS 버전에 따라 4.9~4.12 사이에서 달라질 수 있다)
+
+세 번째 값이 `True`면 Tasks API가 살아 있다는 뜻이고, 그게 코드가 요구하는 전부다.
 
 `PythonTracker/.venv/`는 `.gitignore`에 있으니 Mac에서 새로 만들면 된다. 모델 파일 `PythonTracker/models/hand_landmarker.task`(7,819,105 bytes)는 repo에 커밋돼 있고 git이 binary로 인식하므로 checkout만으로 온전하다 — 크기가 다르면 손상이니 README의 다운로드 URL로 다시 받아라.
 
@@ -213,7 +246,7 @@ PythonTracker/.venv/bin/python PythonTracker/fake_hand.py 30 --empty    # 빈 ha
 
 ## 9. 권장 순서
 
-1. `uname -m`으로 Apple Silicon 확인 → venv 생성 → 의존성 설치 → import 확인
+1. `uname -m`으로 아키텍처 확인 → **Intel이면 Python 3.12 + `requirements-intel-mac.txt`** (§2) → venv 생성 → 의존성 설치 → import 확인
 2. `unity pipeline list`로 CLI 연결 확인 → `unity cmd run_tests --mode EditMode` → **30/30** 확인 (환경이 온전하다는 기준선)
 3. `fake_hand.py`로 Unity 쪽 먼저 확인 (여기서 실패하면 카메라 문제가 아니다)
 4. `hand_tracker.py` 실행 → 카메라 권한 허용 → Step 1 DoD (1-1~1-5, 1-7)

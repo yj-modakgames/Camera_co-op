@@ -3,39 +3,61 @@
 웹캠에서 손 랜드마크를 추출해 UDP(`127.0.0.1:5052`)로 Unity에 전송한다.
 프로토콜 명세는 `docs/02_protocol.md`, 설계는 `docs/03_python_tracker.md` 참고.
 
-> macOS에서 처음 셋업한다면 `docs/06_handoff_macos.md`를 먼저 읽어라. Apple Silicon 필수 조건과 카메라 권한·방화벽 함정이 정리돼 있다.
+> macOS에서 처음 셋업한다면 `docs/06_handoff_macos.md`를 먼저 읽어라. 아키텍처별 의존성 분기, 카메라 권한, 방화벽 함정이 정리돼 있다.
 
-## 1. 가상환경 생성
+## 1. 어느 requirements를 쓸지 먼저 정한다
+
+`mediapipe 1.0.1`은 macOS **arm64 wheel만** 배포한다. 그래서 Intel Mac은 별도 경로를 쓴다.
+
+| 환경 | requirements | Python | mediapipe |
+|---|---|---|---|
+| Windows / Apple Silicon | `requirements.txt` | 3.12 ~ 3.14 | 1.0.1 |
+| **Intel Mac (x86_64)** | **`requirements-intel-mac.txt`** | **3.12 고정** | **0.10.21** |
 
 ```bash
-# macOS / Linux
+uname -m   # arm64 -> Apple Silicon / x86_64 -> Intel
+```
+
+Intel 경로에서도 코드 수정은 필요 없다. 0.10.21에도 Tasks API가 그대로 있고 검증을 마쳤다. 자세한 근거는 `requirements-intel-mac.txt` 주석과 `docs/06_handoff_macos.md` §2 참고.
+
+## 2. 가상환경 생성
+
+```bash
+# macOS Apple Silicon / Linux
 python3 -m venv PythonTracker/.venv
+
+# Intel Mac (3.12 필요. brew install python@3.12)
+python3.12 -m venv PythonTracker/.venv
 ```
 ```powershell
 # Windows
 python -m venv PythonTracker\.venv
 ```
 
-## 2. 패키지 설치
+## 3. 패키지 설치
 
 ```bash
-# macOS / Linux
+# macOS Apple Silicon / Linux
 PythonTracker/.venv/bin/python -m pip install -r PythonTracker/requirements.txt
+
+# Intel Mac
+PythonTracker/.venv/bin/python -m pip install -r PythonTracker/requirements-intel-mac.txt
 ```
 ```powershell
 # Windows
 PythonTracker\.venv\Scripts\python.exe -m pip install -r PythonTracker\requirements.txt
 ```
 
-`mediapipe 1.0.1`은 macOS arm64 wheel만 있다. **Intel Mac에서는 설치가 실패한다.**
-
 설치 확인:
 ```bash
 PythonTracker/.venv/bin/python -c "import cv2, mediapipe as mp; from mediapipe.tasks.python import vision; print(cv2.__version__, mp.__version__, hasattr(vision,'HandLandmarker'))"
 ```
-기대 출력: `5.0.0 1.0.1 True`
+- Windows / Apple Silicon 기대 출력: `5.0.0 1.0.1 True`
+- Intel Mac 기대 출력: `4.11.0 0.10.21 True` (cv2 버전은 macOS 버전에 따라 4.9~4.12 사이)
 
-## 3. 모델 파일
+세 번째 값이 `True`면 Tasks API가 살아 있다는 뜻이고, 그게 코드가 요구하는 전부다.
+
+## 4. 모델 파일
 
 `models/hand_landmarker.task` (7,819,105 bytes)는 이미 저장소에 커밋되어 있다.
 크기가 다르거나 없으면 아래에서 받아 같은 경로에 저장한다.
@@ -50,7 +72,7 @@ curl -L -o PythonTracker/models/hand_landmarker.task \
 Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task" -OutFile "PythonTracker\models\hand_landmarker.task"
 ```
 
-## 4. 실행
+## 5. 실행
 
 ```bash
 # macOS / Linux
@@ -66,7 +88,7 @@ PythonTracker\.venv\Scripts\python.exe PythonTracker\hand_tracker.py
 - 설정값(카메라 인덱스, 필터 파라미터 등)은 전부 `config.py`에서 관리한다.
 - 카메라 백엔드는 `camera_backend()`가 OS별로 고른다 — Windows는 `CAP_DSHOW`, 그 외는 `CAP_ANY`(macOS → AVFoundation).
 
-## 5. fake_hand.py — 웹캠 없이 Unity만 검증
+## 6. fake_hand.py — 웹캠 없이 Unity만 검증
 
 프로토콜 v1 패킷을 합성해 보내는 진단 도구. stdlib만 사용한다.
 커서가 안 움직일 때 **원인이 Unity인지 카메라·MediaPipe인지 가르는** 용도로 쓴다.
