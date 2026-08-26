@@ -15,6 +15,8 @@ namespace CameraCoop.Netplay
         {
             session.OnPlayersChanged += Refresh;
             session.OnCanvasCleared += HandleCleared;
+            Steamworks.SteamFriends.OnGameLobbyJoinRequested += HandleJoinRequested;
+            Steamworks.SteamMatchmaking.OnLobbyEntered += HandleLobbyEntered;
             Refresh();
         }
 
@@ -22,6 +24,8 @@ namespace CameraCoop.Netplay
         {
             session.OnPlayersChanged -= Refresh;
             session.OnCanvasCleared -= HandleCleared;
+            Steamworks.SteamFriends.OnGameLobbyJoinRequested -= HandleJoinRequested;
+            Steamworks.SteamMatchmaking.OnLobbyEntered -= HandleLobbyEntered;
         }
 
         // Loopback 세션 시작 (버튼 배선). 가짜 피어는 Task 5의 검증 스크립트가 붙인다.
@@ -58,6 +62,32 @@ namespace CameraCoop.Netplay
             {
                 if (statusText != null) { statusText.text = "Steam host 실패: " + e.Message; }
             }
+        }
+
+        // 초대 수락 -> 로비 참가 (docs/08 §5). 참가 결과는 OnLobbyEntered로 이어진다.
+        private async void HandleJoinRequested(Steamworks.Data.Lobby lobby, Steamworks.SteamId friendId)
+        {
+            if (!SteamBootstrap.TryInit())
+            {
+                if (statusText != null) { statusText.text = "Steam 미실행 — Steam 로그인 후 재시도"; }
+                return;
+            }
+            await lobby.Join();
+        }
+
+        // 로비 참가 완료 -> host에 relay 접속 (docs/08 §5). host 자신은 이미 세션 중이라 걸러진다.
+        private void HandleLobbyEntered(Steamworks.Data.Lobby lobby)
+        {
+            if (session.IsRunning)
+            {
+                return;
+            }
+            if (lobby.Owner.Id == Steamworks.SteamClient.SteamId)
+            {
+                return; // 내가 만든 로비 — host 경로는 OnClickHostSteam이 담당
+            }
+            session.StartSession(SteamTransport.ConnectTo(lobby.Owner.Id), SteamBootstrap.LocalName);
+            Refresh();
         }
 
         public void OnClickClear()

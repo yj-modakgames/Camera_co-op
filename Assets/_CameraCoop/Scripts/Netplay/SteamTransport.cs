@@ -73,7 +73,7 @@ namespace CameraCoop.Netplay
 
         public void Tick()
         {
-            SteamClient.RunCallbacks();
+            // 콜백은 SteamClient.Init(asyncCallbacks:true)가 자체 펌프 — 여기서 RunCallbacks 중복 호출 금지
             if (hostSocket != null)
             {
                 hostSocket.Receive();
