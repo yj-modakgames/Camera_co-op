@@ -20,6 +20,7 @@ Assets/_CameraCoop/
 ```
 - Unity 6000.3.15f1, URP. **런타임 패키지 추가 없음.** tooling으로 `com.unity.pipeline`만 추가한다 (Unity CLI가 에디터에 붙기 위한 필수 패키지. 런타임 코드는 이 패키지에 의존하지 않으며, 제거해도 게임 동작에 영향 없음).
 - 씬 구성: `Canvas`(Screen Space - Overlay) 아래 커서 2개, 빈 GO `HandTracking`에 UdpHandReceiver + HandCursorController 부착. `EventSystem`·`GraphicRaycaster`는 넣지 않는다 — 커서는 UI raycast를 쓰지 않는다 (프리팹 Image의 `raycastTarget`도 off).
+- NetplayTest.unity는 로비 UI가 있어 EventSystem + InputSystemUIInputModule을 사용한다 (docs/08 §5). 커서 전용 씬의 EventSystem 금지는 유지.
 - 커서 프리팹 비주얼: sprite 없는 64×64 흰 사각형. 색은 런타임에 `leftColor`/`rightColor`로 입힌다. Phase 1 테스트 목적이므로 전용 스프라이트 에셋을 만들지 않는다.
 
 ## 2. HandData.cs — 프로토콜 DTO

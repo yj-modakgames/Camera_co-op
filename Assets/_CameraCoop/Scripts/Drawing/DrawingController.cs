@@ -147,7 +147,7 @@ namespace CameraCoop
             finishedStrokes.Add(stroke.line.gameObject);
         }
 
-        private void ClearAll()
+        public void ClearAll()
         {
             for (int i = 0; i < finishedStrokes.Count; i++)
             {
