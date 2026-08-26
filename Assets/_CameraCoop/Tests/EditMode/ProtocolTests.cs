@@ -256,5 +256,18 @@ namespace CameraCoop.Tests
             Assert.AreEqual(CursorStateLogic.PinchEvent.End, CursorStateLogic.DetermineEvent(wasPinched: true, nowPinched: false));
             Assert.AreEqual(CursorStateLogic.PinchEvent.None, CursorStateLogic.DetermineEvent(wasPinched: false, nowPinched: false));
         }
+
+        // docs/07 §4: lost 시에도 Start-End 쌍 보장. lost == nowPinched false로 판정한다.
+        [Test]
+        public void DetermineEvent_PinchedThenLost_ReturnsEnd()
+        {
+            Assert.AreEqual(CursorStateLogic.PinchEvent.End, CursorStateLogic.DetermineEvent(wasPinched: true, nowPinched: false));
+        }
+
+        [Test]
+        public void DetermineEvent_NotPinchedThenLost_ReturnsNone()
+        {
+            Assert.AreEqual(CursorStateLogic.PinchEvent.None, CursorStateLogic.DetermineEvent(wasPinched: false, nowPinched: false));
+        }
     }
 }

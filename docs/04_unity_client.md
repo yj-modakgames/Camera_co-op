@@ -72,6 +72,7 @@ public double LastLatencyMs { get; }      // (수신 epoch − packet.timestamp)
 | 핀치 표현 | 핀치 중 커서 스케일 `pinchScale`배 축소 + 색 강조(채도/밝기 변경) |
 | 손 lost | 최신 패킷에 해당 handedness 없음 → 그 커서만 fade out (CanvasGroup.alpha → 0, `fadeDuration`) |
 | 서버 lost | `receiver.IsServerLost` → 두 커서 모두 fade out. 수신 재개 시 fade in |
+| 핀치 중 lost | 손/서버 lost로 갱신을 스킵하기 전에 `OnPinchEnd` 발행 + pinched 해제. 모든 Start는 End로 닫힌다 (docs/07 §4) |
 
 ### public 이벤트 (Phase 2 드로잉 접점)
 ```csharp

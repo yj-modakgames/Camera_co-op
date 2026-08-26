@@ -68,6 +68,8 @@ namespace CameraCoop
 
             if (serverLost)
             {
+                EndPinchIfActive(leftState, "Left");
+                EndPinchIfActive(rightState, "Right");
                 FadeOut(leftState);
                 FadeOut(rightState);
                 return; // lost 상태: 위치/핀치 갱신 스킵 (docs/04 §6)
@@ -101,6 +103,16 @@ namespace CameraCoop
             UpdateHand(rightState, right, "Right");
         }
 
+        // lost 시에도 Start-End 쌍 계약 보장 (docs/07 §4): 핀치 중이던 손이 사라지면 End를 발행한다.
+        private void EndPinchIfActive(HandCursorState state, string handedness)
+        {
+            if (CursorStateLogic.DetermineEvent(state.pinched, nowPinched: false) == CursorStateLogic.PinchEvent.End)
+            {
+                state.pinched = false;
+                OnPinchEnd?.Invoke(handedness);
+            }
+        }
+
         private void FadeOut(HandCursorState state)
         {
             state.targetAlpha = 0f;
@@ -115,6 +127,7 @@ namespace CameraCoop
 
             if (!present)
             {
+                EndPinchIfActive(state, handedness);
                 return; // 손 미검출: 위치/핀치 갱신 스킵
             }
 
