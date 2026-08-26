@@ -79,3 +79,9 @@ crashlytics-build.properties
 PythonTracker/.venv/
 __pycache__/
 *.pyc
+
+# macOS 잡파일
+.DS_Store
+
+# 에디터 로컬 설정
+.vscode/
