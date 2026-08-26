@@ -65,6 +65,7 @@ clearKey 입력
 | `lineMaterial` | — | URP Unlit 공유 머티리얼 1개 (SRP Batcher 호환) |
 | `leftStrokeColor` / `rightStrokeColor` | 청 / 주황 | 커서 색과 같은 계열 (독립 필드 — 커플링 회피) |
 | `clearKey` | Key.C | 전체 지우기 키. **주의: 프로젝트가 새 Input System 전용**(`activeInputHandler: 1`)이므로 `UnityEngine.InputSystem.Key` + `Keyboard.current`를 쓴다. legacy `Input.GetKeyDown`은 예외 발생 |
+| `maxSegmentScreenFraction` | 0.25f | 한 스트로크에서 연속 점 사이 허용 최대 화면 이동 비율 (화면 폭 기준). 초과 시 스트로크 분리 (§6 재검출 스냅 방어) |
 
 ## 6. 엣지 케이스
 
@@ -76,6 +77,7 @@ clearKey 입력
 | 점 1개 스트로크 | End 시 파괴. 점 찍기는 미지원 명시 |
 | clear 중 핀치 진행 | 진행 중 스트로크 포함 파괴, 이후 Move는 고아 Move로 무시 |
 | Python 재시작 (S6) | 수신 계층이 처리. 드로잉 무영향 — 기존 스트로크 유지 |
+| 재검출 순간이동 (MediaPipe ROI 스냅, 간헐) | 연속 Move 사이 화면 이동이 `maxSegmentScreenFraction × Screen.width` 초과 시 현재 스트로크 종료 + 새 스트로크 시작 — 점프 선 대신 분리된 두 선 |
 
 ## 7. 씬
 

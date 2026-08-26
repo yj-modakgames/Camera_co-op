@@ -37,6 +37,12 @@ namespace CameraCoop
             return (newPoint - lastPoint).sqrMagnitude >= minDistance * minDistance;
         }
 
+        // 연속 점 사이 화면 이동이 임계 초과면 스트로크를 분리한다 (재검출 스냅 방어, docs/07 §6)
+        public static bool ShouldSplitStroke(Vector2 lastScreenPos, Vector2 newScreenPos, float maxSegmentDistance)
+        {
+            return (newScreenPos - lastScreenPos).sqrMagnitude > maxSegmentDistance * maxSegmentDistance;
+        }
+
         // End 시 점 2개 미만 스트로크는 폐기 (점 찍기 미지원, docs/07 §6)
         public static bool ShouldDiscardOnEnd(int pointCount)
         {

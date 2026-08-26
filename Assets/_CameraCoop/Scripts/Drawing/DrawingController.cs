@@ -13,6 +13,7 @@ namespace CameraCoop
         [SerializeField] private float planeDistance = 5.0f;      // 카메라 -> 드로잉 평면 거리 (m)
         [SerializeField, Min(0f)] private float minPointDistance = 0.01f;  // 점 추가 최소 간격 (월드 단위)
         [SerializeField] private float lineWidth = 0.02f;
+        [SerializeField, Min(0f)] private float maxSegmentScreenFraction = 0.25f;  // 연속 점 허용 최대 화면 이동 비율 (초과 시 스트로크 분리)
         [SerializeField] private Material lineMaterial;           // vertex color를 곱하는 셰이더여야 함 (URP Particles/Unlit)
         [SerializeField] private Color leftStrokeColor = new Color(0.2f, 0.6f, 1f);   // 커서 색과 같은 계열
         [SerializeField] private Color rightStrokeColor = new Color(1f, 0.6f, 0.1f);
@@ -22,6 +23,7 @@ namespace CameraCoop
         {
             public LineRenderer line;
             public Vector3 lastPoint;
+            public Vector2 lastScreenPos;
         }
 
         // 손별 진행 중 스트로크 ("Left"/"Right" 키). 확정분은 finishedStrokes로 이동.
@@ -74,6 +76,12 @@ namespace CameraCoop
             }
 
             ActiveStroke stroke = activeStrokes[handedness];
+            if (StrokeLogic.ShouldSplitStroke(stroke.lastScreenPos, screenPos, maxSegmentScreenFraction * Screen.width))
+            {
+                FinishStroke(handedness); // 재검출 스냅: 점프 선 대신 스트로크 분리 (docs/07 §6)
+                BeginStroke(handedness, screenPos);
+                return;
+            }
             Vector3 point = ToPlanePoint(screenPos);
             if (!StrokeLogic.ShouldAppendPoint(hasLastPoint: true, stroke.lastPoint, point, minPointDistance))
             {
@@ -84,6 +92,7 @@ namespace CameraCoop
             stroke.line.positionCount = count + 1;
             stroke.line.SetPosition(count, point);
             stroke.lastPoint = point;
+            stroke.lastScreenPos = screenPos;
         }
 
         private void HandlePinchEnd(string handedness)
@@ -122,7 +131,7 @@ namespace CameraCoop
             line.positionCount = 1;
             line.SetPosition(0, point);
 
-            activeStrokes[handedness] = new ActiveStroke { line = line, lastPoint = point };
+            activeStrokes[handedness] = new ActiveStroke { line = line, lastPoint = point, lastScreenPos = screenPos };
         }
 
         private void FinishStroke(string handedness)

@@ -77,6 +77,26 @@ namespace CameraCoop.Tests
             Assert.AreEqual(StrokeLogic.StrokeAction.None, StrokeLogic.Decide(hasActiveStroke: false, StrokeLogic.PinchKind.End));
         }
 
+        // ---- StrokeLogic.ShouldSplitStroke (재검출 스냅 방어, docs/07 §6) ----
+
+        [Test]
+        public void ShouldSplitStroke_WithinThreshold_False()
+        {
+            Assert.IsFalse(StrokeLogic.ShouldSplitStroke(new Vector2(100f, 100f), new Vector2(150f, 100f), maxSegmentDistance: 100f));
+        }
+
+        [Test]
+        public void ShouldSplitStroke_AtExactThreshold_False()
+        {
+            Assert.IsFalse(StrokeLogic.ShouldSplitStroke(new Vector2(0f, 0f), new Vector2(100f, 0f), maxSegmentDistance: 100f));
+        }
+
+        [Test]
+        public void ShouldSplitStroke_BeyondThreshold_True()
+        {
+            Assert.IsTrue(StrokeLogic.ShouldSplitStroke(new Vector2(0f, 0f), new Vector2(300f, 0f), maxSegmentDistance: 100f));
+        }
+
         // ---- StrokeLogic.ShouldDiscardOnEnd ----
 
         [Test]
