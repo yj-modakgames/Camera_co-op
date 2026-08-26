@@ -3,8 +3,8 @@ using UnityEngine.UI;
 
 namespace CameraCoop.Netplay
 {
-    // 최소 로비 UI (docs/08 §5): Loopback host 시작, Clear, 피어 목록 표시.
-    // Steam host/join 버튼은 Task 7에서 SteamTransport 연결 후 활성화한다.
+    // 최소 로비 UI (docs/08 §5): Loopback/Steam host 시작, Clear, 피어 목록 표시.
+    // 클라 join은 Steam overlay 초대 수락 경로 — 별도 버튼 없음 (SteamTransport.ConnectTo).
     public class NetplayUI : MonoBehaviour
     {
         [SerializeField] private NetSession session;
@@ -33,6 +33,31 @@ namespace CameraCoop.Netplay
             }
             session.StartSession(new LoopbackTransport(), "LocalHost");
             Refresh();
+        }
+
+        // Steam 세션 시작 (버튼 배선). 친구는 Steam overlay 초대로 참가 (docs/08 §5).
+        public async void OnClickHostSteam()
+        {
+            if (session.IsRunning)
+            {
+                return;
+            }
+            if (!SteamBootstrap.TryInit())
+            {
+                if (statusText != null) { statusText.text = "Steam 미실행 — Steam 로그인 후 재시도"; }
+                return;
+            }
+            try
+            {
+                SteamTransport transport = await SteamTransport.HostAsync(4);
+                session.StartSession(transport, SteamBootstrap.LocalName);
+                Steamworks.SteamFriends.OpenGameInviteOverlay(transport.LobbyId); // 로비 초대 overlay
+                Refresh();
+            }
+            catch (System.Exception e)
+            {
+                if (statusText != null) { statusText.text = "Steam host 실패: " + e.Message; }
+            }
         }
 
         public void OnClickClear()
