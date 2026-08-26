@@ -191,7 +191,8 @@ namespace CameraCoop
                         max = v;
                     }
                 }
-                Debug.Log($"[UdpHandReceiver] 수신 간격 최근 {StatsWindowSize}개 평균 {sum / StatsWindowSize:F1}ms, 최대 {max:F1}ms");
+                // end-to-end는 직전 패킷 기준 (LastLatencyMs 갱신이 이 호출 뒤에 온다). 30Hz에서 무의미한 차이.
+                Debug.Log($"[UdpHandReceiver] 수신 간격 최근 {StatsWindowSize}개 평균 {sum / StatsWindowSize:F1}ms, 최대 {max:F1}ms, end-to-end {LastLatencyMs:F1}ms");
             }
         }
 

@@ -50,8 +50,35 @@
 ## 3. 레이턴시 측정 방법
 
 - **수신 간격:** `UdpHandReceiver`가 최근 N=100 패킷의 수신 간격(ms)을 누적해 평균/최대를 로그. 기대: 평균 ≈33ms (카메라 30fps), 최대 < 100ms.
+  - 이 지표는 **UDP 도착 간격이 아니라 Unity가 패킷을 처리한 간격**이다. `RecordInterval`이 메인 스레드 `Update()`에서 호출되므로 Unity 프레임 갭이 그대로 값에 들어간다. 프레임이 늦으면 그 사이 도착한 패킷은 최신 1슬롯 방식대로 폐기된다 (`docs/01_architecture.md` §3 의도된 동작).
 - **end-to-end:** 동일 머신이므로 `LastLatencyMs = (Unity 수신 epoch − packet.timestamp) × 1000`으로 직접 측정. 기대: 파이프라인(캡처+추론+필터+전송+수신) < 100ms.
+  - `DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()`가 ms 단위로 내림하고 로그가 직전 패킷 기준이라 **-1ms 수준의 음수가 정상 범위**로 나온다.
 - 측정 로그는 개발용 토글(Inspector bool) 뒤에 두고 기본 off.
+
+### 실측 결과 (2026-08-26, 합성 UDP 송신기 30Hz, 웹캠 부재)
+Editor Play 모드, 5분 연속 8843 패킷, 통계 window 88개 기준.
+
+| 지표 | 실측 | 기대 | 판정 |
+|---|---|---|---|
+| 수신 간격 평균 | 33.8 ~ 34.0ms (중앙 33.9) | ≈33ms | PASS |
+| 5분 경과 시점 평균 | 33.9ms | 드리프트 없음 | PASS |
+| 수신 간격 최대 (중앙) | 38.1ms | < 100ms | PASS |
+| 100ms 초과 window | 1 / 88 (1.1%), 최악 353ms | < 100ms | **부분 미달** |
+| end-to-end | -1.2 ~ 5.0ms | < 100ms | PASS (단 아래 주의) |
+| 예외·에러 | 0건 | 0건 | PASS |
+
+- 100ms 초과 스파이크는 **에디터가 백그라운드일 때의 프레임 갭**이 원인이다. Unity CLI로 매초 폴링하며 측정하면 초과 비율이 22%(9 window 중 2건)까지 오르고, 폴링을 끊으면 1.1%로 떨어진다. 포커스된 빌드에서 재측정이 필요하다.
+- **end-to-end 값에 주의:** 합성 송신기는 캡처·MediaPipe 추론을 하지 않으므로 이 수치는 `UDP 전송 + 파싱`만 측정한다. 실제 파이프라인은 여기에 추론 시간이 더해진다 — 웹캠 확보 후 재측정 대상.
+
+### 실측 결과 — S7 장시간 (5분)
+| 지표 | 시작 | 5분 후 | 판정 |
+|---|---|---|---|
+| totalAllocatedBytes | 2095MB | 2055MB | 누수 없음 |
+| monoUsedBytes | 849MB | 944MB (+95MB) | GC 대기 garbage. 8843패킷 × 약 10KB ≈ 88MB와 일치 (`docs/04_unity_client.md` §2가 인지·허용한 JsonUtility 할당) |
+| drawCalls / triangles | 7 / 1686 | 7 / 1686 | 오브젝트 누적 없음 |
+| cpuFrameTimeMs | 4.16 | 3.08 | 악화 없음 |
+
+절대값은 Editor 프로세스 기준이라 게임 실측치가 아니다. 추세만 유효하다.
 
 ## 4. Step 4 절차
 
