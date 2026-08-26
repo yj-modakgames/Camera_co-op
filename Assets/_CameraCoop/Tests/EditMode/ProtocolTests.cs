@@ -38,6 +38,34 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void IsNewSession_TrueBeforeFirstPacket()
+        {
+            Assert.IsTrue(PacketFilter.IsNewSession(null, timeSinceLastPacket: 0f, lostTimeout: 0.5f));
+        }
+
+        [Test]
+        public void IsNewSession_FalseWhileReceiving()
+        {
+            Assert.IsFalse(PacketFilter.IsNewSession(100u, timeSinceLastPacket: 0.033f, lostTimeout: 0.5f));
+        }
+
+        [Test]
+        public void IsNewSession_TrueAtLostTimeout()
+        {
+            Assert.IsTrue(PacketFilter.IsNewSession(100u, timeSinceLastPacket: 0.5f, lostTimeout: 0.5f));
+        }
+
+        // 송신 측 재시작 시나리오: lost 이후 seq 0 패킷이 와도 수용돼야 자동 복구가 성립한다.
+        [Test]
+        public void IsNewSession_AllowsRestartedSenderWithLowerSeq()
+        {
+            var restarted = new HandPacket { v = 1, seq = 0, timestamp = 0, hands = new HandData[0] };
+            Assert.IsFalse(PacketFilter.ShouldAccept(restarted, lastSeq: 900), "seq 필터만으로는 재시작 패킷이 폐기된다");
+            Assert.IsTrue(PacketFilter.IsNewSession(900u, timeSinceLastPacket: 1.2f, lostTimeout: 0.5f),
+                "lost 이후에는 새 세션으로 보고 seq 체인을 리셋해야 한다");
+        }
+
+        [Test]
         public void ShouldAccept_RejectsNullPacket()
         {
             Assert.IsFalse(PacketFilter.ShouldAccept(null, lastSeq: 0));

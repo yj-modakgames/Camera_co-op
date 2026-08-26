@@ -62,8 +62,10 @@
 | 패킷 역전/중복 | `seq <= lastSeq` | 폐기 |
 | 손 lost | 최신 패킷의 `hands`에 해당 handedness 없음 | 해당 커서 fade out |
 | 서버 lost | **0.5초 무수신** | 전체 커서 fade out. 수신 재개 시 자동 복구 |
+| 송신 측 재시작 | 서버 lost 이후 첫 패킷 | **`lastSeq` 리셋 후 수용** (아래 참조) |
 
 - 손 lost와 서버 lost를 구분하기 위해 Python은 손이 없어도 빈 `hands`로 계속 전송한다.
+- **`seq` 체인 리셋:** Python은 재시작하면 `seq`를 0부터 다시 보낸다. `seq <= lastSeq` 폐기 규칙만 적용하면 재시작 패킷이 영구히 폐기돼 자동 복구가 불가능하다. 따라서 수신 측은 **서버 lost 상태(0.5초 무수신)에서 온 패킷을 새 세션의 첫 패킷으로 보고 `lastSeq`를 리셋**한다 (`PacketFilter.IsNewSession`). <!-- ponytail: 0.5초 안에 재시작하면 이 리셋이 걸리지 않아 옛 seq를 넘을 때까지 폐기된다. MediaPipe 초기화가 수 초 걸리므로 실제로는 발생하지 않는다. 문제되면 프로토콜에 session id 추가 -->
 - `seq`는 uint 롤오버를 무시한다. <!-- ponytail: 30Hz 기준 롤오버까지 4.5년. 문제되면 wrap-around 비교로 교체 -->
 
 ## 5. 버전 정책

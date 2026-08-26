@@ -147,7 +147,7 @@ namespace CameraCoop
                 return;
             }
 
-            bool isFirstPacket = !lastSeq.HasValue;
+            bool isFirstPacket = PacketFilter.IsNewSession(lastSeq, TimeSinceLastPacket, lostTimeout);
             if (!isFirstPacket && !PacketFilter.ShouldAccept(packet, lastSeq.Value))
             {
                 return;

@@ -4,11 +4,13 @@
 
 | 항목 | 값 | 근거 |
 |---|---|---|
-| Python | 3.13.3 (시스템 설치본) | Phase 0에서 확인 |
+| Python | 3.14.4 (시스템 PATH) | 2026-08-26 실측. **이 PC에 3.13은 없다** (py launcher는 3.12만 등록). Phase 0 기록의 3.13.3은 오류 |
 | 가상환경 | `PythonTracker/.venv` | `.gitignore`에 `PythonTracker/.venv/` 추가 (Step 1에서) |
-| mediapipe | `1.0.1` 고정 | 3.13 휠 존재 확인(Phase 0 dry-run). 1.x는 Tasks API 전용 |
-| opencv-python | `5.0.0.93` 고정 | 3.13 휠 존재 확인 |
+| mediapipe | `1.0.1` 고정 | wheel 태그 `py3-none-win_amd64` — **Python 버전 비의존**. 1.x는 Tasks API 전용 |
+| opencv-python | `5.0.0.93` 고정 | wheel 태그 `cp37-abi3-win_amd64` — Python 3.7+ 공통 ABI |
 | 모델 파일 | `PythonTracker/models/hand_landmarker.task` | Tasks API 필수 에셋. **git에 커밋** (약 8MB, 팀원 편의 우선). 다운로드 URL은 README에 기록 |
+
+> 버전 주의: 두 wheel 모두 특정 CPython 버전에 묶이지 않으므로 3.12/3.14 어디서든 설치된다. 실제 검증은 3.14.4에서 수행했다 (`cv2 5.0.0`, `mediapipe 1.0.1`, `vision.HandLandmarker` import 확인). 의존성으로 `numpy 2.5.2`, `opencv-contrib-python`이 함께 설치된다.
 
 ## 2. 모듈 구성
 

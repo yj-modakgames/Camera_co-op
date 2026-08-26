@@ -62,6 +62,14 @@ namespace CameraCoop
 
             return true;
         }
+
+        // 서버 lost 이후의 첫 패킷은 송신 측 재시작으로 간주해 seq 체인을 새로 시작한다.
+        // 재시작한 Python은 seq를 0부터 다시 보내므로, lastSeq를 유지하면 ShouldAccept가
+        // 그 패킷을 영구히 폐기해 자동 복구가 불가능해진다 (docs/02_protocol.md §4).
+        public static bool IsNewSession(uint? lastSeq, float timeSinceLastPacket, float lostTimeout)
+        {
+            return !lastSeq.HasValue || timeSinceLastPacket >= lostTimeout;
+        }
     }
 
     // 정규화 좌표 [0,1] → 화면 픽셀 좌표 변환 (y 반전). 순수 함수.
