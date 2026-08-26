@@ -116,5 +116,54 @@ namespace CameraCoop.Tests
             Vector2[] back = NetProtocol.UnflattenPoints(new[] { 0.1f, 0.2f, 0.9f });
             Assert.AreEqual(1, back.Length);
         }
+
+        // ---- LoopbackTransport (docs/08 §2 — 단일 기기 검증용) ----
+
+        [Test]
+        public void Loopback_AddFakePeer_FiresConnected()
+        {
+            var t = new LoopbackTransport();
+            string connected = null;
+            t.OnPeerConnected += id => connected = id;
+            t.AddFakePeer("fake-1", "P1");
+            Assert.AreEqual("fake-1", connected);
+            Assert.IsTrue(t.IsHost);
+        }
+
+        [Test]
+        public void Loopback_FakeSend_DeliveredOnTickOnly()
+        {
+            var t = new LoopbackTransport();
+            var peer = t.AddFakePeer("fake-1", "P1");
+            byte[] got = null;
+            string from = null;
+            t.OnMessage += (id, data) => { from = id; got = data; };
+            peer.SendToHost(new byte[] { 7 });
+            Assert.IsNull(got); // Tick 전에는 미발화 (큐잉)
+            t.Tick();
+            Assert.AreEqual("fake-1", from);
+            Assert.AreEqual(7, got[0]);
+        }
+
+        [Test]
+        public void Loopback_SendTo_AppendsToFakeReceived()
+        {
+            var t = new LoopbackTransport();
+            var peer = t.AddFakePeer("fake-1", "P1");
+            t.SendTo("fake-1", new byte[] { 9 }, reliable: true);
+            Assert.AreEqual(1, peer.Received.Count);
+            Assert.AreEqual(9, peer.Received[0][0]);
+        }
+
+        [Test]
+        public void Loopback_RemoveFakePeer_FiresDisconnected()
+        {
+            var t = new LoopbackTransport();
+            t.AddFakePeer("fake-1", "P1");
+            string gone = null;
+            t.OnPeerDisconnected += id => gone = id;
+            t.RemoveFakePeer("fake-1");
+            Assert.AreEqual("fake-1", gone);
+        }
     }
 }
