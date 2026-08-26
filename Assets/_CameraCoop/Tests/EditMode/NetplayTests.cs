@@ -165,5 +165,36 @@ namespace CameraCoop.Tests
             t.RemoveFakePeer("fake-1");
             Assert.AreEqual("fake-1", gone);
         }
+
+        // ---- SessionLogic (docs/08 §2, §3) ----
+
+        [Test]
+        public void AssignColorIndex_PicksSmallestFree()
+        {
+            Assert.AreEqual(0, SessionLogic.AssignColorIndex(new List<int>()));
+            Assert.AreEqual(1, SessionLogic.AssignColorIndex(new List<int> { 0 }));
+            Assert.AreEqual(1, SessionLogic.AssignColorIndex(new List<int> { 0, 2 }));
+            Assert.AreEqual(3, SessionLogic.AssignColorIndex(new List<int> { 0, 1, 2 }));
+        }
+
+        [Test]
+        public void AssignColorIndex_FullReturnsMinusOne()
+        {
+            Assert.AreEqual(-1, SessionLogic.AssignColorIndex(new List<int> { 0, 1, 2, 3 }));
+        }
+
+        [Test]
+        public void BuildSnapshot_IncludesOnlyFinishedStrokes()
+        {
+            var strokes = new Dictionary<string, NetStroke>
+            {
+                { "a:0", new NetStroke { playerId = "a", points = new List<Vector2> { Vector2.zero, Vector2.one }, finished = true } },
+                { "a:1", new NetStroke { playerId = "a", points = new List<Vector2> { Vector2.zero }, finished = false } }
+            };
+            StrokeSnapshot[] snap = SessionLogic.BuildSnapshot(strokes);
+            Assert.AreEqual(1, snap.Length);
+            Assert.AreEqual("a:0", snap[0].strokeId);
+            Assert.AreEqual(4, snap[0].xy.Length);
+        }
     }
 }
