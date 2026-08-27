@@ -22,8 +22,8 @@ Steam/Loopback 멀티플레이 드로잉을 **3D 환경(룸 + 월드 공간 캔�
 Scripts/Drawing/CanvasSurface.cs — 월드 공간 캔버스 평면 (MonoBehaviour)
 ```
 
-- transform이 붙은 Quad가 캔버스. `width`/`height`(월드 단위, Inspector)로 사각형 정의.
-- `Vector3 NormToWorld(Vector2 norm)` — norm [0,1] 좌상단 원점(docs/02 §3 좌표계) → 캔버스 평면 위 월드 좌표. transform의 위치·회전·스케일 반영.
+- 1×1 Quad에 부착 — **transform 스케일이 곧 캔버스 크기** (별도 width/height 필드 없음 → 시각 크기와 매핑이 어긋날 수 없다).
+- `Vector3 NormToWorld(Vector2 norm)` — norm [0,1] 좌상단 원점(docs/02 §3 좌표계) → 캔버스 표면 위 월드 좌표 (`transform.TransformPoint`). 로컬 z에 `surfaceOffset`(기본 -0.005, Quad 정면 -Z 쪽)을 둬 z-fighting 방지.
 - 순수 매핑 수식은 `internal static CanvasSurfaceLogic`으로 분리 — EditMode 테스트 대상 (docs/04 §5 패턴).
 
 ### 기존 3개에 optional 주입 (미할당 = 기존 동작 → NetplayTest 무회귀)
@@ -48,7 +48,7 @@ Scripts/Drawing/CanvasSurface.cs — 월드 공간 캔버스 평면 (MonoBehavio
 `Scenes/Netplay3D.unity` 신규. 빌드 씬 등록. 외부 에셋 없이 프리미티브 + URP material.
 
 - **룸**: 바닥 Plane + 뒷벽/옆벽 (URP Lit, 차분한 색), Directional Light 1 + 보조 광
-- **이젤 + 캔버스**: 큐브 조합 이젤 위 Quad. **캔버스 비율 16:9** (웹캠·화면 norm 좌표와 동일 비율 — 그림 왜곡 방지). 흰색 material. `CanvasSurface` 부착, width/height = Quad 크기와 일치
+- **이젤 + 캔버스**: 큐브 조합 이젤 위 Quad. **캔버스 비율 16:9** (웹캠·화면 norm 좌표와 동일 비율 — 그림 왜곡 방지). 흰색 material. `CanvasSurface` 부착 (Quad 스케일 = 캔버스 크기)
 - **카메라**: 캔버스 정면 고정, 캔버스가 화면 대부분을 차지
 - **배선**: NetplayTest와 동일 오브젝트 세트 (UdpHandReceiver, HandCursorController+HandCursor prefab×2, DrawingController, NetSession, RemotePresenter, NetplayUI, TrackerLauncher, 로비 UI Canvas+**GraphicRaycaster**+EventSystem) + canvasSurface/카메라 주입
 - 스트로크 lineWidth는 캔버스 크기에 맞게 조정 (기본 0.02 월드 단위 기준 검토)
