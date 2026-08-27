@@ -37,6 +37,10 @@ namespace CameraCoop.Netplay
 
         private void OnEnable()
         {
+            if (canvasSurface != null && drawCamera == null)
+            {
+                Debug.LogError("[RemotePresenter] canvasSurface는 할당됐는데 drawCamera가 없다 — 원격 표시가 화면 좌표로 폴백해 잉크와 어긋난다 (docs/10 §2)");
+            }
             session.OnRemoteCursor += HandleCursor;
             session.OnRemoteStrokeStart += HandleStrokeStart;
             session.OnRemoteStrokePoints += HandleStrokePoints;

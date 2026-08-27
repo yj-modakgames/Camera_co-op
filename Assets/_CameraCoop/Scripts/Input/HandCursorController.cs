@@ -44,6 +44,10 @@ namespace CameraCoop
 
         private void Awake()
         {
+            if (canvasSurface != null && projectionCamera == null)
+            {
+                Debug.LogError("[HandCursorController] canvasSurface는 할당됐는데 projectionCamera가 없다 — 커서가 화면 좌표로 폴백해 잉크와 어긋난다 (docs/10 §2)");
+            }
             leftState = BuildState(leftCursor, leftColor);
             rightState = BuildState(rightCursor, rightColor);
         }
