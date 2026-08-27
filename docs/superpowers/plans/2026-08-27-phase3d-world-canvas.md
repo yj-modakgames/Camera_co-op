@@ -437,8 +437,11 @@ canvasGo.GetComponent<UnityEngine.Renderer>().sharedMaterial = canvasMat;
 UnityEngine.Object.DestroyImmediate(canvasGo.GetComponent<UnityEngine.Collider>());
 var surface = canvasGo.AddComponent<CameraCoop.CanvasSurface>();
 
-// 5) 카메라 재배치 (캔버스 정면 고정, docs/10 §3)
-var cam = UnityEngine.Camera.main;
+// 5) 2D 전용 Backdrop 제거 + 카메라 재배치 (캔버스 정면 고정, docs/10 §3)
+// 주의: 씬 카메라는 이름 "Camera", 태그 Untagged — Camera.main은 null이다. FindFirstObjectByType 사용.
+var backdrop = UnityEngine.GameObject.Find("Backdrop");
+if (backdrop != null) { UnityEngine.Object.DestroyImmediate(backdrop); }
+var cam = UnityEngine.Object.FindFirstObjectByType<UnityEngine.Camera>();
 cam.transform.position = new UnityEngine.Vector3(0f, 1.5f, -1.6f);
 cam.transform.rotation = UnityEngine.Quaternion.identity;
 cam.clearFlags = UnityEngine.CameraClearFlags.Skybox;
