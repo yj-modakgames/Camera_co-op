@@ -15,6 +15,7 @@ namespace CameraCoop.Netplay
         [SerializeField, Min(0f)] private float planeDistance = 5.0f;   // DrawingController와 동일 값 유지
         [SerializeField, Min(0f)] private float lineWidth = 0.02f;
         [SerializeField] private Material lineMaterial;                  // StrokeLine.mat 공유
+        [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 월드 캔버스에 표시 (docs/10 §2). 미할당 = 기존 카메라 평면
         [SerializeField] private Color[] playerPalette = new Color[]     // colorIndex 0~3 (docs/08 §3)
         {
             new Color(0.2f, 0.6f, 1f), new Color(1f, 0.6f, 0.1f),
@@ -91,7 +92,9 @@ namespace CameraCoop.Netplay
             }
             cursor.lastSeen = Time.unscaledTime;
             cursor.image.color = ColorOf(playerId);
-            cursor.rect.position = HandScreenMapper.ToScreen(norm.x, norm.y, Screen.width, Screen.height);
+            cursor.rect.position = canvasSurface != null
+                ? (Vector2)drawCamera.WorldToScreenPoint(canvasSurface.NormToWorld(norm))
+                : HandScreenMapper.ToScreen(norm.x, norm.y, Screen.width, Screen.height);
             float scale = CursorStateLogic.Scale(pinched, 0.7f);
             cursor.rect.localScale = new Vector3(scale, scale, scale);
         }
@@ -161,9 +164,13 @@ namespace CameraCoop.Netplay
             strokeLines.Clear();
         }
 
-        // 정규화 [0,1] (좌상단 원점) -> 화면 -> 드로잉 평면 월드 좌표
+        // 정규화 [0,1] (좌상단 원점) -> 월드 좌표. canvasSurface 할당 시 월드 캔버스, 미할당 시 카메라 평면
         private Vector3 ToWorld(Vector2 norm)
         {
+            if (canvasSurface != null)
+            {
+                return canvasSurface.NormToWorld(norm);
+            }
             Vector2 screen = HandScreenMapper.ToScreen(norm.x, norm.y, Screen.width, Screen.height);
             return drawCamera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, planeDistance));
         }

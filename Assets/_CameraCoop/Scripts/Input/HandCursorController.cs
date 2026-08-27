@@ -20,6 +20,8 @@ namespace CameraCoop
         [SerializeField] private Color leftColor = new Color(0.2f, 0.6f, 1f);   // 청색 계열
         [SerializeField] private Color rightColor = new Color(1f, 0.6f, 0.1f);  // 주황색 계열
         [SerializeField] private float fadeDuration = 0.2f;
+        [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 커서를 월드 캔버스 투영 위치에 표시 (docs/10 §2)
+        [SerializeField] private Camera projectionCamera;        // canvasSurface 사용 시 필수 (WorldToScreenPoint용)
 
         // Phase 2 드로잉 접점. Phase 1에서는 발행만 하고 구독자 없음.
         public event Action<string, Vector2> OnPinchStart;
@@ -133,7 +135,13 @@ namespace CameraCoop
 
             Vector3 tip = hand.GetLandmark(8); // index tip
             Vector2 screenPos = HandScreenMapper.ToScreen(tip.x, tip.y, Screen.width, Screen.height);
-            state.cursor.position = screenPos;
+            // 표시 위치만 월드 캔버스 투영으로 분기. 이벤트의 screenPos는 기존 값 유지 (NetSession 왕복 계약, docs/10 §2)
+            Vector2 displayPos = screenPos;
+            if (canvasSurface != null && projectionCamera != null)
+            {
+                displayPos = projectionCamera.WorldToScreenPoint(canvasSurface.NormToWorld(new Vector2(tip.x, tip.y)));
+            }
+            state.cursor.position = displayPos;
 
             bool wasPinched = state.pinched;
             bool nowPinched = PinchStateMachine.Next(wasPinched, hand.pinch, pinchThreshold, pinchReleaseThreshold);

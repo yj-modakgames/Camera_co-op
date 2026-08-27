@@ -15,6 +15,7 @@ namespace CameraCoop
         [SerializeField] private float lineWidth = 0.02f;
         [SerializeField, Min(0f)] private float maxSegmentScreenFraction = 0.25f;  // 연속 점 허용 최대 화면 이동 비율 (초과 시 스트로크 분리)
         [SerializeField] private Material lineMaterial;           // vertex color를 곱하는 셰이더여야 함 (URP Particles/Unlit)
+        [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 월드 캔버스에 그림 (docs/10 §2). 미할당 = 기존 카메라 평면
         [SerializeField] private Color leftStrokeColor = new Color(0.2f, 0.6f, 1f);   // 커서 색과 같은 계열
         [SerializeField] private Color rightStrokeColor = new Color(1f, 0.6f, 0.1f);
         [SerializeField] private Key clearKey = Key.C;            // 새 Input System 전용 (docs/07 §5)
@@ -103,9 +104,13 @@ namespace CameraCoop
             }
         }
 
-        // 화면 좌표 -> 카메라 앞 planeDistance 평면의 월드 좌표 (docs/07 §3)
+        // 화면 좌표 -> 드로잉 표면 월드 좌표. canvasSurface 할당 시 월드 캔버스(docs/10 §2), 미할당 시 카메라 앞 평면(docs/07 §3)
         private Vector3 ToPlanePoint(Vector2 screenPos)
         {
+            if (canvasSurface != null)
+            {
+                return canvasSurface.NormToWorld(HandScreenMapper.ToNormalized(screenPos, Screen.width, Screen.height));
+            }
             return drawCamera.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, planeDistance));
         }
 
