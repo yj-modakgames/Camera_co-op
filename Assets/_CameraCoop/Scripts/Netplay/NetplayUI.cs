@@ -72,7 +72,14 @@ namespace CameraCoop.Netplay
                 if (statusText != null) { statusText.text = "Steam 미실행 — Steam 로그인 후 재시도"; }
                 return;
             }
-            await lobby.Join();
+            try
+            {
+                await lobby.Join();
+            }
+            catch (System.Exception e)
+            {
+                if (statusText != null) { statusText.text = "로비 참가 실패: " + e.Message; }
+            }
         }
 
         // 로비 참가 완료 -> host에 relay 접속 (docs/08 §5). host 자신은 이미 세션 중이라 걸러진다.
