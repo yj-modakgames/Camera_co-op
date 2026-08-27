@@ -439,6 +439,9 @@ namespace CameraCoop.Game
 
 docs/12 §6 DoD를 실제로 실행해 증거를 남긴다. **추측 금지 — 실행 출력·캡처만 인용.** 검증용 eval 스크립트는 스크래치 디렉터리에 두고 커밋하지 않는다.
 
+> **검증 환경 제약 (docs/12 §6):** 실웹캠·실기 멀티 불가 — 전부 `fake_hand.py` 합성 UDP + Loopback 가짜 피어로 수행한다.
+> 실웹캠 스모크·Steam 실기·한글 IME 실타이핑은 "사용자 검증 대기"로 보고서에 명시하고 이 Task의 PASS 조건에서 제외.
+
 - [ ] **Step 1: G-2 Loopback 게임 전판** — Play → Host Loopback → eval로 가짜 클라 2명 접속(`LoopbackTransport(isHost:false, ...)` — NetplayTests 패턴) → `GameSession.StartGame(0)` → 출제자 확인 → 가짜 클라로 오답 1회·정답 제출 → 피드·점수 확인 → 전 라운드 소화(테스트 편의로 Inspector에서 `drawSec` 10으로 낮춰 진행 가능) → GameEnd → Idle 복귀 → 자유 그리기 동작. **콘솔 에러 0**
 - [ ] **Step 2: G-3 드로잉 게이트** — 로컬이 출제자인 라운드에 `fake_hand.py --target`으로 실제 UDP 스트로크 1개 생성(스트로크 오브젝트 존재 인용). 가짜 클라(비출제자)가 `StrokeStart` 송신 → host `strokes`에 없고 다른 클라에 미중계 인용. 로컬이 비출제자일 때 fake_hand 핀치 → 스트로크 0개
 - [ ] **Step 3: G-4 입력 게이트** — Play 중 eval로 `guessInput.ActivateInputField()` → `InputFocus.IsTyping == true` 인용 → `PlayerController.Step` 경로가 Update에서 안 불리는지(위치 불변) + C키 시뮬레이션 대신 코드 검사로 게이트 조건 인용. **한글 IME 실타이핑은 자동화 불가 — 최종 보고에 "사용자 확인 필요" 항목으로 명시**

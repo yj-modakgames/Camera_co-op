@@ -168,6 +168,11 @@ host: GuessGameLogic.SubmitGuess(playerId, text, 남은 초)
 
 ## 6. 테스트 / DoD
 
+> **검증 환경 제약 (2026-08-27 사용자 확인):** 실제 웹캠 입력과 실제 다인(Steam) 접속은 현재 테스트 불가.
+> 따라서 G-2~G-7은 전부 **합성 입력(`fake_hand.py` UDP) + Loopback 가짜 피어**로 수행한다 — 웹캠·별도 기기 불필요.
+> 아래 3건은 **사용자 검증 대기**로 이연하며, 이 Phase의 DoD에서 제외한다 (docs/09 §3 N-5와 같은 취급):
+> ① 실웹캠 손 트래킹으로 게임 1라운드 스모크 ② Steam 실기 2+인 게임 세션 ③ G-4 중 한글 IME 실타이핑(자동화 불가)
+
 | # | 기준 | 확인 방법 |
 |---|---|---|
 | G-1 | EditMode: GuessGameLogic 상태 전이 전건·턴 순환(이탈 포함)·점수·조기 종료·릴레이 교대 / GuessJudge 정규화 / WordBank 무중복·재셔플 / NetSession 화이트리스트 중계·StrokeGate / 프로토콜 v3 인코딩 왕복 + 기존 전체 pass | `unity cmd run_tests --mode EditMode` |
