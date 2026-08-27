@@ -61,7 +61,7 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 
 - **Play 모드 중 `unity cmd recompile` 금지** — domain reload로 비직렬화 필드 null → 프레임당 NRE burst. 반드시 editor_stop 먼저
 - **컴파일 중 run_tests 금지** — stale 어셈블리 결과 반환. `editor_status`의 `compiling:false` 확인 후 실행
-- **handedness 반전 (docs/02 §2)**: Python이 좌우 반전해 송신하는 것은 mediapipe **0.10.21** 실측 기반. Windows의 mediapipe 1.0.1에서 라벨 방향이 다를 수 있다 — **웹캠 연결 후 첫 작업으로 양손 색 확인** (왼손=파랑, 오른손=주황). 반대면 `hand_tracker.py`의 반전 1줄 제거 + docs/02 갱신
+- ~~**handedness 반전 (docs/02 §2)**~~ **2026-08-27 Windows 검증 완료 — 코드 변경 불필요.** mediapipe 1.0.1도 0.10.21과 동일하게 flip 후 raw 라벨이 실제 손과 반대다 (양손 동시 검출 30프레임: 실제 왼손→raw `Right`, 실제 오른손→raw `Left`, score 0.975). `hand_tracker.py:181`의 반전 1줄 유지. 단, **한 손만** 올리면 라벨이 한쪽으로 고정되는 현상이 있으니 검증은 반드시 양손으로 할 것
 - Unity CLI: instanceId는 Play 진입/domain reload마다 무효화. eval에서 `Object`는 `UnityEngine.Object`로 명시 (모호성 컴파일 에러)
 - `capture_game_view --save_path`는 프로젝트 루트 상대 경로만, 실제로는 `Assets/` 밑에 저장됨 — 검증 후 .meta와 함께 삭제
 - pipeline test-runner가 timeout으로 취소되면 editor update 펌프가 죽어 모든 CLI 명령이 timeout될 수 있다 — Editor 재시작으로 복구 (Mac에서 1회 발생)

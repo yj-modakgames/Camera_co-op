@@ -33,7 +33,7 @@
 | `seq` | uint | 0부터 증가 | 패킷 순번. 수신 측은 마지막 처리 seq 이하인 패킷을 폐기 (UDP 역전/중복 대응) |
 | `timestamp` | double | Unix epoch 초 | Python `time.time()`. 동일 머신이므로 Unity 측 epoch와 직접 비교해 레이턴시 측정 가능 |
 | `hands` | array | 0~2개 | 검출된 손. **미검출 시에도 빈 배열로 계속 전송** (heartbeat 겸용) |
-| `handedness` | string | `"Left"` \| `"Right"` | 사용자 기준 실제 손. 셀피 미러(flip) 후 추론 시 MediaPipe 판정값이 실제 손과 반대로 나오므로 Python이 좌우 반전해 송신한다 (2026-08-26 Intel Mac·mediapipe 0.10.21 실물 검증. 다른 스택(mediapipe 1.0.1)에서는 재검증 필요) |
+| `handedness` | string | `"Left"` \| `"Right"` | 사용자 기준 실제 손. 셀피 미러(flip) 후 추론 시 MediaPipe 판정값이 실제 손과 반대로 나오므로 Python이 좌우 반전해 송신한다 (2026-08-26 Intel Mac·mediapipe 0.10.21, 2026-08-27 Windows·mediapipe 1.0.1 양쪽 실물 검증 — 두 스택 모두 반전 필요. 검증법: 양손을 동시에 올려 flip 후 `wrist.x`가 큰 쪽이 실제 오른손임을 정답으로 두고 raw 라벨과 대조) |
 | `landmarks` | float[63] | 아래 좌표계 | 21개 랜드마크 × (x,y,z) **평탄화 배열**. index i번 랜드마크 = `[i*3], [i*3+1], [i*3+2]` |
 | `pinch` | float | 비율 (무단위) | `dist2D(4,8) / dist2D(0,9)`. 손 크기로 정규화된 엄지-검지 거리 |
 
