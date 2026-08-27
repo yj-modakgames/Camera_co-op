@@ -92,7 +92,7 @@ namespace CameraCoop.Netplay
             }
             cursor.lastSeen = Time.unscaledTime;
             cursor.image.color = ColorOf(playerId);
-            cursor.rect.position = canvasSurface != null
+            cursor.rect.position = (canvasSurface != null && drawCamera != null)
                 ? (Vector2)drawCamera.WorldToScreenPoint(canvasSurface.NormToWorld(norm))
                 : HandScreenMapper.ToScreen(norm.x, norm.y, Screen.width, Screen.height);
             float scale = CursorStateLogic.Scale(pinched, 0.7f);
