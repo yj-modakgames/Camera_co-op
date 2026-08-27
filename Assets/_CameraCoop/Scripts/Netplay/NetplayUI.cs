@@ -11,8 +11,13 @@ namespace CameraCoop.Netplay
         [SerializeField] private DrawingController drawingController;
         [SerializeField] private Text statusText;
 
+        private SteamTransport steamTransport; // 로비 Id 표시용 (초대가 막힐 때 수동 join 대조)
+
         private void OnEnable()
         {
+            // 구독보다 먼저 Init — 초대 수락 callback(OnGameLobbyJoinRequested)은 Init 이후에만 발화한다.
+            // 클라 쪽은 host 버튼을 누르지 않으므로 여기서 초기화하지 않으면 초대를 영원히 못 받는다.
+            SteamBootstrap.TryInit();
             session.OnPlayersChanged += Refresh;
             session.OnCanvasCleared += HandleCleared;
             Steamworks.SteamFriends.OnGameLobbyJoinRequested += HandleJoinRequested;
@@ -54,6 +59,7 @@ namespace CameraCoop.Netplay
             try
             {
                 SteamTransport transport = await SteamTransport.HostAsync(4);
+                steamTransport = transport;
                 session.StartSession(transport, SteamBootstrap.LocalName);
                 Steamworks.SteamFriends.OpenGameInviteOverlay(transport.LobbyId); // 로비 초대 overlay
                 Refresh();
@@ -123,11 +129,17 @@ namespace CameraCoop.Netplay
             }
             if (!session.IsRunning)
             {
-                statusText.text = "세션 없음 — Host Loopback을 누르세요";
+                statusText.text = SteamBootstrap.IsValid
+                    ? "세션 없음 — Steam 연결됨: " + SteamBootstrap.LocalName + " (" + SteamBootstrap.LocalSteamId + ")"
+                    : "세션 없음 — Steam 미연결 (Loopback만 가능)";
                 return;
             }
             var sb = new System.Text.StringBuilder();
             sb.Append(session.IsHost ? "[HOST] " : "[CLIENT] ").Append("players: ").Append(session.Players.Count).AppendLine();
+            if (steamTransport != null && steamTransport.LobbyId != 0UL)
+            {
+                sb.Append("lobby: ").Append(steamTransport.LobbyId).AppendLine(); // 초대가 안 뜰 때 이 값으로 대조
+            }
             foreach (var pair in session.Players)
             {
                 sb.Append("  ").Append(pair.Value.name).Append(" (#").Append(pair.Value.colorIndex).Append(")").AppendLine();
