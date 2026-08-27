@@ -13,6 +13,7 @@
 | 2. 드로잉 메카닉 | 완료. DoD D-1~D-7 통과, 재검출 스냅 가드 포함. 채점 9.9 |
 | 3a. 온라인 4인 네트워킹 | **구현 완료, main merge됨.** Loopback 검증(N-1~N-3) 통과, EditMode **72/72** (2026-08-27 client role 4건 추가). Steam 경로는 컴파일·정적 검증만 (런타임 미검증) |
 | 3d. 3D 월드 캔버스 (Netplay3D) | **구현 완료.** `CanvasSurface` norm→월드 매핑 + 3개 컴포넌트 optional 주입, `Netplay3D.unity` 신규 씬(빌드 씬 등록). EditMode **81/81**. Loopback W-2/W-3 PASS, 2D 씬 W-4 무회귀 PASS (docs/10 §5·§7) |
+| 3e. 3D 이동·그림 도구 팔레트 | **3D 구현 및 P-1~P-6 검증 완료.** 손바닥 조준 회귀 테스트 포함 EditMode **132/132**, 실제 UDP 도구 선택·그리기·지우기 및 Loopback 스타일/삭제 검증. 기존 2D 입력 경로 보존 방식 승인 대기(P-7), 새 빌드·최종 채점 미완료. 재개점: docs/11 §8 |
 
 Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 (-0.1), Unity 메모리 증가분 단정 불가+스냅샷 무상한 (-0.1), Steam 런타임 미실행 (-0.1), `lobby.SetData("hostId")` 죽은 줄 (-0.1)
 
