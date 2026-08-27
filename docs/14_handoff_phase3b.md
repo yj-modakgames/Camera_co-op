@@ -7,10 +7,9 @@
 
 ## 1. 즉시 확인할 것 (재개 첫 단계)
 
-1. `git log --oneline -6` — 아래 §2 표와 대조해 어디까지 커밋됐는지 확인.
-2. `git status` — **인계 시점에 Task 3 수정 라운드 1이 하위 에이전트에서 진행 중이었고, `NetSession.cs`·`GameChannelTests.cs`에 미커밋 변경이 있었다.** 세션이 끊겼으면 이 작업은 미완성일 수 있다:
-   - 미커밋 변경이 남아 있으면: §4의 open finding에 대한 수정인지 확인(멤버십 검사 + 테스트). 완성돼 보이면 EditMode 전건 실행 후 `fix: 미등록 피어 게임 메시지 차단 (Task 3 리뷰 수정)`으로 커밋. 애매하면 `git checkout -- .`으로 버리고 §4대로 재수정 (작은 수정이라 재작업 비용이 검증 비용보다 싸다).
-   - `b7d851a` 이후 fix 커밋이 이미 있으면: 수정 완료 상태 — 스코프 재리뷰(§5 절차)만 하면 Task 3 종료.
+1. `git log --oneline -7` — 아래 §2 표와 대조해 어디까지 커밋됐는지 확인. 인계 시점 HEAD 부근: `8d3c353`(Task 3 fix) / `a2b3907`(이 문서). working tree는 인계 시점에 clean.
+2. **Task 3 수정 라운드 1은 완료·커밋됨** (`8d3c353`, EditMode 197/197, 신규 테스트 `Host_UnregisteredPeer_MessagesAreDropped` 포함). 남은 것은 **스코프 재리뷰 1건**: `8d3c353` diff만 놓고 §4 finding이 ADDRESSED인지 + fix diff의 신규 파손 여부만 확인 (§5 절차). ADDRESSED면 Task 3 종료 → Task 4부터 진행.
+   - 참고(재리뷰어에게 전달): 이 fix 라운드는 가드 제거 상태의 실행 RED 증거가 없다(recompile 권한 차단). 논리 증명 + 신규 테스트 GREEN + 전체 197/197로 갈음 — task-3-report.md의 fix 부록 참조.
 3. SDD 레저(git-ignored, 이 기기 한정): `.superpowers/sdd/2026-08-27-phase3b-guess-game/progress.md` — 존재하면 그것이 상세 기록. 없으면 이 문서 §2~§6이 대체본.
 
 ## 2. Task 진행 상태 (2026-08-27 인계 시점)
@@ -19,7 +18,7 @@
 |---|---|---|---|---|
 | 1 | GameProtocol + GuessJudge + WordBank | **완료** (리뷰 clean) | `a1b434b` | 153/153 |
 | 2 | GuessGameLogic 상태 머신 | **완료** (리뷰 clean, minor 7 이연) | `8d5bc78` | 178/178 |
-| 3 | NetProtocol v3 + NetSession 통로 6건 | 구현 커밋됨, **리뷰 Important 1건 수정 중** (§4) | `b7d851a` (+fix 미커밋일 수 있음) | 196/196 (fix 전) |
+| 3 | NetProtocol v3 + NetSession 통로 6건 | 구현+리뷰 fix 커밋됨, **스코프 재리뷰만 남음** (§1-2) | `b7d851a` + `8d3c353` | 197/197 |
 | 4 | 입력 게이트 (InputFocus·StrokesEnabled·WASD/C 차단) | 미착수 | — | — |
 | 5 | GameClientState + GameSession | 미착수 (§6 인계 노트 필수 반영) | — | — |
 | 6 | GameUI + words_ko.txt + 씬 배선 | 미착수 | — | — |
@@ -42,13 +41,13 @@ docs/superpowers/plans/2026-08-27-phase3b-guess-game.md 를 subagent-driven-deve
 - Task당 절차: 구현자 파견(TDD) → 리뷰어 파견(스펙+품질) → 필요 시 수정 라운드(최대 5) → 레저 기록 → 다음 Task.
 - 전체 완료 후: 최종 브랜치 리뷰 → G-8 채점(≥9.0) → main 병합은 **사용자 확인 후**.
 
-## 4. Task 3 open finding (Important 1건 — 수정 라운드 1 진행 중이었음)
+## 4. Task 3 리뷰 finding (Important 1건 — `8d3c353`으로 수정됨, 재리뷰 대기)
 
 리뷰어 판정 원문 요약:
 
 > **미등록 sender의 게임 메시지가 `OnGameMessage`로 나간다** (NetSession.cs 수신 경로). 위조 가드(`env.sender != directSender`)는 있으나 `players` 멤버십 검사가 없어, Hello를 아직 안 보낸 피어나 4인 초과로 거부된 5번째 피어가 임의 게임 타입을 보내면 통로로 흘러 들어간다 — 미등록 피어가 정답을 제출해 라운드를 끝낼 수 있는 경로.
 
-수정 내용(합의됨): host 수신 경로에서 Hello 분기 **뒤**, StrokeGate·중계·OnGameMessage **앞**에 `if (IsHost && !players.ContainsKey(env.sender)) return;` 성격의 검사 1건 + 커버 테스트(미등록 피어의 게임 타입 → OnGameMessage 미발화·미중계, 스트로크 타입도 폐기). 기존 Hello→Welcome 경로와 클라 role 테스트를 깨지 않아야 한다. 수정 후 스코프 재리뷰로 이 finding만 ADDRESSED 확인.
+적용된 수정(`8d3c353`): host 수신 경로에서 Hello 분기 **뒤**, StrokeGate·중계·OnGameMessage **앞**에 `if (IsHost && !players.ContainsKey(env.sender)) return;` 가드 1건 (host 한정 — 클라의 players는 Welcome 전까지 비어 있어 같은 검사를 클라에 걸면 Welcome 자체가 막힌다). 커버 테스트: 미등록 피어의 `GuessSubmit`·`StrokeStart` 모두 폐기 (OnGameMessage 미발화·미중계·미반영). 부수 효과로 이탈한 피어의 잔여 메시지도 폐기된다. 남은 절차: 이 fix diff의 스코프 재리뷰.
 
 ## 5. 리뷰 절차 참고 (레저 없이도 재현 가능하게)
 
