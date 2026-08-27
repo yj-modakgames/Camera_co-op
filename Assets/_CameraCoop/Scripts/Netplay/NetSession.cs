@@ -506,10 +506,10 @@ namespace CameraCoop.Netplay
             }
         }
 
-        // 화면 픽셀 -> 정규화 (송신은 항상 정규화 좌표, docs/08 §3). y는 화면 좌하단 원점 -> 좌상단 원점으로 반전.
+        // 화면 픽셀 -> 정규화 (송신은 항상 정규화 좌표, docs/08 §3). 변환 수식은 HandScreenMapper가 단일 진실 원천.
         private Vector2 ToNormalized(Vector2 screenPos)
         {
-            return new Vector2(screenPos.x / Screen.width, 1f - screenPos.y / Screen.height);
+            return HandScreenMapper.ToNormalized(screenPos, Screen.width, Screen.height);
         }
     }
 }

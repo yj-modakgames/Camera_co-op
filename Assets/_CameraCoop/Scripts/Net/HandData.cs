@@ -79,6 +79,12 @@ namespace CameraCoop
         {
             return new Vector2(x * screenW, (1f - y) * screenH);
         }
+
+        // 화면 픽셀(좌하단 원점) → 정규화 [0,1](좌상단 원점). ToScreen의 역함수.
+        public static Vector2 ToNormalized(Vector2 screenPos, float screenW, float screenH)
+        {
+            return new Vector2(screenPos.x / screenW, 1f - screenPos.y / screenH);
+        }
     }
 
     // 핀치 히스테리시스 상태 전이. 경계 떨림 방지용 순수 함수.

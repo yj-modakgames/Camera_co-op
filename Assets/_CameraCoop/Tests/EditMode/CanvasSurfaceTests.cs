@@ -72,5 +72,26 @@ namespace CameraCoop.Tests
                 Object.DestroyImmediate(go);
             }
         }
+
+        // ---- HandScreenMapper 왕복 (docs/10 §2 — screen↔norm 단일 진실 원천) ----
+
+        [Test]
+        public void HandScreenMapper_RoundTrip_IsIdentity()
+        {
+            var norm = new Vector2(0.25f, 0.75f);
+            Vector2 screen = HandScreenMapper.ToScreen(norm.x, norm.y, 1920f, 1080f);
+            Vector2 back = HandScreenMapper.ToNormalized(screen, 1920f, 1080f);
+            Assert.AreEqual(norm.x, back.x, 1e-5f);
+            Assert.AreEqual(norm.y, back.y, 1e-5f);
+        }
+
+        [Test]
+        public void HandScreenMapper_ToNormalized_FlipsY()
+        {
+            // 화면 좌하단 원점 (0,0) -> norm 좌상단 원점이므로 (0,1)
+            Vector2 norm = HandScreenMapper.ToNormalized(Vector2.zero, 1920f, 1080f);
+            Assert.AreEqual(0f, norm.x, 1e-5f);
+            Assert.AreEqual(1f, norm.y, 1e-5f);
+        }
     }
 }
