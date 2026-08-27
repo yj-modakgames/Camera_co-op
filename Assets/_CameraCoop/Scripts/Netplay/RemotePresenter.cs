@@ -14,7 +14,8 @@ namespace CameraCoop.Netplay
         [SerializeField] private Camera drawCamera;
         [SerializeField, Min(0f)] private float planeDistance = 5.0f;   // DrawingController와 동일 값 유지
         [SerializeField, Min(0f)] private float lineWidth = 0.02f;
-        [SerializeField] private Material lineMaterial;                  // StrokeLine.mat 공유
+        [SerializeField] private Material lineMaterial;                  // StrokeLine.mat 공유 (스타일 누락 시 폴백)
+        [SerializeField] private Material[] brushMaterials;              // 브러시 인덱스 -> 머티리얼 (docs/11 §3)
         [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 월드 캔버스에 표시 (docs/10 §2). 미할당 = 기존 카메라 평면
         [SerializeField] private Color[] playerPalette = new Color[]     // colorIndex 0~3 (docs/08 §3)
         {
@@ -43,6 +44,7 @@ namespace CameraCoop.Netplay
             }
             session.OnRemoteCursor += HandleCursor;
             session.OnRemoteStrokeStart += HandleStrokeStart;
+            session.OnRemoteStrokeErased += HandleStrokeErased;
             session.OnRemoteStrokePoints += HandleStrokePoints;
             session.OnRemoteStrokeEnd += HandleStrokeEnd;
             session.OnCanvasCleared += HandleCleared;
@@ -52,6 +54,7 @@ namespace CameraCoop.Netplay
         {
             session.OnRemoteCursor -= HandleCursor;
             session.OnRemoteStrokeStart -= HandleStrokeStart;
+            session.OnRemoteStrokeErased -= HandleStrokeErased;
             session.OnRemoteStrokePoints -= HandleStrokePoints;
             session.OnRemoteStrokeEnd -= HandleStrokeEnd;
             session.OnCanvasCleared -= HandleCleared;
@@ -103,7 +106,7 @@ namespace CameraCoop.Netplay
             cursor.rect.localScale = new Vector3(scale, scale, scale);
         }
 
-        private void HandleStrokeStart(string strokeId, string playerId, Vector2 norm)
+        private void HandleStrokeStart(string strokeId, string playerId, Vector2 norm, StrokeStyle style)
         {
             if (strokeLines.ContainsKey(strokeId))
             {
@@ -113,13 +116,17 @@ namespace CameraCoop.Netplay
             strokeObject.transform.SetParent(transform, worldPositionStays: true);
             LineRenderer line = strokeObject.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
-            line.widthMultiplier = lineWidth;
-            line.sharedMaterial = lineMaterial;
             line.numCapVertices = 4;
             line.numCornerVertices = 4;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
-            Color color = ColorOf(playerId);
+
+            // 스타일이 실려 있으면 그대로 재생한다. width <= 0 = 스타일 없음(구버전/스냅샷) -> 플레이어 색 폴백 (docs/11 §3)
+            bool hasStyle = style.width > 0f;
+            Color color = hasStyle ? ColorPack.FromInt(style.color) : ColorOf(playerId);
+            line.widthMultiplier = hasStyle ? style.width : lineWidth;
+            Material material = hasStyle ? BrushMaterial(style.brush) : lineMaterial;
+            line.sharedMaterial = material != null ? material : lineMaterial;
             line.startColor = color;
             line.endColor = color;
             line.positionCount = 1;
@@ -139,6 +146,31 @@ namespace CameraCoop.Netplay
             for (int i = 0; i < points.Length; i++)
             {
                 line.SetPosition(baseCount + i, ToWorld(points[i]));
+            }
+        }
+
+        // 브러시 인덱스 -> 공유 머티리얼. 범위 밖이면 null을 돌려 호출부가 기본 머티리얼로 폴백한다.
+        private Material BrushMaterial(int brush)
+        {
+            if (brushMaterials == null || brush < 0 || brush >= brushMaterials.Length)
+            {
+                return null;
+            }
+            return brushMaterials[brush];
+        }
+
+        // 원격 지우개 (docs/11 §3). 없는 id는 무시 — 멱등
+        private void HandleStrokeErased(string strokeId)
+        {
+            LineRenderer line;
+            if (!strokeLines.TryGetValue(strokeId, out line))
+            {
+                return;
+            }
+            strokeLines.Remove(strokeId);
+            if (line != null)
+            {
+                Destroy(line.gameObject);
             }
         }
 

@@ -19,7 +19,7 @@ namespace CameraCoop.Tests
             byte[] data = NetProtocol.Encode(NetProtocol.TypeCursor, "p1", payload);
             NetEnvelope env = NetProtocol.Decode(data);
             Assert.IsNotNull(env);
-            Assert.AreEqual(1, env.v);
+            Assert.AreEqual(NetProtocol.Version, env.v);
             Assert.AreEqual(NetProtocol.TypeCursor, env.type);
             Assert.AreEqual("p1", env.sender);
             var back = NetProtocol.DecodePayload<CursorPayload>(env);
@@ -98,7 +98,7 @@ namespace CameraCoop.Tests
         [Test]
         public void Decode_VersionMismatch_ReturnsNull()
         {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes("{\"v\":2,\"type\":\"Hello\",\"sender\":\"x\",\"payload\":\"{}\"}");
+            byte[] data = System.Text.Encoding.UTF8.GetBytes("{\"v\":3,\"type\":\"Hello\",\"sender\":\"x\",\"payload\":\"{}\"}"); // v2가 현재 버전 (docs/11 §3)
             Assert.IsNull(NetProtocol.Decode(data));
         }
 
@@ -307,7 +307,7 @@ namespace CameraCoop.Tests
             var starts = new List<string>();
             var ends = new List<string>();
             Vector2[] rest = null;
-            session.OnRemoteStrokeStart += (id, sender, p) => starts.Add(id);
+            session.OnRemoteStrokeStart += (id, sender, p, style) => starts.Add(id);
             session.OnRemoteStrokePoints += (id, pts) => rest = pts;
             session.OnRemoteStrokeEnd += id => ends.Add(id);
 
@@ -329,6 +329,65 @@ namespace CameraCoop.Tests
             Assert.AreEqual(new[] { "host:0" }, starts.ToArray());  // 스냅샷 스트로크 재생
             Assert.AreEqual(2, rest.Length);                        // 첫 점은 Start로 나가고 나머지가 Points
             Assert.AreEqual(new[] { "host:0" }, ends.ToArray());    // 스냅샷은 완결 스트로크
+        }
+
+        // ---- v2: 스타일 수신 + StrokeErase (docs/11 §3) ----
+
+        [Test]
+        public void Client_StrokeStart_CarriesStyle()
+        {
+            StartClient();
+            StrokeStyle got = default(StrokeStyle);
+            session.OnRemoteStrokeStart += (id, sender, p, style) => got = style;
+
+            int packed = ColorPack.ToInt(new Color(1f, 0.6f, 0.1f, 0.55f));
+            DeliverFromHost(NetProtocol.TypeStrokeStart, new StrokeStartPayload
+            {
+                strokeId = "host:2", hand = "Left", x = 0.1f, y = 0.1f,
+                color = packed, width = 0.044f, brush = 1
+            });
+
+            Assert.AreEqual(packed, got.color);
+            Assert.AreEqual(0.044f, got.width, 1e-6f);
+            Assert.AreEqual(1, got.brush);
+        }
+
+        [Test]
+        public void Client_StrokeErase_IsForwarded_AndIdempotent()
+        {
+            StartClient();
+            var erased = new List<string>();
+            session.OnRemoteStrokeErased += id => erased.Add(id);
+
+            DeliverFromHost(NetProtocol.TypeStrokeStart, new StrokeStartPayload
+            {
+                strokeId = "host:1", hand = "Right", x = 0.2f, y = 0.3f, color = 0, width = 0.02f, brush = 0
+            });
+            DeliverFromHost(NetProtocol.TypeStrokeErase, new StrokeErasePayload { strokeId = "host:1" });
+            DeliverFromHost(NetProtocol.TypeStrokeErase, new StrokeErasePayload { strokeId = "host:1" }); // 없는 id 재수신
+
+            Assert.AreEqual(new[] { "host:1", "host:1" }, erased.ToArray()); // 수신 측(RemotePresenter)이 멱등 처리한다
+        }
+
+        [Test]
+        public void BuildSnapshot_PreservesStyle()
+        {
+            var strokes = new Dictionary<string, NetStroke>();
+            var stroke = new NetStroke
+            {
+                playerId = "p",
+                finished = true,
+                style = new StrokeStyle { color = 0x11223344, width = 0.03f, brush = 2 }
+            };
+            stroke.points.Add(new Vector2(0.1f, 0.2f));
+            stroke.points.Add(new Vector2(0.3f, 0.4f));
+            strokes["p:0"] = stroke;
+
+            StrokeSnapshot[] snap = SessionLogic.BuildSnapshot(strokes);
+            Assert.AreEqual(1, snap.Length);
+            Assert.AreEqual(0x11223344, snap[0].color);
+            Assert.AreEqual(0.03f, snap[0].width, 1e-6f);
+            Assert.AreEqual(2, snap[0].brush);
         }
 
         [Test]

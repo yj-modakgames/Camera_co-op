@@ -93,5 +93,49 @@ namespace CameraCoop.Tests
             Assert.AreEqual(0f, norm.x, 1e-5f);
             Assert.AreEqual(1f, norm.y, 1e-5f);
         }
+
+        // ---- docs/11 §2 — 역변환 (레이 hit 지점 -> norm) ----
+
+        [Test]
+        public void LocalToNorm_IsInverseOfNormToLocal()
+        {
+            AssertLocalRoundTrip(new Vector2(0f, 0f));
+            AssertLocalRoundTrip(new Vector2(1f, 1f));
+            AssertLocalRoundTrip(new Vector2(0.37f, 0.82f));
+        }
+
+        private static void AssertLocalRoundTrip(Vector2 norm)
+        {
+            Vector3 local = CanvasSurfaceLogic.NormToLocal(norm, zOffset: -0.005f);
+            Vector2 back = CanvasSurfaceLogic.LocalToNorm(local);
+            Assert.AreEqual(norm.x, back.x, 1e-5f, "x roundtrip");
+            Assert.AreEqual(norm.y, back.y, 1e-5f, "y roundtrip");
+        }
+
+        [Test]
+        public void WorldToNorm_IsInverseOfNormToWorld_WithRotation()
+        {
+            var go = new GameObject("canvas");
+            try
+            {
+                go.transform.position = new Vector3(1f, 1.5f, -0.5f);
+                go.transform.localScale = new Vector3(2.4f, 1.35f, 1f); // 씬 실제 캔버스 스케일
+                go.transform.rotation = Quaternion.Euler(0f, 30f, 0f);  // 회전이 있어도 복원돼야 한다
+                var surface = go.AddComponent<CanvasSurface>();
+
+                var norms = new Vector2[] { new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0.13f, 0.91f) };
+                for (int i = 0; i < norms.Length; i++)
+                {
+                    Vector3 world = surface.NormToWorld(norms[i]);
+                    Vector2 back = surface.WorldToNorm(world);
+                    Assert.AreEqual(norms[i].x, back.x, 1e-4f, "x roundtrip at " + i);
+                    Assert.AreEqual(norms[i].y, back.y, 1e-4f, "y roundtrip at " + i);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
     }
 }

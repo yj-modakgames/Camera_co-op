@@ -16,10 +16,19 @@ namespace CameraCoop.Netplay
 
     [Serializable] public class HelloPayload { public string name; }
     [Serializable] public class PlayerInfo { public string playerId; public string name; public int colorIndex; }
-    [Serializable] public class StrokeSnapshot { public string strokeId; public string playerId; public float[] xy; } // (x,y) 쌍 평탄화
+    [Serializable] public class StrokeSnapshot { public string strokeId; public string playerId; public float[] xy; public int color; public float width; public int brush; } // (x,y) 쌍 평탄화 + 스타일 (v2)
     [Serializable] public class WelcomePayload { public PlayerInfo[] players; public StrokeSnapshot[] snapshot; }
     [Serializable] public class CursorPayload { public string hand; public float x; public float y; public bool pinched; public uint seq; }
-    [Serializable] public class StrokeStartPayload { public string strokeId; public string hand; public float x; public float y; }
+    [Serializable] public class StrokeStartPayload { public string strokeId; public string hand; public float x; public float y; public int color; public float width; public int brush; } // 스타일 3필드 = v2 추가분
+    [Serializable] public class StrokeErasePayload { public string strokeId; }
+
+    // 스트로크 스타일 묶음 (docs/11 §3). 이벤트 인자 수를 줄이기 위한 값 타입 — 와이어에는 3필드로 평탄하게 실린다.
+    [Serializable] public struct StrokeStyle
+    {
+        public int color;   // packed 0xAARRGGBB (ColorPack)
+        public float width; // 월드 단위. <= 0 이면 "스타일 없음"(구버전/스냅샷 폴백)
+        public int brush;
+    }
     [Serializable] public class StrokePointsPayload { public string strokeId; public float[] xy; }
     [Serializable] public class StrokeEndPayload { public string strokeId; }
     [Serializable] public class EmptyPayload { }
@@ -28,7 +37,9 @@ namespace CameraCoop.Netplay
     // 메시지 직렬화/역직렬화 + 프로토콜 순수 판정 (docs/08 §3, §4)
     public static class NetProtocol
     {
-        public const int Version = 1;
+        // v2: StrokeStart/StrokeSnapshot에 스타일 3필드 추가 + StrokeErase 신규 (docs/11 §3).
+        // 필드만 추가하고 버전을 유지하면 구버전과 섞였을 때 조용히 틀린 색으로 그려진다 — 거부가 맞다.
+        public const int Version = 2;
 
         public const string TypeHello = "Hello";
         public const string TypeWelcome = "Welcome";
@@ -39,6 +50,7 @@ namespace CameraCoop.Netplay
         public const string TypeClear = "ClearCanvas";
         public const string TypePeerJoined = "PeerJoined";
         public const string TypePeerLeft = "PeerLeft";
+        public const string TypeStrokeErase = "StrokeErase";
 
         public static byte[] Encode<T>(string type, string sender, T payload)
         {
@@ -106,6 +118,34 @@ namespace CameraCoop.Netplay
                 points[i] = new Vector2(xy[i * 2], xy[i * 2 + 1]);
             }
             return points;
+        }
+    }
+
+    // 색을 팔레트 인덱스가 아니라 packed 정수로 보낸다 (docs/11 §3) — 클라이언트 간 팔레트 배열 불일치 위험 제거.
+    // 알파까지 싣는다(0xAARRGGBB): 브러시 반투명(Marker)이 원격에서도 같게 보여야 한다.
+    internal static class ColorPack
+    {
+        public static int ToInt(Color color)
+        {
+            int a = Channel(color.a);
+            int r = Channel(color.r);
+            int g = Channel(color.g);
+            int b = Channel(color.b);
+            return (a << 24) | (r << 16) | (g << 8) | b;
+        }
+
+        public static Color FromInt(int packed)
+        {
+            return new Color(
+                ((packed >> 16) & 0xFF) / 255f,
+                ((packed >> 8) & 0xFF) / 255f,
+                (packed & 0xFF) / 255f,
+                ((packed >> 24) & 0xFF) / 255f);
+        }
+
+        private static int Channel(float value)
+        {
+            return Mathf.Clamp(Mathf.RoundToInt(value * 255f), 0, 255);
         }
     }
 }

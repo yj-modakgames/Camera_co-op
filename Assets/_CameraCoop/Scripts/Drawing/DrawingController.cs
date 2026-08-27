@@ -1,48 +1,76 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace CameraCoop
 {
-    // 핀치 이벤트를 구독해 카메라 앞 고정 평면에 LineRenderer 스트로크를 그린다 (docs/07).
-    // 기존 컴포넌트는 이 클래스의 존재를 모른다 — 참조는 단방향 (docs/01 §4).
+    // HandPointer의 조준 결과(캔버스 위 월드 지점)를 받아 LineRenderer 스트로크를 그린다 (docs/11 §2).
+    // Phase 3d까지는 화면 좌표를 직접 평면에 투영했지만, 이제 좌표 계산은 HandPointer가 단독으로 한다.
+    // 색·두께·브러시·머티리얼은 ToolState에서 읽고 스트로크 시작 시점 값으로 고정한다.
     public class DrawingController : MonoBehaviour
     {
-        [SerializeField] private HandCursorController cursorController;
-        [SerializeField] private Camera drawCamera;
-        [SerializeField] private float planeDistance = 5.0f;      // 카메라 -> 드로잉 평면 거리 (m)
-        [SerializeField, Min(0f)] private float minPointDistance = 0.01f;  // 점 추가 최소 간격 (월드 단위)
-        [SerializeField] private float lineWidth = 0.02f;
-        [SerializeField, Min(0f)] private float maxSegmentScreenFraction = 0.25f;  // 연속 점 허용 최대 화면 이동 비율 (초과 시 스트로크 분리)
-        [SerializeField] private Material lineMaterial;           // vertex color를 곱하는 셰이더여야 함 (URP Particles/Unlit)
-        [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 월드 캔버스에 그림 (docs/10 §2). 미할당 = 기존 카메라 평면
-        [SerializeField] private Color leftStrokeColor = new Color(0.2f, 0.6f, 1f);   // 커서 색과 같은 계열
-        [SerializeField] private Color rightStrokeColor = new Color(1f, 0.6f, 0.1f);
-        [SerializeField] private Key clearKey = Key.C;            // 새 Input System 전용 (docs/07 §5)
+        [SerializeField] private HandPointer handPointer;
+        [SerializeField] private ToolState toolState;
+        [SerializeField, Min(0f)] private float minPointDistance = 0.01f;         // 점 추가 최소 간격 (월드 단위)
+        [SerializeField, Min(0f)] private float maxSegmentWorldDistance = 0.6f;   // 캔버스 폭(2.4)의 0.25. 초과 시 스트로크 분리 (docs/07 §6)
+        [SerializeField] private Material lineMaterial;                           // 브러시 머티리얼 미할당 시 폴백
+        [SerializeField] private Key clearKey = Key.C;                            // 새 Input System 전용 (docs/07 §5)
+
+        public event Action<int, string> OnLocalStrokeStarted;  // localId, hand — NetSession이 전역 strokeId와 매핑한다
+        public event Action<int> OnLocalStrokeErased;           // 지운 로컬 스트로크의 localId
 
         private class ActiveStroke
         {
+            public int localId;
             public LineRenderer line;
             public Vector3 lastPoint;
-            public Vector2 lastScreenPos;
+            public List<Vector3> points;
         }
 
-        // 손별 진행 중 스트로크 ("Left"/"Right" 키). 확정분은 finishedStrokes로 이동.
+        private class FinishedStroke
+        {
+            public int localId;
+            public GameObject go;
+            public List<Vector3> points;   // 지우개 판정용. LineRenderer.GetPositions는 할당이 생긴다
+        }
+
+        // 손별 진행 중 스트로크 (Left/Right 키). 확정분은 finishedStrokes로 이동.
         private readonly Dictionary<string, ActiveStroke> activeStrokes = new Dictionary<string, ActiveStroke>(2);
-        private readonly List<GameObject> finishedStrokes = new List<GameObject>();
+        private readonly List<FinishedStroke> finishedStrokes = new List<FinishedStroke>();
+        private int localIdCounter;
+
+        private void Awake()
+        {
+            if (handPointer == null || toolState == null)
+            {
+                // 조용한 실패 금지 (docs/10 §7)
+                Debug.LogError("[DrawingController] handPointer/toolState 미할당 — 로컬 드로잉이 동작하지 않습니다 (docs/11 §4)");
+            }
+        }
 
         private void OnEnable()
         {
-            cursorController.OnPinchStart += HandlePinchStart;
-            cursorController.OnPinchMove += HandlePinchMove;
-            cursorController.OnPinchEnd += HandlePinchEnd;
+            if (handPointer == null)
+            {
+                return;
+            }
+            handPointer.OnCanvasStrokeStart += HandleStrokeStart;
+            handPointer.OnCanvasStrokeMove += HandleStrokeMove;
+            handPointer.OnCanvasStrokeEnd += HandleStrokeEnd;
+            handPointer.OnCanvasErase += HandleErase;
         }
 
         private void OnDisable()
         {
-            cursorController.OnPinchStart -= HandlePinchStart;
-            cursorController.OnPinchMove -= HandlePinchMove;
-            cursorController.OnPinchEnd -= HandlePinchEnd;
+            if (handPointer == null)
+            {
+                return;
+            }
+            handPointer.OnCanvasStrokeStart -= HandleStrokeStart;
+            handPointer.OnCanvasStrokeMove -= HandleStrokeMove;
+            handPointer.OnCanvasStrokeEnd -= HandleStrokeEnd;
+            handPointer.OnCanvasErase -= HandleErase;
         }
 
         private void Update()
@@ -55,21 +83,22 @@ namespace CameraCoop
             }
         }
 
-        private void HandlePinchStart(string handedness, Vector2 screenPos)
+        // norm은 NetSession이 쓰고 여기서는 월드 좌표만 쓴다 (같은 이벤트를 둘이 구독한다)
+        private void HandleStrokeStart(string handedness, Vector2 norm, Vector3 world)
         {
             switch (StrokeLogic.Decide(activeStrokes.ContainsKey(handedness), StrokeLogic.PinchKind.Start))
             {
                 case StrokeLogic.StrokeAction.EndThenStartNew: // 방어: 중복 Start (docs/07 §6)
                     FinishStroke(handedness);
-                    BeginStroke(handedness, screenPos);
+                    BeginStroke(handedness, world);
                     break;
                 case StrokeLogic.StrokeAction.StartNew:
-                    BeginStroke(handedness, screenPos);
+                    BeginStroke(handedness, world);
                     break;
             }
         }
 
-        private void HandlePinchMove(string handedness, Vector2 screenPos)
+        private void HandleStrokeMove(string handedness, Vector2 norm, Vector3 world)
         {
             if (StrokeLogic.Decide(activeStrokes.ContainsKey(handedness), StrokeLogic.PinchKind.Move) != StrokeLogic.StrokeAction.Append)
             {
@@ -77,26 +106,25 @@ namespace CameraCoop
             }
 
             ActiveStroke stroke = activeStrokes[handedness];
-            if (StrokeLogic.ShouldSplitStroke(stroke.lastScreenPos, screenPos, maxSegmentScreenFraction * Screen.width))
+            if (StrokeLogic.ShouldSplitStroke(stroke.lastPoint, world, maxSegmentWorldDistance))
             {
                 FinishStroke(handedness); // 재검출 스냅: 점프 선 대신 스트로크 분리 (docs/07 §6)
-                BeginStroke(handedness, screenPos);
+                BeginStroke(handedness, world);
                 return;
             }
-            Vector3 point = ToPlanePoint(screenPos);
-            if (!StrokeLogic.ShouldAppendPoint(hasLastPoint: true, stroke.lastPoint, point, minPointDistance))
+            if (!StrokeLogic.ShouldAppendPoint(hasLastPoint: true, stroke.lastPoint, world, minPointDistance))
             {
                 return;
             }
 
             int count = stroke.line.positionCount;
             stroke.line.positionCount = count + 1;
-            stroke.line.SetPosition(count, point);
-            stroke.lastPoint = point;
-            stroke.lastScreenPos = screenPos;
+            stroke.line.SetPosition(count, world);
+            stroke.points.Add(world);
+            stroke.lastPoint = world;
         }
 
-        private void HandlePinchEnd(string handedness)
+        private void HandleStrokeEnd(string handedness)
         {
             if (StrokeLogic.Decide(activeStrokes.ContainsKey(handedness), StrokeLogic.PinchKind.End) == StrokeLogic.StrokeAction.End)
             {
@@ -104,39 +132,60 @@ namespace CameraCoop
             }
         }
 
-        // 화면 좌표 -> 드로잉 표면 월드 좌표. canvasSurface 할당 시 월드 캔버스(docs/10 §2), 미할당 시 카메라 앞 평면(docs/07 §3)
-        private Vector3 ToPlanePoint(Vector2 screenPos)
+        // 닿은 스트로크를 통째로 지운다 (docs/11 §2). 완료 스트로크만 대상 — 그리던 선은 지우지 않는다.
+        // ponytail: 선형 스캔 O(스트로크x점). 수백 스트로크에서 체감되면 그때 공간 분할
+        private void HandleErase(Vector3 world)
         {
-            if (canvasSurface != null)
+            float radius = toolState != null ? toolState.EraseRadius : 0.05f;
+            for (int i = finishedStrokes.Count - 1; i >= 0; i--) // 최근 것부터, 첫 hit 1개만
             {
-                return canvasSurface.NormToWorld(HandScreenMapper.ToNormalized(screenPos, Screen.width, Screen.height));
+                if (!EraseLogic.HitsStroke(finishedStrokes[i].points, world, radius))
+                {
+                    continue;
+                }
+                FinishedStroke hit = finishedStrokes[i];
+                finishedStrokes.RemoveAt(i);
+                if (hit.go != null)
+                {
+                    Destroy(hit.go);
+                }
+                OnLocalStrokeErased?.Invoke(hit.localId);
+                return;
             }
-            return drawCamera.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, planeDistance));
         }
 
-        private void BeginStroke(string handedness, Vector2 screenPos)
+        private void BeginStroke(string handedness, Vector3 world)
         {
             var strokeObject = new GameObject("Stroke_" + handedness);
             strokeObject.transform.SetParent(transform, worldPositionStays: true);
 
             LineRenderer line = strokeObject.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
-            line.widthMultiplier = lineWidth;
-            line.sharedMaterial = lineMaterial;
             line.numCapVertices = 4;    // ~14Hz 입력의 각짐 완화 (docs/07 §3)
             line.numCornerVertices = 4;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
 
-            Color color = string.Equals(handedness, "Left", System.StringComparison.Ordinal) ? leftStrokeColor : rightStrokeColor;
+            // 도구 값은 시작 시점에 고정한다 — 그리는 중 팔레트를 눌러도 진행 중 선은 바뀌지 않는다
+            line.widthMultiplier = toolState != null ? toolState.CurrentWidth : 0.02f;
+            Material material = toolState != null ? toolState.CurrentMaterial : null;
+            line.sharedMaterial = material != null ? material : lineMaterial;
+            Color color = toolState != null ? toolState.CurrentColor : Color.black;
             line.startColor = color;
             line.endColor = color;
 
-            Vector3 point = ToPlanePoint(screenPos);
             line.positionCount = 1;
-            line.SetPosition(0, point);
+            line.SetPosition(0, world);
 
-            activeStrokes[handedness] = new ActiveStroke { line = line, lastPoint = point, lastScreenPos = screenPos };
+            int localId = ++localIdCounter; // 1부터 단조 증가
+            activeStrokes[handedness] = new ActiveStroke
+            {
+                localId = localId,
+                line = line,
+                lastPoint = world,
+                points = new List<Vector3>(64) { world }
+            };
+            OnLocalStrokeStarted?.Invoke(localId, handedness);
         }
 
         private void FinishStroke(string handedness)
@@ -149,16 +198,21 @@ namespace CameraCoop
                 Destroy(stroke.line.gameObject); // 점 찍기 미지원 (docs/07 §6)
                 return;
             }
-            finishedStrokes.Add(stroke.line.gameObject);
+            finishedStrokes.Add(new FinishedStroke
+            {
+                localId = stroke.localId,
+                go = stroke.line.gameObject,
+                points = stroke.points
+            });
         }
 
         public void ClearAll()
         {
             for (int i = 0; i < finishedStrokes.Count; i++)
             {
-                if (finishedStrokes[i] != null)
+                if (finishedStrokes[i].go != null)
                 {
-                    Destroy(finishedStrokes[i]);
+                    Destroy(finishedStrokes[i].go);
                 }
             }
             finishedStrokes.Clear();

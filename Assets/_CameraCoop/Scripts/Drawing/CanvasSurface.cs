@@ -13,6 +13,12 @@ namespace CameraCoop
         {
             return transform.TransformPoint(CanvasSurfaceLogic.NormToLocal(norm, surfaceOffset));
         }
+
+        // 레이 hit 월드 지점 -> norm [0,1] (docs/11 §2). NormToWorld의 역함수 — 조준 경로가 이걸 쓴다.
+        public Vector2 WorldToNorm(Vector3 world)
+        {
+            return CanvasSurfaceLogic.LocalToNorm(transform.InverseTransformPoint(world));
+        }
     }
 
     // 매핑 수식을 MonoBehaviour 밖으로 분리한 순수 함수 (docs/04 §5 테스트 가능 설계)
@@ -22,6 +28,12 @@ namespace CameraCoop
         public static Vector3 NormToLocal(Vector2 norm, float zOffset)
         {
             return new Vector3(norm.x - 0.5f, 0.5f - norm.y, zOffset);
+        }
+
+        // NormToLocal의 역함수. 표면 두께(로컬 z)는 무시한다.
+        public static Vector2 LocalToNorm(Vector3 local)
+        {
+            return new Vector2(local.x + 0.5f, 0.5f - local.y);
         }
     }
 }

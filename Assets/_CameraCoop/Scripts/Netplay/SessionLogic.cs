@@ -9,6 +9,7 @@ namespace CameraCoop.Netplay
         public string playerId;
         public List<Vector2> points = new List<Vector2>();
         public bool finished;
+        public StrokeStyle style; // v2 스타일 (docs/11 §3). width <= 0 = 스타일 없음
     }
 
     // NetSession의 프레임 무관 판정을 분리한 순수 함수 (docs/04 §5 패턴)
@@ -43,7 +44,10 @@ namespace CameraCoop.Netplay
                 {
                     strokeId = pair.Key,
                     playerId = pair.Value.playerId,
-                    xy = NetProtocol.FlattenPoints(pair.Value.points)
+                    xy = NetProtocol.FlattenPoints(pair.Value.points),
+                    color = pair.Value.style.color,
+                    width = pair.Value.style.width,
+                    brush = pair.Value.style.brush
                 });
             }
             return list.ToArray();

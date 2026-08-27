@@ -7,8 +7,10 @@ namespace CameraCoop.Netplay
     // 세션 중심: 로컬 입력 -> 네트워크 송신, 수신 -> 이벤트 발행, host면 중계 + 스냅샷 (docs/08 §2~§4)
     public class NetSession : MonoBehaviour
     {
-        [SerializeField] private HandCursorController cursorController;
-        [SerializeField] private UdpHandReceiver receiver;
+        [SerializeField] private HandPointer handPointer;          // 스트로크 입력원 (norm을 직접 준다, docs/11 §2)
+        [SerializeField] private ToolState toolState;               // 송신 스타일 원본
+        [SerializeField] private DrawingController drawingController; // localId 발급자 — 지우개 매핑용
+        [SerializeField] private UdpHandReceiver receiver;          // 커서 송신은 여전히 손 패킷을 직접 읽는다
         [SerializeField, Min(1f)] private float cursorSendHz = 15f;
         [SerializeField, Min(0.01f)] private float pointsFlushInterval = 0.1f; // StrokePoints 100ms 배치 (docs/08 §3)
         [SerializeField] private float pinchThreshold = 0.40f;         // Phase 1 실측값과 동일 유지
@@ -21,7 +23,8 @@ namespace CameraCoop.Netplay
 
         public event Action OnPlayersChanged;
         public event Action<string, string, Vector2, bool> OnRemoteCursor;
-        public event Action<string, string, Vector2> OnRemoteStrokeStart;
+        public event Action<string, string, Vector2, StrokeStyle> OnRemoteStrokeStart;
+        public event Action<string> OnRemoteStrokeErased;
         public event Action<string, Vector2[]> OnRemoteStrokePoints;
         public event Action<string> OnRemoteStrokeEnd;
         public event Action OnCanvasCleared;
@@ -40,6 +43,9 @@ namespace CameraCoop.Netplay
         private readonly Dictionary<string, string> localActiveStroke = new Dictionary<string, string>();      // hand -> strokeId
         private readonly Dictionary<string, List<Vector2>> pendingPoints = new Dictionary<string, List<Vector2>>(); // strokeId -> 미전송 점
         private readonly Dictionary<string, bool> localPinch = new Dictionary<string, bool>(); // hand -> 핀치 상태 (커서 표시용 재판정)
+        private readonly Dictionary<string, int> pendingLocalId = new Dictionary<string, int>(2);  // hand -> DrawingController가 발급한 localId
+        private readonly Dictionary<int, string> localToStroke = new Dictionary<int, string>();    // localId -> 전역 strokeId (지우개)
+        private bool warnedMissingMapping;
 
         public void StartSession(INetTransport newTransport, string name)
         {
@@ -59,6 +65,8 @@ namespace CameraCoop.Netplay
             localActiveStroke.Clear();
             pendingPoints.Clear();
             localPinch.Clear();
+            pendingLocalId.Clear();
+            localToStroke.Clear();
             localStrokeCounter = 0;
             localCursorSeq = 0;
             OnCanvasCleared?.Invoke(); // 이전 세션의 원격 표시·strokeId 재사용 충돌 정리 (최종 리뷰 I-2)
@@ -68,15 +76,21 @@ namespace CameraCoop.Netplay
                 players[transport.LocalPlayerId] = new PlayerInfo { playerId = transport.LocalPlayerId, name = localName, colorIndex = 0 };
             }
 
-            if (cursorController != null)
+            if (handPointer != null)
             {
-                cursorController.OnPinchStart += HandleLocalPinchStart;
-                cursorController.OnPinchMove += HandleLocalPinchMove;
-                cursorController.OnPinchEnd += HandleLocalPinchEnd;
+                handPointer.OnCanvasStrokeStart += HandleLocalStrokeStart;
+                handPointer.OnCanvasStrokeMove += HandleLocalStrokeMove;
+                handPointer.OnCanvasStrokeEnd += HandleLocalStrokeEnd;
             }
             else
             {
-                Debug.LogWarning("[NetSession] cursorController 미할당 — 로컬 드로잉이 송신되지 않습니다.");
+                Debug.LogWarning("[NetSession] handPointer 미할당 — 로컬 드로잉이 송신되지 않습니다.");
+            }
+            if (drawingController != null)
+            {
+                // strokeId 소유권 (docs/11 §2): localId는 DrawingController가 발급하고, 전역 strokeId는 여기서 만든다
+                drawingController.OnLocalStrokeStarted += HandleLocalStrokeIdAssigned;
+                drawingController.OnLocalStrokeErased += HandleLocalStrokeErased;
             }
 
             OnPlayersChanged?.Invoke();
@@ -88,11 +102,16 @@ namespace CameraCoop.Netplay
             {
                 return;
             }
-            if (cursorController != null)
+            if (handPointer != null)
             {
-                cursorController.OnPinchStart -= HandleLocalPinchStart;
-                cursorController.OnPinchMove -= HandleLocalPinchMove;
-                cursorController.OnPinchEnd -= HandleLocalPinchEnd;
+                handPointer.OnCanvasStrokeStart -= HandleLocalStrokeStart;
+                handPointer.OnCanvasStrokeMove -= HandleLocalStrokeMove;
+                handPointer.OnCanvasStrokeEnd -= HandleLocalStrokeEnd;
+            }
+            if (drawingController != null)
+            {
+                drawingController.OnLocalStrokeStarted -= HandleLocalStrokeIdAssigned;
+                drawingController.OnLocalStrokeErased -= HandleLocalStrokeErased;
             }
             transport.OnPeerConnected -= HandlePeerConnected;
             transport.OnPeerDisconnected -= HandlePeerDisconnected;
@@ -113,6 +132,8 @@ namespace CameraCoop.Netplay
             strokes.Clear();
             localActiveStroke.Clear(); // Clear 중 진행 스트로크의 고아 참조 방지 (불변식: 이 둘은 strokes와 함께 리셋)
             pendingPoints.Clear();
+            pendingLocalId.Clear();
+            localToStroke.Clear();     // 로컬 스트로크가 전부 사라졌으므로 매핑도 함께 리셋
             Broadcast(NetProtocol.TypeClear, new EmptyPayload(), reliable: true, exceptId: null);
             OnCanvasCleared?.Invoke();
         }
@@ -174,30 +195,88 @@ namespace CameraCoop.Netplay
 
         // ---- 로컬 스트로크 송신 (이벤트 구독, reliable) ----
 
-        private void HandleLocalPinchStart(string hand, Vector2 screenPos)
+        // HandPointer가 norm을 직접 준다 — 내부 screen->norm 변환은 삭제됐다 (docs/11 §2)
+        private void HandleLocalStrokeStart(string hand, Vector2 norm, Vector3 world)
         {
             string strokeId = NetProtocol.MakeStrokeId(transport.LocalPlayerId, localStrokeCounter++);
             localActiveStroke[hand] = strokeId;
-            Vector2 norm = ToNormalized(screenPos);
-            strokes[strokeId] = new NetStroke { playerId = transport.LocalPlayerId, finished = false };
-            strokes[strokeId].points.Add(norm);
+            StrokeStyle style = CurrentStyle();
+            var stroke = new NetStroke { playerId = transport.LocalPlayerId, finished = false, style = style };
+            stroke.points.Add(norm);
+            strokes[strokeId] = stroke;
             pendingPoints[strokeId] = new List<Vector2>();
-            SendStrokeMsg(NetProtocol.TypeStrokeStart, new StrokeStartPayload { strokeId = strokeId, hand = hand, x = norm.x, y = norm.y });
+
+            // DrawingController가 같은 이벤트를 먼저 구독한다(씬 로드 시 OnEnable, 세션 시작은 그 뒤) →
+            // 여기 도달했을 때 이번 스트로크의 localId가 이미 pendingLocalId에 있다.
+            int localId;
+            if (pendingLocalId.TryGetValue(hand, out localId))
+            {
+                localToStroke[localId] = strokeId;
+                pendingLocalId.Remove(hand);
+            }
+
+            SendStrokeMsg(NetProtocol.TypeStrokeStart, new StrokeStartPayload
+            {
+                strokeId = strokeId, hand = hand, x = norm.x, y = norm.y,
+                color = style.color, width = style.width, brush = style.brush
+            });
         }
 
-        private void HandleLocalPinchMove(string hand, Vector2 screenPos)
+        private void HandleLocalStrokeMove(string hand, Vector2 norm, Vector3 world)
         {
             string strokeId;
             if (!localActiveStroke.TryGetValue(hand, out strokeId))
             {
                 return;
             }
-            Vector2 norm = ToNormalized(screenPos);
             strokes[strokeId].points.Add(norm);
             pendingPoints[strokeId].Add(norm);
         }
 
-        private void HandleLocalPinchEnd(string hand)
+        // 송신 스타일은 ToolState가 단일 출처. 미할당이면 width=0으로 보내 수신 측 폴백을 태운다.
+        private StrokeStyle CurrentStyle()
+        {
+            if (toolState == null)
+            {
+                return default(StrokeStyle);
+            }
+            return new StrokeStyle
+            {
+                color = ColorPack.ToInt(toolState.CurrentColor),
+                width = toolState.CurrentWidth,
+                brush = toolState.CurrentBrushIndex
+            };
+        }
+
+        // DrawingController가 발급한 localId 수신 (같은 핀치 이벤트에서 먼저 발행된다)
+        private void HandleLocalStrokeIdAssigned(int localId, string hand)
+        {
+            pendingLocalId[hand] = localId;
+        }
+
+        // 로컬에서 지운 스트로크를 전역 strokeId로 변환해 송신 (docs/11 §2 — 판정을 원격에서 재실행하지 않는다)
+        private void HandleLocalStrokeErased(int localId)
+        {
+            if (transport == null)
+            {
+                return;
+            }
+            string strokeId;
+            if (!localToStroke.TryGetValue(localId, out strokeId))
+            {
+                if (!warnedMissingMapping)
+                {
+                    warnedMissingMapping = true;
+                    Debug.LogWarning("[NetSession] localId " + localId + "의 strokeId 매핑이 없어 StrokeErase를 보내지 못했습니다 (docs/11 §2)");
+                }
+                return;
+            }
+            localToStroke.Remove(localId);
+            strokes.Remove(strokeId);
+            SendStrokeMsg(NetProtocol.TypeStrokeErase, new StrokeErasePayload { strokeId = strokeId });
+        }
+
+        private void HandleLocalStrokeEnd(string hand)
         {
             string strokeId;
             if (!localActiveStroke.TryGetValue(hand, out strokeId))
@@ -357,10 +436,16 @@ namespace CameraCoop.Netplay
                     {
                         return; // 중복 Start 멱등 (docs/08 §4)
                     }
-                    var stroke = new NetStroke { playerId = env.sender, finished = false };
+                    var startStyle = new StrokeStyle { color = start.color, width = start.width, brush = start.brush };
+                    var stroke = new NetStroke { playerId = env.sender, finished = false, style = startStyle };
                     stroke.points.Add(new Vector2(start.x, start.y));
                     strokes[start.strokeId] = stroke;
-                    OnRemoteStrokeStart?.Invoke(start.strokeId, env.sender, new Vector2(start.x, start.y));
+                    OnRemoteStrokeStart?.Invoke(start.strokeId, env.sender, new Vector2(start.x, start.y), startStyle);
+                    break;
+                case NetProtocol.TypeStrokeErase:
+                    var erase = NetProtocol.DecodePayload<StrokeErasePayload>(env);
+                    strokes.Remove(erase.strokeId); // 없으면 무시 — 멱등 (docs/11 §5)
+                    OnRemoteStrokeErased?.Invoke(erase.strokeId);
                     break;
                 case NetProtocol.TypeStrokePoints:
                     var pts = NetProtocol.DecodePayload<StrokePointsPayload>(env);
@@ -397,6 +482,8 @@ namespace CameraCoop.Netplay
                     strokes.Clear();
                     localActiveStroke.Clear();
                     pendingPoints.Clear();
+                    pendingLocalId.Clear();
+                    localToStroke.Clear();
                     OnCanvasCleared?.Invoke();
                     break;
             }
@@ -408,14 +495,15 @@ namespace CameraCoop.Netplay
             {
                 return; // 멱등
             }
-            var stroke = new NetStroke { playerId = snap.playerId, finished = true };
+            var style = new StrokeStyle { color = snap.color, width = snap.width, brush = snap.brush };
+            var stroke = new NetStroke { playerId = snap.playerId, finished = true, style = style };
             Vector2[] points = NetProtocol.UnflattenPoints(snap.xy);
             for (int i = 0; i < points.Length; i++)
             {
                 stroke.points.Add(points[i]);
             }
             strokes[snap.strokeId] = stroke;
-            OnRemoteStrokeStart?.Invoke(snap.strokeId, snap.playerId, points.Length > 0 ? points[0] : Vector2.zero);
+            OnRemoteStrokeStart?.Invoke(snap.strokeId, snap.playerId, points.Length > 0 ? points[0] : Vector2.zero, style);
             if (points.Length > 1)
             {
                 var rest = new Vector2[points.Length - 1];
@@ -504,12 +592,6 @@ namespace CameraCoop.Netplay
                 bool reliable = env.type != NetProtocol.TypeCursor;
                 transport.SendTo(pair.Key, data, reliable);
             }
-        }
-
-        // 화면 픽셀 -> 정규화 (송신은 항상 정규화 좌표, docs/08 §3). 변환 수식은 HandScreenMapper가 단일 진실 원천.
-        private Vector2 ToNormalized(Vector2 screenPos)
-        {
-            return HandScreenMapper.ToNormalized(screenPos, Screen.width, Screen.height);
         }
     }
 }

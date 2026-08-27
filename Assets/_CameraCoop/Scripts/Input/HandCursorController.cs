@@ -20,8 +20,6 @@ namespace CameraCoop
         [SerializeField] private Color leftColor = new Color(0.2f, 0.6f, 1f);   // 청색 계열
         [SerializeField] private Color rightColor = new Color(1f, 0.6f, 0.1f);  // 주황색 계열
         [SerializeField] private float fadeDuration = 0.2f;
-        [SerializeField] private CanvasSurface canvasSurface;    // 할당 시 커서를 월드 캔버스 투영 위치에 표시 (docs/10 §2)
-        [SerializeField] private Camera projectionCamera;        // canvasSurface 사용 시 필수 (WorldToScreenPoint용)
 
         // Phase 2 드로잉 접점. Phase 1에서는 발행만 하고 구독자 없음.
         public event Action<string, Vector2> OnPinchStart;
@@ -44,10 +42,6 @@ namespace CameraCoop
 
         private void Awake()
         {
-            if (canvasSurface != null && projectionCamera == null)
-            {
-                Debug.LogError("[HandCursorController] canvasSurface는 할당됐는데 projectionCamera가 없다 — 커서가 화면 좌표로 폴백해 잉크와 어긋난다 (docs/10 §2)");
-            }
             leftState = BuildState(leftCursor, leftColor);
             rightState = BuildState(rightCursor, rightColor);
         }
@@ -138,14 +132,10 @@ namespace CameraCoop
             }
 
             Vector3 palm = hand.GetPalmCenter();
+            // 커서는 항상 화면 좌표(= 레이 원점)에 둔다. Phase 3e에서 조준이 카메라 레이캐스트로 바뀌었으므로
+            // 커서를 캔버스에 투영하면 실제 조준점과 어긋난다 (docs/11 §2 — Phase 3d 투영 분기 삭제).
             Vector2 screenPos = HandScreenMapper.ToScreen(palm.x, palm.y, Screen.width, Screen.height);
-            // 표시 위치만 월드 캔버스 투영으로 분기. 이벤트의 screenPos는 기존 값 유지 (NetSession 왕복 계약, docs/10 §2)
-            Vector2 displayPos = screenPos;
-            if (canvasSurface != null && projectionCamera != null)
-            {
-                displayPos = projectionCamera.WorldToScreenPoint(canvasSurface.NormToWorld(new Vector2(palm.x, palm.y)));
-            }
-            state.cursor.position = displayPos;
+            state.cursor.position = screenPos;
 
             bool wasPinched = state.pinched;
             bool nowPinched = PinchStateMachine.Next(wasPinched, hand.pinch, pinchThreshold, pinchReleaseThreshold);

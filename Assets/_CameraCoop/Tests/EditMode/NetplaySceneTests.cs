@@ -85,7 +85,6 @@ namespace CameraCoop.Tests
 
                 DrawingController drawing = roots.SelectMany(r => r.GetComponentsInChildren<DrawingController>(true)).FirstOrDefault();
                 Assert.IsNotNull(drawing, "Netplay3D에 DrawingController가 없다");
-                AssertFieldAssigned(drawing, "canvasSurface", "DrawingController.canvasSurface 미배선 — 로컬 드로잉이 화면 좌표로 폴백한다");
 
                 RemotePresenter presenter = roots.SelectMany(r => r.GetComponentsInChildren<RemotePresenter>(true)).FirstOrDefault();
                 Assert.IsNotNull(presenter, "Netplay3D에 RemotePresenter가 없다");
@@ -94,8 +93,7 @@ namespace CameraCoop.Tests
 
                 HandCursorController cursor = roots.SelectMany(r => r.GetComponentsInChildren<HandCursorController>(true)).FirstOrDefault();
                 Assert.IsNotNull(cursor, "Netplay3D에 HandCursorController가 없다");
-                AssertFieldAssigned(cursor, "canvasSurface", "HandCursorController.canvasSurface 미배선 — 커서가 화면 좌표로 폴백한다");
-                AssertFieldAssigned(cursor, "projectionCamera", "HandCursorController.projectionCamera 미배선 — 커서가 화면 좌표로 폴백해 잉크와 어긋난다");
+                // Phase 3e: canvasSurface/projectionCamera 투영 분기는 삭제됐다 — 조준은 HandPointer 단독 담당.
             }
             finally
             {
