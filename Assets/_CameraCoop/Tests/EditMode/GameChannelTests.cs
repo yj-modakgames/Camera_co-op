@@ -158,6 +158,27 @@ namespace CameraCoop.Tests
             Assert.AreEqual(JsonUtility.ToJson(payload), gotJson);
         }
 
+        // Hello 이전(또는 4인 초과로 거부된) 피어는 트랜스포트에 붙어 있어도 세션 멤버가 아니다 —
+        // 미등록 sender가 게임 메시지를 흘리면 미등록 피어가 정답을 제출할 수 있는 경로가 된다.
+        [Test]
+        public void Host_UnregisteredPeer_MessagesAreDropped()
+        {
+            StartHost();
+            var games = new List<string>();
+            var starts = new List<string>();
+            session.OnGameMessage += (type, sender, json) => games.Add(type);
+            session.OnRemoteStrokeStart += (id, sender, p, style) => starts.Add(id);
+
+            LoopbackTransport.FakePeer stranger = transport.AddFakePeer("x", "X"); // Hello 미송신
+            Deliver(stranger, "GuessSubmit", "x", new TestPayload { text = "사과", n = 1 });
+            Deliver(stranger, NetProtocol.TypeStrokeStart, "x", Start("x:0"));
+
+            Assert.AreEqual(0, games.Count, "미등록 피어의 게임 메시지는 통로에 오르지 않는다");
+            Assert.AreEqual(0, starts.Count, "스트로크도 반영되지 않는다");
+            Assert.AreEqual(0, CountReceived(peerA, "GuessSubmit"));
+            Assert.AreEqual(0, CountReceived(peerA, NetProtocol.TypeStrokeStart), "중계도 없다");
+        }
+
         // 회귀 가드: 화이트리스트에 없어도 Welcome·PeerJoined·PeerLeft는 반드시 Apply를 탄다 (빼먹으면 클라 세션이 통째로 깨진다)
         [Test]
         public void Client_SessionCoreTypes_StillApplied_AndNotRoutedToGameMessage()

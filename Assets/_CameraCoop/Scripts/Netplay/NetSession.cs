@@ -417,6 +417,13 @@ namespace CameraCoop.Netplay
                 return;
             }
 
+            // host는 세션 멤버의 메시지만 받는다. Hello 이전 피어, 4인 초과로 거부된 피어(HandleHello)는
+            // 트랜스포트에는 붙어 있어도 players에 없다 — 아래 전부(게이트·중계·OnGameMessage·Apply)가 멤버십을 전제한다.
+            if (IsHost && !players.ContainsKey(env.sender))
+            {
+                return;
+            }
+
             // 스트로크 4종은 중계·Apply 전에 권위 게이트 (docs/12 §2 표 #3).
             // 거부는 로그를 남기지 않는다 — 라운드 내내 대량으로 발생해 콘솔 스팸(원격 유발 로그 폭탄)이 된다.
             if (NetProtocol.IsStrokeType(env.type) && StrokeGate != null && !StrokeGate(env.sender))
