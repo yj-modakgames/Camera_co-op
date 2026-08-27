@@ -96,31 +96,47 @@ namespace CameraCoop
         private static void KillTree(Process target)
         {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            var kill = new ProcessStartInfo("taskkill", "/PID " + target.Id + " /T /F")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using (Process p = Process.Start(kill))
-            {
-                p.WaitForExit(3000);
-            }
+            RunSilent("taskkill", "/PID " + target.Id + " /T /F");
 #else
+            RunSilent("/usr/bin/pkill", "-P " + target.Id); // 자식 먼저 — 부모를 먼저 죽이면 고아가 캠을 물고 남는다
             target.Kill();
 #endif
         }
 
-        // 빌드: <exe 폴더>/tracker, Editor: <프로젝트 루트>/PythonTracker
+        private static void RunSilent(string file, string args)
+        {
+            var info = new ProcessStartInfo(file, args)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using (Process p = Process.Start(info))
+            {
+                p.WaitForExit(3000);
+            }
+        }
+
+        // dataPath에서 위로 훑어 tracker/(배포) 또는 PythonTracker/(개발)를 찾는다.
+        // 깊이가 OS마다 다르기 때문이다 — Windows 빌드는 1단계(<exe>/CameraCoop_Data),
+        // Editor도 1단계(<root>/Assets), macOS 빌드는 4단계(<app>/Contents/Resources/Data).
         private static string ResolveTrackerDir()
         {
-            string root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            string built = Path.Combine(root, "tracker");
-            if (Directory.Exists(built))
+            string dir = Application.dataPath;
+            for (int i = 0; i < 5 && !string.IsNullOrEmpty(dir); i++)
             {
-                return built;
+                string built = Path.Combine(dir, "tracker");
+                if (Directory.Exists(built))
+                {
+                    return built;
+                }
+                string dev = Path.Combine(dir, "PythonTracker");
+                if (Directory.Exists(dev))
+                {
+                    return dev;
+                }
+                dir = Path.GetDirectoryName(dir);
             }
-            string dev = Path.Combine(root, "PythonTracker");
-            return Directory.Exists(dev) ? dev : null;
+            return null;
         }
 
         // venv가 없으면 실행하지 않는다 — PATH의 python으로 띄워봐야 mediapipe가 없어 조용히 죽는다.
