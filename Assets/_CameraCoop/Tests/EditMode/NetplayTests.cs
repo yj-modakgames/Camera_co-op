@@ -98,7 +98,7 @@ namespace CameraCoop.Tests
         [Test]
         public void Decode_VersionMismatch_ReturnsNull()
         {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes("{\"v\":3,\"type\":\"Hello\",\"sender\":\"x\",\"payload\":\"{}\"}"); // v2가 현재 버전 (docs/11 §3)
+            byte[] data = System.Text.Encoding.UTF8.GetBytes("{\"v\":4,\"type\":\"Hello\",\"sender\":\"x\",\"payload\":\"{}\"}"); // v3가 현재 버전 (docs/12 §3)
             Assert.IsNull(NetProtocol.Decode(data));
         }
 

@@ -21,7 +21,16 @@ namespace CameraCoop.Netplay
         public string LocalPlayerId { get { return transport != null ? transport.LocalPlayerId : null; } }
         public IReadOnlyDictionary<string, PlayerInfo> Players { get { return players; } }
 
+        // host: 자기 id / 클라: Welcome sender(star에서 Welcome을 보내는 건 host뿐, docs/08 §1) / 세션 없음: null.
+        // 게임 계층이 "host가 보낸 게임 메시지만 적용"을 판정하는 기준 (docs/12 §2 표 #6)
+        public string HostPlayerId { get; private set; }
+
+        // playerId -> 스트로크 허용. null이면 전원 허용. 스트로크 4종에만 적용된다 (docs/12 §2 표 #3)
+        public Func<string, bool> StrokeGate { get; set; }
+
         public event Action OnPlayersChanged;
+        public event Action<string, string, string> OnGameMessage;  // (type, senderPlayerId, payloadJson) — 코어 타입 밖 전부 (docs/12 §2 표 #1)
+        public event Action<string> OnPeerJoinedSession;            // host: Hello 처리 직후 / 클라: PeerJoined 적용 직후 (docs/12 §2 표 #4)
         public event Action<string, string, Vector2, bool> OnRemoteCursor;
         public event Action<string, string, Vector2, StrokeStyle> OnRemoteStrokeStart;
         public event Action<string> OnRemoteStrokeErased;
@@ -46,6 +55,7 @@ namespace CameraCoop.Netplay
         private readonly Dictionary<string, int> pendingLocalId = new Dictionary<string, int>(2);  // hand -> DrawingController가 발급한 localId
         private readonly Dictionary<int, string> localToStroke = new Dictionary<int, string>();    // localId -> 전역 strokeId (지우개)
         private bool warnedMissingMapping;
+        private bool warnedGameRole;
 
         public void StartSession(INetTransport newTransport, string name)
         {
@@ -71,6 +81,7 @@ namespace CameraCoop.Netplay
             localCursorSeq = 0;
             OnCanvasCleared?.Invoke(); // 이전 세션의 원격 표시·strokeId 재사용 충돌 정리 (최종 리뷰 I-2)
 
+            HostPlayerId = transport.IsHost ? transport.LocalPlayerId : null; // 클라는 Welcome을 받아야 안다
             if (transport.IsHost)
             {
                 players[transport.LocalPlayerId] = new PlayerInfo { playerId = transport.LocalPlayerId, name = localName, colorIndex = 0 };
@@ -118,6 +129,7 @@ namespace CameraCoop.Netplay
             transport.OnMessage -= HandleMessage;
             transport.Shutdown();
             transport = null;
+            HostPlayerId = null;
             players.Clear();
             OnCanvasCleared?.Invoke(); // 이전 세션의 원격 표시·strokeId 재사용 충돌 정리 (최종 리뷰 I-2)
             OnPlayersChanged?.Invoke();
@@ -136,6 +148,50 @@ namespace CameraCoop.Netplay
             localToStroke.Clear();     // 로컬 스트로크가 전부 사라졌으므로 매핑도 함께 리셋
             Broadcast(NetProtocol.TypeClear, new EmptyPayload(), reliable: true, exceptId: null);
             OnCanvasCleared?.Invoke();
+        }
+
+        // ---- 게임 메시지 송신 (docs/12 §2 표 #2). 전부 reliable, 내용은 보지 않는다 ----
+
+        public void BroadcastGameMsg<T>(string type, T payload, string exceptId = null)
+        {
+            if (!CanSendGame(needHost: true, api: "BroadcastGameMsg"))
+            {
+                return;
+            }
+            Broadcast(type, payload, reliable: true, exceptId: exceptId);
+        }
+
+        public void SendGameTo<T>(string playerId, string type, T payload)
+        {
+            if (!CanSendGame(needHost: true, api: "SendGameTo"))
+            {
+                return;
+            }
+            transport.SendTo(playerId, NetProtocol.Encode(type, transport.LocalPlayerId, payload), true);
+        }
+
+        public void SendGameToHost<T>(string type, T payload)
+        {
+            if (!CanSendGame(needHost: false, api: "SendGameToHost"))
+            {
+                return;
+            }
+            SendToHostMsg(type, payload, reliable: true);
+        }
+
+        // 역할이 안 맞는 송신을 조용히 삼키지 않는다. 다만 게임 루프에서 반복 호출될 수 있어 경고는 1회만 남긴다.
+        private bool CanSendGame(bool needHost, string api)
+        {
+            if (transport != null && IsHost == needHost)
+            {
+                return true;
+            }
+            if (!warnedGameRole)
+            {
+                warnedGameRole = true;
+                Debug.LogWarning("[NetSession] " + api + "는 " + (needHost ? "host" : "클라") + " 전용입니다 — 호출을 무시합니다 (docs/12 §2)");
+            }
+            return false;
         }
 
         private void Update()
@@ -198,6 +254,10 @@ namespace CameraCoop.Netplay
         // HandPointer가 norm을 직접 준다 — 내부 screen->norm 변환은 삭제됐다 (docs/11 §2)
         private void HandleLocalStrokeStart(string hand, Vector2 norm, Vector3 world)
         {
+            if (StrokeGate != null && !StrokeGate(transport.LocalPlayerId))
+            {
+                return; // host 자신도 게이트 대상 (docs/12 §2). 1차 방어는 HandPointer라 정상 경로에선 도달하지 않는다
+            }
             string strokeId = NetProtocol.MakeStrokeId(transport.LocalPlayerId, localStrokeCounter++);
             localActiveStroke[hand] = strokeId;
             StrokeStyle style = CurrentStyle();
@@ -357,10 +417,25 @@ namespace CameraCoop.Netplay
                 return;
             }
 
-            // host: 발신자 제외 전원에게 중계 (정본 순서 = host의 중계 순서, docs/08 §1)
-            if (IsHost)
+            // 스트로크 4종은 중계·Apply 전에 권위 게이트 (docs/12 §2 표 #3).
+            // 거부는 로그를 남기지 않는다 — 라운드 내내 대량으로 발생해 콘솔 스팸(원격 유발 로그 폭탄)이 된다.
+            if (NetProtocol.IsStrokeType(env.type) && StrokeGate != null && !StrokeGate(env.sender))
+            {
+                return;
+            }
+
+            // host: 화이트리스트 타입만 발신자 제외 전원에게 중계 (정본 순서 = host의 중계 순서, docs/08 §1).
+            // 게임 메시지는 중계 대상이 아니다 — 중계 여부는 host의 게임 계층이 결정한다 (docs/12 §2 표 #1)
+            if (IsHost && NetProtocol.IsRelayType(env.type))
             {
                 RelayRaw(data, env, exceptId: directSender);
+            }
+
+            // 코어 타입 밖 = 게임 메시지. Apply의 switch에 넣지 않고 통로 이벤트로만 내보낸다 (NetSession은 게임을 모른다)
+            if (!NetProtocol.IsCoreType(env.type))
+            {
+                OnGameMessage?.Invoke(env.type, env.sender, env.payload);
+                return;
             }
             Apply(env);
         }
@@ -385,6 +460,7 @@ namespace CameraCoop.Netplay
             transport.SendTo(peerId, NetProtocol.Encode(NetProtocol.TypeWelcome, transport.LocalPlayerId, welcome), true);
             Broadcast(NetProtocol.TypePeerJoined, new PeerPayload { playerId = peerId, name = hello.name, colorIndex = colorIndex }, reliable: true, exceptId: peerId);
             OnPlayersChanged?.Invoke();
+            OnPeerJoinedSession?.Invoke(peerId); // 늦은 참가자에게 게임 상태를 보낼 트리거 (docs/12 §2 표 #4)
         }
 
         private void Apply(NetEnvelope env)
@@ -396,6 +472,7 @@ namespace CameraCoop.Netplay
             switch (env.type)
             {
                 case NetProtocol.TypeWelcome:
+                    HostPlayerId = env.sender; // star 토폴로지에서 Welcome을 보내는 건 host뿐 (docs/08 §1)
                     var welcome = NetProtocol.DecodePayload<WelcomePayload>(env);
                     players.Clear();
                     for (int i = 0; i < welcome.players.Length; i++)
@@ -412,6 +489,7 @@ namespace CameraCoop.Netplay
                     var joined = NetProtocol.DecodePayload<PeerPayload>(env);
                     players[joined.playerId] = new PlayerInfo { playerId = joined.playerId, name = joined.name, colorIndex = joined.colorIndex };
                     OnPlayersChanged?.Invoke();
+                    OnPeerJoinedSession?.Invoke(joined.playerId);
                     break;
                 case NetProtocol.TypePeerLeft:
                     var left = NetProtocol.DecodePayload<PeerPayload>(env);

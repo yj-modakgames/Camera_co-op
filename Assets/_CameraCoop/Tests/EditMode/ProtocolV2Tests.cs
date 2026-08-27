@@ -4,13 +4,14 @@ using UnityEngine;
 
 namespace CameraCoop.Tests
 {
-    // docs/11 §3 — network v2: 스타일 3필드 + StrokeErase + packed 색. v1은 폐기돼야 한다.
+    // docs/11 §3 — v2 와이어 포맷(스타일 3필드 + StrokeErase + packed 색)은 그대로 유지된다.
+    // 버전 숫자만 v3로 오른다 (docs/12 §3 게임 메시지 도입) — 구버전 envelope는 v1·v2 모두 폐기.
     public class ProtocolV2Tests
     {
         [Test]
-        public void Version_IsTwo()
+        public void Version_IsThree()
         {
-            Assert.AreEqual(2, NetProtocol.Version);
+            Assert.AreEqual(3, NetProtocol.Version);
         }
 
         [Test]
@@ -18,6 +19,15 @@ namespace CameraCoop.Tests
         {
             // 구버전 클라이언트가 보낸 v1 envelope — 조용히 틀린 색으로 그리는 대신 폐기 (docs/11 §3)
             var old = new NetEnvelope { v = 1, type = NetProtocol.TypeStrokeStart, sender = "old", payload = "{}" };
+            byte[] data = System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(old));
+            Assert.IsNull(NetProtocol.Decode(data));
+        }
+
+        [Test]
+        public void V2Envelope_IsDiscarded()
+        {
+            // v2 클라는 게임 메시지를 모른다 — 섞이면 게임 진행이 조용히 깨지므로 같은 규칙으로 폐기 (docs/12 §2 표 #5)
+            var old = new NetEnvelope { v = 2, type = NetProtocol.TypeStrokeStart, sender = "v2", payload = "{}" };
             byte[] data = System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(old));
             Assert.IsNull(NetProtocol.Decode(data));
         }

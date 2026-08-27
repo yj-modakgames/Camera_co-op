@@ -37,9 +37,10 @@ namespace CameraCoop.Netplay
     // 메시지 직렬화/역직렬화 + 프로토콜 순수 판정 (docs/08 §3, §4)
     public static class NetProtocol
     {
+        // v3: 게임 메시지 타입 도입 (docs/12 §3). 게임을 모르는 v2와 섞이면 게임 진행이 조용히 깨진다 — 거부가 맞다.
         // v2: StrokeStart/StrokeSnapshot에 스타일 3필드 추가 + StrokeErase 신규 (docs/11 §3).
         // 필드만 추가하고 버전을 유지하면 구버전과 섞였을 때 조용히 틀린 색으로 그려진다 — 거부가 맞다.
-        public const int Version = 2;
+        public const int Version = 3;
 
         public const string TypeHello = "Hello";
         public const string TypeWelcome = "Welcome";
@@ -51,6 +52,31 @@ namespace CameraCoop.Netplay
         public const string TypePeerJoined = "PeerJoined";
         public const string TypePeerLeft = "PeerLeft";
         public const string TypeStrokeErase = "StrokeErase";
+
+        // host가 원본 그대로 자동 중계하는 타입 = 기존 드로잉/커서 전부 (docs/12 §3 화이트리스트).
+        // 이 집합 밖은 중계하지 않는다 — 게임 메시지(GuessSubmit 등)가 전원에게 퍼지면 정답이 즉시 유출된다.
+        private static readonly HashSet<string> RelayTypes = new HashSet<string>
+        {
+            TypeCursor, TypeStrokeStart, TypeStrokePoints, TypeStrokeEnd, TypeStrokeErase, TypeClear
+        };
+
+        public static bool IsRelayType(string type)
+        {
+            return RelayTypes.Contains(type);
+        }
+
+        // NetSession.Apply가 처리하는 코어 타입 = 중계 6종 + 세션 관리 3종.
+        // 세션 관리 3종은 중계 대상이 아니지만 Apply는 반드시 태워야 한다 — 빼면 클라 세션이 통째로 깨진다.
+        public static bool IsCoreType(string type)
+        {
+            return IsRelayType(type) || type == TypeWelcome || type == TypePeerJoined || type == TypePeerLeft;
+        }
+
+        // StrokeGate 적용 대상 (docs/12 §2 표 #3). 커서는 제외 — 그리지 못하는 사람도 손은 보여야 한다.
+        public static bool IsStrokeType(string type)
+        {
+            return type == TypeStrokeStart || type == TypeStrokePoints || type == TypeStrokeEnd || type == TypeStrokeErase;
+        }
 
         public static byte[] Encode<T>(string type, string sender, T payload)
         {
