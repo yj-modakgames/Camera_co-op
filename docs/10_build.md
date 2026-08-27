@@ -10,7 +10,7 @@
 | 항목 | 값 |
 |---|---|
 | Unity | **6000.3.15f1** 고정 (다른 버전은 URP 에셋 업그레이드 diff 발생, docs/09 §2-2) |
-| 빌드 씬 | `Assets/_CameraCoop/Scenes/NetplayTest.unity` **단 1개** |
+| 빌드 씬 | **2개** — index 0 `Assets/_CameraCoop/Scenes/NetplayTest.unity`, index 1 `Assets/_CameraCoop/Scenes/Netplay3D.unity` (`ProjectSettings/EditorBuildSettings.asset`, commit `d1bf470`) |
 | Input | 새 Input System 전용 (`activeInputHandler: 1`). legacy `Input` API 사용 금지 |
 | Steam AppID | 개발용 **480** (Spacewar). 출시 시 `SteamBootstrap.DevAppId`만 교체 |
 | 산출물 위치 | `Builds/CameraCoop/` (gitignore 대상) |

@@ -48,7 +48,7 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 | N-7 | 10분 Loopback 세션 재실행 | §1 절차 |
 | 3b | 미니게임 프레임워크 설계 | **진입 조건 충족 (2026-08-27).** `LoopbackTransport(isHost:false, localPlayerId)` client 모드 + client role EditMode 4건 추가 — Hello 송신·Welcome 적용(플레이어+스냅샷 재생)·host 이탈 StopSession·커서 seq 게이트. 최종 리뷰 I-5 해소 |
 
-**2026-08-27 Phase 3d 완료로 씬이 2개(`NetplayTest`, `Netplay3D`)가 됐다.** N-5(Steam 2인) 실검증은 이제 **`Netplay3D.unity`로 하는 것이 기본**이며(docs/10), 다음 Windows 빌드 갱신 시 함께 수행한다.
+**2026-08-27 Phase 3d 완료로 씬이 2개(`NetplayTest`, `Netplay3D`)가 됐다.** N-5(Steam 2인) 실검증은 이제 **`Netplay3D.unity`로 하는 것이 기본**이며(docs/10), 다음 Windows 빌드 갱신 시 함께 수행한다. **단, 지금 빌드된 플레이어는 `Netplay3D`에 도달할 수 없다** — `Netplay3D`는 빌드 씬 index 1(`NetplayTest`가 index 0)이고, 런타임 스크립트에 `SceneManager.LoadScene` 호출이 **0건**이라 씬 전환 수단이 없다(지금 빌드하면 첫 씬인 2D `NetplayTest`만 뜬다). **다음 Windows 빌드 갱신 시 `Netplay3D`를 씬 index 0으로 올려야** N-5를 3D 씬에서 실행할 수 있다 — 지금 씬 순서를 바꾸지는 않는다(빌드 갱신은 범위 밖, docs/10_phase3d_world_canvas.md §1).
 
 ### 3b 설계 입력 (3a 최종 리뷰에서 park된 항목 — docs/08과 함께 읽을 것)
 
@@ -94,7 +94,8 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 - `capture_game_view`에 `--width`/`--height`를 안 주면 실제 Game view 해상도를 목표 크기로 **비균일 확대**해 종횡비가 왜곡된다 (2026-08-27 실측: 500×462 → 1280×720, 가로 1.65배). 크기를 명시하거나 `UnityEditor.PlayModeWindow.SetCustomRenderingResolution`으로 먼저 해상도를 고정할 것
 - URP 머티리얼을 처음 렌더할 때 Editor가 60~90초 blocking될 수 있다 — **재시작 불필요**, `editor_status` 폴링으로 복구된다 (timeout을 진짜 멈춤으로 오판하지 말 것, 2026-08-27 Phase 3d 실측)
 - 원격 merge로 유입된 `Assets/_CameraCoop/Editor/MacBuild.cs`가 macOS 전용 API(`UnityEditor.OSXStandalone`)를 조건 없이 참조해 Windows에서 CS0234로 **Editor 어셈블리 전체**가 깨진 적이 있다 (`run_tests`가 stale 79 반환) — `#if UNITY_EDITOR_OSX`로 가드해 해결 (commit `bd24577`)
-- **`run_tests`가 "이미 Editor에서 열려 있는(active) 씬"을 `EditorSceneManager.OpenScene(path, OpenSceneMode.Additive)`로 다시 여는 테스트(`NetplaySceneTests`)를 포함하면, 그 씬의 오브젝트 transform이 실제로 변형돼 디스크에 저장될 수 있다.** 2026-08-27 Phase 3d Task 6 실측: `Netplay3D.unity`가 Editor의 active 씬인 상태에서 `run_tests`를 돌리자 `DrawCanvas`의 로컬 z가 `0 → -0.04`로 바뀌어 파일까지 저장됐다(`get_scene_hierarchy`의 `isActive:true`로 원인 확인). `run_tests` 전에 `unity cmd open_scene --path <테스트 대상이 아닌 다른 씬>`으로 active 씬을 바꿔두면 재현되지 않는다 — 재발생 시 `git status`로 `*.unity` diff를 확인하고 `git checkout --` 로 되돌릴 것
+- **dirty 씬을 열어둔 채 `run_tests`를 돌리면 그 씬이 저장된다 — 테스트가 아니라 Unity Test Framework가 저장한다.** 2026-08-27 Phase 3d Task 6 실측: `Netplay3D.unity`가 Editor의 active 씬인 상태에서 `run_tests`를 돌리자 `DrawCanvas`의 로컬 z가 `0 → -0.04`로 바뀌어 파일까지 저장됐다. Task 6은 이를 `NetplaySceneTests`가 `EditorSceneManager.OpenScene(path, OpenSceneMode.Additive)`로 active 씬을 재차 여는 부작용으로 진단했지만, **Task 7의 재현 실험으로 이 진단은 오진임이 확인됐다**: `NetplaySceneTests`를 실행하지 않고 dirty 씬만 열어둔 채 `run_tests`를 돌려도 동일하게 저장된다. 실제 원인은 `Library/PackageCache/com.unity.test-framework@.../UnityEditor.TestRunner/TestRun/TaskList.cs:48`가 **모든 test run 앞에서**(테스트 코드 실행보다 먼저) `SaveModifiedSceneTask` → `SaveCurrentModifiedScenesIfUserWantsTo()`를 실행해 dirty 씬을 무조건 디스크에 저장하는 것이다 — 테스트 쪽에서 막을 방법이 없다. 함정의 교훈: **dirty 씬을 열어둔 채 `run_tests`를 돌리지 말 것**(실행 전 저장하거나 되돌려 clean으로 만든다). 재발생 시 `git status`로 `*.unity` diff를 확인하고 `git checkout --`로 되돌릴 것.
+  - 참고 — 이것과는 별개로 `NetplaySceneTests`에 실재하는 결함이 있었다: 검사 대상 씬이 이미 사용자의 active 씬일 때도 무조건 Additive로 다시 열고, `finally`에서 `CloseScene(scene, true)`로 **사용자의 active 씬을 닫아버리는** 문제(디스크 저장과는 무관). commit `592c465`(`alreadyOpen` 가드 추가)로 수정 완료
 
 ## 5. 문서 지도
 

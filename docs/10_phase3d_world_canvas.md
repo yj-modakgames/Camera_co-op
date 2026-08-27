@@ -67,7 +67,7 @@ Scripts/Drawing/CanvasSurface.cs — 월드 공간 캔버스 평면 (MonoBehavio
 
 | # | 기준 | 확인 방법 | 결과 |
 |---|---|---|---|
-| W-1 | EditMode: CanvasSurfaceLogic 매핑 (코너 4점·중심·transform 이동/회전 반영) + 기존 전체 pass | `unity cmd run_tests` | **PASS** — 81/81 (Failed 0). 진행 이력 72(3a baseline) → 77(Task1 +5) → 79(Task2 +2) → 80(MacBuild.cs Windows CS0234 가드 후 stale 카운트 복구) → 81(Netplay3D TestCase 추가). Task 4 report |
+| W-1 | EditMode: CanvasSurfaceLogic 매핑 (대각 2코너[좌상단·우하단]·중심·transform 이동/회전 반영) + 기존 전체 pass | `unity cmd run_tests` | **PASS** — 81/81 (Failed 0). 진행 이력 72(3a baseline) → 77(Task1 +5) → 79(Task2 +2) → 80(MacBuild.cs Windows CS0234 가드 후 stale 카운트 복구) → 81(Netplay3D TestCase 추가). Task 4 report |
 | W-2 | Loopback 4인 in Netplay3D: 가짜 피어 3 + 로컬 1 커서·스트로크가 캔버스 Quad 위 4색 표시 | eval + `capture_game_view` | **PASS** — `remoteStrokes=2 onCanvas=2 remoteCursors=1 players=4`. 스트로크 첫 점 z=-0.0050 = `CanvasSurface.surfaceOffset`(-0.005)과 정확히 일치(캔버스 평면 위). 좌표 검산 일치(fake-1 norm(0.2,0.2)→world(-0.72,1.905)). 캡처(1280×720)로 4색 표시가 캔버스 Quad 안쪽에 있음을 육안 확인. Task 5 report |
 | W-3 | 늦은 참가 스냅샷 + 피어 이탈 (N-2/N-3 절차를 3D 씬에서) | 자동 | **PASS** — 피어 이탈: `players 4→3 remoteStrokesPreserved=2`. 늦은 참가(빈 슬롯 재사용): `type=Welcome players=4 snapshot=2`. `players=4`는 `SessionLogic.MaxPlayers=4` 제한에 따른 정정값(plan의 `players=5`는 도달 불가 — 위 plan 정정 참조). Task 5 report |
 | W-4 | NetplayTest 2D 씬 무회귀 (Loopback smoke) | 육안/capture | **PASS** — `cam.transform.InverseTransformPoint(strokePoint).z = 5.0000` = `planeDistance`(기존 카메라 평면 경로), `canvasSurface=null`(두 소비자 모두 미할당으로 legacy 분기 확인). 월드 z=6.785로 캔버스 평면(z≈0)과 명확히 구분 — 월드 캔버스 경로로의 회귀 없음. plan의 `z ≈ camZ+5` 판정식은 카메라 회전(euler 26.33,225,0) 때문에 성립하지 않아 정정. Task 5 report |
