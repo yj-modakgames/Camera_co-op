@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# .sh 는 항상 LF — CRLF면 macOS에서 shebang이 깨진다 (bad interpreter)
+*.sh text eol=lf
