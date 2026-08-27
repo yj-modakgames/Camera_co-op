@@ -1,3 +1,4 @@
+#if UNITY_EDITOR_OSX
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -29,3 +30,4 @@ static class MacBuild
             EditorApplication.Exit(1);
     }
 }
+#endif
