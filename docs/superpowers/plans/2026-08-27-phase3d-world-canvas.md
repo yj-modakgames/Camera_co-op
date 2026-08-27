@@ -579,25 +579,11 @@ Expected: `remoteStrokes=2 onCanvas=2 remoteCursors>=1 players=4`. 미달 시 ST
 
 스크린샷: `unity cmd capture_game_view --source screen --save_path Temp/netplay3d_loopback.png` → Read로 열어 4색 표시가 **캔버스 Quad 위에** 있는지 육안 확인.
 
-- [ ] **Step 3: W-3 판정 — 늦은 참가 스냅샷 + 피어 이탈**
+- [ ] **Step 3: W-3 판정 — 피어 이탈로 슬롯을 비운 뒤 늦은 참가 스냅샷 검증**
 
-늦은 참가 (3a plan과 동일 — 같은 eval 안에서 `lb.Tick()` 직접 호출로 즉시 처리):
+**주의(정정, Task 5 실측):** `SessionLogic.MaxPlayers = 4`라 4인 만석에서 5번째 Hello는 `colorIndex < 0` → `NetSession.HandleHello`가 조용히 무시한다(설계된 정상 동작, docs/08 4인 제한). 따라서 만석 상태로 바로 5번째를 Hello하면 Welcome 자체가 오지 않는다. **피어 1명을 먼저 이탈시켜 슬롯을 비운 뒤** 늦은 참가를 검증한다.
 
-```csharp
-var s = UnityEngine.Object.FindFirstObjectByType<CameraCoop.Netplay.NetSession>();
-var tf = s.GetType().GetField("transport", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-var lb = (CameraCoop.Netplay.LoopbackTransport)tf.GetValue(s);
-var late = lb.AddFakePeer("fake-late", "Late");
-late.Send(CameraCoop.Netplay.NetProtocol.Encode(CameraCoop.Netplay.NetProtocol.TypeHello, "fake-late", new CameraCoop.Netplay.HelloPayload { name = "Late" }));
-lb.Tick();
-if (late.Received.Count == 0) { return "FAIL: no welcome"; }
-var env = CameraCoop.Netplay.NetProtocol.Decode(late.Received[0]);
-var welcome = CameraCoop.Netplay.NetProtocol.DecodePayload<CameraCoop.Netplay.WelcomePayload>(env);
-return "welcome type=" + env.type + " players=" + welcome.players.Length + " snapshot=" + welcome.snapshot.Length;
-```
-Expected: `type=Welcome players=5 snapshot=2`
-
-피어 이탈:
+피어 이탈 (먼저 실행):
 
 ```csharp
 var s = UnityEngine.Object.FindFirstObjectByType<CameraCoop.Netplay.NetSession>();
@@ -611,7 +597,23 @@ int remote = 0;
 foreach (var l in lines) { if (l.gameObject.name.StartsWith("RemoteStroke_")) { remote++; } }
 return "players " + before + "->" + after + " remoteStrokesPreserved=" + remote;
 ```
-Expected: players 감소 1, `remoteStrokesPreserved=2` (스트로크 보존)
+Expected: players 감소 1 (`4->3`), `remoteStrokesPreserved=2` (스트로크 보존)
+
+늦은 참가 (슬롯이 빈 뒤 실행 — 3a plan과 동일 패턴, 같은 eval 안에서 `lb.Tick()` 직접 호출로 즉시 처리):
+
+```csharp
+var s = UnityEngine.Object.FindFirstObjectByType<CameraCoop.Netplay.NetSession>();
+var tf = s.GetType().GetField("transport", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+var lb = (CameraCoop.Netplay.LoopbackTransport)tf.GetValue(s);
+var late = lb.AddFakePeer("fake-late", "Late");
+late.Send(CameraCoop.Netplay.NetProtocol.Encode(CameraCoop.Netplay.NetProtocol.TypeHello, "fake-late", new CameraCoop.Netplay.HelloPayload { name = "Late" }));
+lb.Tick();
+if (late.Received.Count == 0) { return "FAIL: no welcome"; }
+var env = CameraCoop.Netplay.NetProtocol.Decode(late.Received[0]);
+var welcome = CameraCoop.Netplay.NetProtocol.DecodePayload<CameraCoop.Netplay.WelcomePayload>(env);
+return "welcome type=" + env.type + " players=" + welcome.players.Length + " snapshot=" + welcome.snapshot.Length;
+```
+Expected: `type=Welcome players=4 snapshot=2` (players는 5가 아니라 4 — 위 MaxPlayers=4 정정 참조. 빈 슬롯을 늦은 참가자가 재할당받아 만석 4로 복귀)
 
 - [ ] **Step 4: 콘솔 에러 + 종료**
 
@@ -628,7 +630,7 @@ unity cmd open_scene --path Assets/_CameraCoop/Scenes/NetplayTest.unity
 unity cmd editor_play
 ```
 
-eval — Loopback host + 가짜 스트로크 1개 후, RemoteStroke의 z가 **기존 카메라 평면(≈5)**인지 확인:
+eval — Loopback host + 가짜 스트로크 1개 후, RemoteStroke가 **기존 카메라 평면(planeDistance)** 위인지 확인:
 
 ```csharp
 var ui = UnityEngine.Object.FindFirstObjectByType<CameraCoop.Netplay.NetplayUI>();
@@ -646,12 +648,13 @@ foreach (var l in lines)
 {
     if (l.gameObject.name.StartsWith("RemoteStroke_"))
     {
-        return "2d stroke z=" + l.GetPosition(0).z + " camZ=" + UnityEngine.Camera.main.transform.position.z;
+        UnityEngine.Vector3 camLocal = UnityEngine.Camera.main.transform.InverseTransformPoint(l.GetPosition(0));
+        return "2d stroke camLocalZ=" + camLocal.z + " worldZ=" + l.GetPosition(0).z;
     }
 }
 return "FAIL: no remote stroke";
 ```
-Expected: `z ≈ camZ + 5` (planeDistance=5인 기존 카메라 평면 경로 유지 — 캔버스 평면 z≈0이 나오면 회귀, STOP). 이후 `editor_stop`, `Assets/Temp/` 캡처 파일 + `.meta` 삭제.
+Expected: `cam.transform.InverseTransformPoint(strokePoint).z ≈ planeDistance(5)` (기존 카메라 평면 경로 유지). **정정(Task 5 실측): `z ≈ camZ + 5`라는 원래 판정식은 틀렸다** — NetplayTest 카메라가 `euler(26.33, 225, 0)`로 회전돼 있어 forward가 +Z가 아니므로 월드 z와 camZ의 단순 덧셈이 성립하지 않는다. 카메라 로컬 z(`InverseTransformPoint`)로만 판정할 것. 캔버스 평면 z≈0이 나오면 회귀, STOP. 이후 `editor_stop`, `Assets/Temp/` 캡처 파일 + `.meta` 삭제.
 
 - [ ] **Step 6: 보고**
 

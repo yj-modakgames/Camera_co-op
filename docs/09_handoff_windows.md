@@ -12,6 +12,7 @@
 | 1. 손 추적 입력 | 완료. 웹캠 실기 검증 통과. **handedness는 Python이 좌우 반전 송신** (mediapipe 0.10.21 Intel Mac 실측 — §4 주의 참조) |
 | 2. 드로잉 메카닉 | 완료. DoD D-1~D-7 통과, 재검출 스냅 가드 포함. 채점 9.9 |
 | 3a. 온라인 4인 네트워킹 | **구현 완료, main merge됨.** Loopback 검증(N-1~N-3) 통과, EditMode **72/72** (2026-08-27 client role 4건 추가). Steam 경로는 컴파일·정적 검증만 (런타임 미검증) |
+| 3d. 3D 월드 캔버스 (Netplay3D) | **구현 완료.** `CanvasSurface` norm→월드 매핑 + 3개 컴포넌트 optional 주입, `Netplay3D.unity` 신규 씬(빌드 씬 등록). EditMode **81/81**. Loopback W-2/W-3 PASS, 2D 씬 W-4 무회귀 PASS (docs/10 §5·§7) |
 
 Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 (-0.1), Unity 메모리 증가분 단정 불가+스냅샷 무상한 (-0.1), Steam 런타임 미실행 (-0.1), `lobby.SetData("hostId")` 죽은 줄 (-0.1)
 
@@ -46,6 +47,8 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 | N-5 | **실 Steam 2인 상호 드로잉** | 기기 2대 (Windows + Mac 또는 노트북), 서로 다른 Steam 계정·친구 관계. A: NetplayTest Play → **Host Steam** → Steam overlay로 친구 초대. B: 게임 실행 중 초대 수락 → 자동 join (`SteamFriends.OnGameLobbyJoinRequested` 배선됨). 확인: 상호 커서·스트로크 실시간 표시, 늦은 참가 스냅샷, host 종료 시 클라 세션 종료 |
 | N-7 | 10분 Loopback 세션 재실행 | §1 절차 |
 | 3b | 미니게임 프레임워크 설계 | **진입 조건 충족 (2026-08-27).** `LoopbackTransport(isHost:false, localPlayerId)` client 모드 + client role EditMode 4건 추가 — Hello 송신·Welcome 적용(플레이어+스냅샷 재생)·host 이탈 StopSession·커서 seq 게이트. 최종 리뷰 I-5 해소 |
+
+**2026-08-27 Phase 3d 완료로 씬이 2개(`NetplayTest`, `Netplay3D`)가 됐다.** N-5(Steam 2인) 실검증은 이제 **`Netplay3D.unity`로 하는 것이 기본**이며(docs/10), 다음 Windows 빌드 갱신 시 함께 수행한다.
 
 ### 3b 설계 입력 (3a 최종 리뷰에서 park된 항목 — docs/08과 함께 읽을 것)
 
@@ -85,6 +88,13 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 - **UI 버튼이 조용히 안 눌리면 Canvas의 `GraphicRaycaster`를 먼저 확인**한다. 없으면 EventSystem이 포인터 이벤트를 UI로 전달하지 못하는데 에러도 로그도 남지 않는다. 2026-08-27 NetplayTest에서 실제로 발생 (Editor에서도 처음부터 안 눌렸다). 검증: eval에서 `EventSystem.current.RaycastAll`로 버튼이 잡히는지 본다
 - **`unity cmd eval`은 코드를 메서드 본문에 감싸므로 `using` 지시문을 쓸 수 없다.** 전부 전체 이름(`CameraCoop.Netplay.NetSession`)으로 적는다. 또한 Roslyn 컴파일이 메인 스레드를 ~0.5초 멈추므로, eval에서 읽은 시간 기반 값(`Time.realtimeSinceStartup` 차이 등)은 그만큼 낡게 나온다 — `UdpHandReceiver.IsServerLost`가 정상 수신 중에도 true로 보이는 것이 그 예다. 시간 판정은 eval 대신 `capture_game_view`로 확인할 것
 - pipeline test-runner가 timeout으로 취소되면 editor update 펌프가 죽어 모든 CLI 명령이 timeout될 수 있다 — Editor 재시작으로 복구 (Mac에서 1회 발생)
+- **`unity cmd`의 `--timeout`은 command **앞**에 와야 한다.** 뒤에 두면 `run_tests`의 인자로 넘어가 CLI 기본값 30초에 끊긴다. 올바른 형태: `unity cmd --timeout 180 run_tests --mode EditMode` (2026-08-27 Phase 3d 실측)
+- `eval_file`의 파라미터는 `--path`가 아니라 **`--file`**이다 (2026-08-27 Phase 3d 실측)
+- `capture_game_view --source screen`은 **Play 모드 전용**이다. Play가 아닐 때는 `--source camera`를 쓴다 (단 `--source camera`는 Screen Space - Overlay UI가 안 잡힌다, 2026-08-27 Phase 3d 실측)
+- `capture_game_view`에 `--width`/`--height`를 안 주면 실제 Game view 해상도를 목표 크기로 **비균일 확대**해 종횡비가 왜곡된다 (2026-08-27 실측: 500×462 → 1280×720, 가로 1.65배). 크기를 명시하거나 `UnityEditor.PlayModeWindow.SetCustomRenderingResolution`으로 먼저 해상도를 고정할 것
+- URP 머티리얼을 처음 렌더할 때 Editor가 60~90초 blocking될 수 있다 — **재시작 불필요**, `editor_status` 폴링으로 복구된다 (timeout을 진짜 멈춤으로 오판하지 말 것, 2026-08-27 Phase 3d 실측)
+- 원격 merge로 유입된 `Assets/_CameraCoop/Editor/MacBuild.cs`가 macOS 전용 API(`UnityEditor.OSXStandalone`)를 조건 없이 참조해 Windows에서 CS0234로 **Editor 어셈블리 전체**가 깨진 적이 있다 (`run_tests`가 stale 79 반환) — `#if UNITY_EDITOR_OSX`로 가드해 해결 (commit `bd24577`)
+- **`run_tests`가 "이미 Editor에서 열려 있는(active) 씬"을 `EditorSceneManager.OpenScene(path, OpenSceneMode.Additive)`로 다시 여는 테스트(`NetplaySceneTests`)를 포함하면, 그 씬의 오브젝트 transform이 실제로 변형돼 디스크에 저장될 수 있다.** 2026-08-27 Phase 3d Task 6 실측: `Netplay3D.unity`가 Editor의 active 씬인 상태에서 `run_tests`를 돌리자 `DrawCanvas`의 로컬 z가 `0 → -0.04`로 바뀌어 파일까지 저장됐다(`get_scene_hierarchy`의 `isActive:true`로 원인 확인). `run_tests` 전에 `unity cmd open_scene --path <테스트 대상이 아닌 다른 씬>`으로 active 씬을 바꿔두면 재현되지 않는다 — 재발생 시 `git status`로 `*.unity` diff를 확인하고 `git checkout --` 로 되돌릴 것
 
 ## 5. 문서 지도
 
