@@ -145,7 +145,7 @@ namespace CameraCoop.Tests
             byte[] got = null;
             string from = null;
             t.OnMessage += (id, data) => { from = id; got = data; };
-            peer.SendToHost(new byte[] { 7 });
+            peer.Send(new byte[] { 7 });
             Assert.IsNull(got); // Tick 전에는 미발화 (큐잉)
             t.Tick();
             Assert.AreEqual("fake-1", from);
@@ -202,6 +202,103 @@ namespace CameraCoop.Tests
             Assert.AreEqual(1, snap.Length);
             Assert.AreEqual("a:0", snap[0].strokeId);
             Assert.AreEqual(4, snap[0].xy.Length);
+        }
+
+        // ---- client role (docs/09 3b 진입 조건 — Hello 송신·Welcome 적용·host 이탈·커서 seq 게이트) ----
+
+        private const string HostId = "host";
+        private NetSession session;
+        private LoopbackTransport client;
+        private LoopbackTransport.FakePeer hostPeer;
+
+        // 로컬이 클라, 가짜 host 1명이 연결된 상태를 만든다. cursorController 미할당은 의도적 (로컬 송신 경로 미사용).
+        private void StartClient()
+        {
+            session = new GameObject("NetSessionTest").AddComponent<NetSession>();
+            client = new LoopbackTransport(isHost: false, localPlayerId: "cli");
+            session.StartSession(client, "Cli");
+            hostPeer = client.AddFakePeer(HostId, "Host");
+        }
+
+        private void DeliverFromHost<T>(string type, T payload)
+        {
+            hostPeer.Send(NetProtocol.Encode(type, HostId, payload));
+            client.Tick(); // EditMode에는 Update가 없으므로 직접 펌프
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (session != null)
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+            session = null;
+            client = null;
+            hostPeer = null;
+        }
+
+        [Test]
+        public void Client_HostConnected_SendsHelloWithLocalName()
+        {
+            StartClient();
+            Assert.AreEqual(1, client.SentToHost.Count);
+            NetEnvelope env = NetProtocol.Decode(client.SentToHost[0]);
+            Assert.AreEqual(NetProtocol.TypeHello, env.type);
+            Assert.AreEqual("cli", env.sender);
+            Assert.AreEqual("Cli", NetProtocol.DecodePayload<HelloPayload>(env).name);
+        }
+
+        [Test]
+        public void Client_Welcome_AppliesPlayersAndReplaysSnapshot()
+        {
+            StartClient();
+            var starts = new List<string>();
+            var ends = new List<string>();
+            Vector2[] rest = null;
+            session.OnRemoteStrokeStart += (id, sender, p) => starts.Add(id);
+            session.OnRemoteStrokePoints += (id, pts) => rest = pts;
+            session.OnRemoteStrokeEnd += id => ends.Add(id);
+
+            DeliverFromHost(NetProtocol.TypeWelcome, new WelcomePayload
+            {
+                players = new[]
+                {
+                    new PlayerInfo { playerId = HostId, name = "Host", colorIndex = 0 },
+                    new PlayerInfo { playerId = "cli", name = "Cli", colorIndex = 1 }
+                },
+                snapshot = new[]
+                {
+                    new StrokeSnapshot { strokeId = "host:0", playerId = HostId, xy = new[] { 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f } }
+                }
+            });
+
+            Assert.AreEqual(2, session.Players.Count);
+            Assert.AreEqual(1, session.Players["cli"].colorIndex);
+            Assert.AreEqual(new[] { "host:0" }, starts.ToArray());  // 스냅샷 스트로크 재생
+            Assert.AreEqual(2, rest.Length);                        // 첫 점은 Start로 나가고 나머지가 Points
+            Assert.AreEqual(new[] { "host:0" }, ends.ToArray());    // 스냅샷은 완결 스트로크
+        }
+
+        [Test]
+        public void Client_HostDisconnected_StopsSession()
+        {
+            StartClient();
+            Assert.IsTrue(session.IsRunning);
+            client.RemoveFakePeer(HostId);
+            Assert.IsFalse(session.IsRunning); // 클라의 직결 피어는 host뿐 (docs/08 §4)
+        }
+
+        [Test]
+        public void Client_Cursor_StaleSeqIgnored()
+        {
+            StartClient();
+            var xs = new List<float>();
+            session.OnRemoteCursor += (id, hand, pos, pinched) => xs.Add(pos.x);
+            DeliverFromHost(NetProtocol.TypeCursor, new CursorPayload { hand = "Right", x = 0.5f, y = 0.5f, seq = 5 });
+            DeliverFromHost(NetProtocol.TypeCursor, new CursorPayload { hand = "Right", x = 0.9f, y = 0.5f, seq = 4 }); // 역주행 폐기
+            DeliverFromHost(NetProtocol.TypeCursor, new CursorPayload { hand = "Right", x = 0.7f, y = 0.5f, seq = 6 });
+            Assert.AreEqual(new[] { 0.5f, 0.7f }, xs.ToArray());
         }
     }
 }

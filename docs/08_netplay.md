@@ -76,6 +76,7 @@ playerId = SteamID 문자열 (loopback에서는 `"fake-1"` 등). 좌표는 전�
 | 층 | 방법 |
 |---|---|
 | EditMode (순수) | `NetProtocol` 직렬화 왕복 / strokeId 유일성·파싱 / 커서 seq 폐기 / 스냅샷 병합 멱등성 |
+| EditMode (client role) | `LoopbackTransport` client 모드로 `NetSession` 구동 — Hello 송신 / Welcome 적용·스냅샷 재생 / host 이탈 시 StopSession / 커서 역주행 seq 폐기 |
 | Loopback 통합 | 가짜 피어 3명이 스크립트된 커서·스트로크 재생 → 캔버스에 4인분 표시 자동 검증 (이 Mac 한 대로 가능) |
 | 실 Steam | AppID 480 (`steam_appid.txt`), **두 번째 기기 + 별도 Steam 계정 필요** — 2인 상호 드로잉 수동 검증. 기기 확보 시점은 사용자와 조율 |
 

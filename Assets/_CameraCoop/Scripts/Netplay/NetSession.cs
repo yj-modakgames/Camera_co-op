@@ -68,9 +68,16 @@ namespace CameraCoop.Netplay
                 players[transport.LocalPlayerId] = new PlayerInfo { playerId = transport.LocalPlayerId, name = localName, colorIndex = 0 };
             }
 
-            cursorController.OnPinchStart += HandleLocalPinchStart;
-            cursorController.OnPinchMove += HandleLocalPinchMove;
-            cursorController.OnPinchEnd += HandleLocalPinchEnd;
+            if (cursorController != null)
+            {
+                cursorController.OnPinchStart += HandleLocalPinchStart;
+                cursorController.OnPinchMove += HandleLocalPinchMove;
+                cursorController.OnPinchEnd += HandleLocalPinchEnd;
+            }
+            else
+            {
+                Debug.LogWarning("[NetSession] cursorController 미할당 — 로컬 드로잉이 송신되지 않습니다.");
+            }
 
             OnPlayersChanged?.Invoke();
         }
@@ -81,9 +88,12 @@ namespace CameraCoop.Netplay
             {
                 return;
             }
-            cursorController.OnPinchStart -= HandleLocalPinchStart;
-            cursorController.OnPinchMove -= HandleLocalPinchMove;
-            cursorController.OnPinchEnd -= HandleLocalPinchEnd;
+            if (cursorController != null)
+            {
+                cursorController.OnPinchStart -= HandleLocalPinchStart;
+                cursorController.OnPinchMove -= HandleLocalPinchMove;
+                cursorController.OnPinchEnd -= HandleLocalPinchEnd;
+            }
             transport.OnPeerConnected -= HandlePeerConnected;
             transport.OnPeerDisconnected -= HandlePeerDisconnected;
             transport.OnMessage -= HandleMessage;

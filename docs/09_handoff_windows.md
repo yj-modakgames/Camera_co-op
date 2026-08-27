@@ -11,7 +11,7 @@
 |---|---|
 | 1. 손 추적 입력 | 완료. 웹캠 실기 검증 통과. **handedness는 Python이 좌우 반전 송신** (mediapipe 0.10.21 Intel Mac 실측 — §4 주의 참조) |
 | 2. 드로잉 메카닉 | 완료. DoD D-1~D-7 통과, 재검출 스냅 가드 포함. 채점 9.9 |
-| 3a. 온라인 4인 네트워킹 | **구현 완료, main merge됨.** Loopback 검증(N-1~N-3) 통과, EditMode **68/68**. Steam 경로는 컴파일·정적 검증만 (런타임 미검증) |
+| 3a. 온라인 4인 네트워킹 | **구현 완료, main merge됨.** Loopback 검증(N-1~N-3) 통과, EditMode **72/72** (2026-08-27 client role 4건 추가). Steam 경로는 컴파일·정적 검증만 (런타임 미검증) |
 
 Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 (-0.1), Unity 메모리 증가분 단정 불가+스냅샷 무상한 (-0.1), Steam 런타임 미실행 (-0.1), `lobby.SetData("hostId")` 죽은 줄 (-0.1)
 
@@ -45,7 +45,7 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 |---|---|---|
 | N-5 | **실 Steam 2인 상호 드로잉** | 기기 2대 (Windows + Mac 또는 노트북), 서로 다른 Steam 계정·친구 관계. A: NetplayTest Play → **Host Steam** → Steam overlay로 친구 초대. B: 게임 실행 중 초대 수락 → 자동 join (`SteamFriends.OnGameLobbyJoinRequested` 배선됨). 확인: 상호 커서·스트로크 실시간 표시, 늦은 참가 스냅샷, host 종료 시 클라 세션 종료 |
 | N-7 | 10분 Loopback 세션 재실행 | §1 절차 |
-| 3b | 미니게임 프레임워크 설계 | **진입 조건: `LoopbackTransport`에 client 모드 추가 + client role EditMode/통합 테스트** (최종 리뷰 I-5 — Welcome 적용·Hello 송신·host 이탈 StopSession·client seq 게이트가 현재 무커버) |
+| 3b | 미니게임 프레임워크 설계 | **진입 조건 충족 (2026-08-27).** `LoopbackTransport(isHost:false, localPlayerId)` client 모드 + client role EditMode 4건 추가 — Hello 송신·Welcome 적용(플레이어+스냅샷 재생)·host 이탈 StopSession·커서 seq 게이트. 최종 리뷰 I-5 해소 |
 
 ### 3b 설계 입력 (3a 최종 리뷰에서 park된 항목 — docs/08과 함께 읽을 것)
 
