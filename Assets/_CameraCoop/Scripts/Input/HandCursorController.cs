@@ -137,13 +137,13 @@ namespace CameraCoop
                 return; // 손 미검출: 위치/핀치 갱신 스킵
             }
 
-            Vector3 tip = hand.GetLandmark(8); // index tip
-            Vector2 screenPos = HandScreenMapper.ToScreen(tip.x, tip.y, Screen.width, Screen.height);
+            Vector3 palm = hand.GetPalmCenter();
+            Vector2 screenPos = HandScreenMapper.ToScreen(palm.x, palm.y, Screen.width, Screen.height);
             // 표시 위치만 월드 캔버스 투영으로 분기. 이벤트의 screenPos는 기존 값 유지 (NetSession 왕복 계약, docs/10 §2)
             Vector2 displayPos = screenPos;
             if (canvasSurface != null && projectionCamera != null)
             {
-                displayPos = projectionCamera.WorldToScreenPoint(canvasSurface.NormToWorld(new Vector2(tip.x, tip.y)));
+                displayPos = projectionCamera.WorldToScreenPoint(canvasSurface.NormToWorld(new Vector2(palm.x, palm.y)));
             }
             state.cursor.position = displayPos;
 

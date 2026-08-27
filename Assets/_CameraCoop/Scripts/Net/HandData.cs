@@ -36,6 +36,12 @@ namespace CameraCoop
 
             return new Vector3(landmarks[offset], landmarks[offset + 1], landmarks[offset + 2]);
         }
+
+        // 손가락을 굽혀도 조준점이 움직이지 않도록 손목과 손가락 뿌리만 사용한다.
+        public Vector3 GetPalmCenter()
+        {
+            return (GetLandmark(0) + GetLandmark(5) + GetLandmark(9) + GetLandmark(13) + GetLandmark(17)) / 5f;
+        }
     }
 
     // 패킷 수용 여부 판정 (v 검사 + seq 역전/중복 검사). 순수 함수.

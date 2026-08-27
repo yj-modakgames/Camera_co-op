@@ -70,7 +70,7 @@ public double LastLatencyMs { get; }      // (수신 epoch − packet.timestamp)
 ### 동작 명세
 | 항목 | 명세 |
 |---|---|
-| 커서 위치 | index tip(landmark 8) → `screenX = x * Screen.width`, `screenY = (1-y) * Screen.height`. Overlay 캔버스이므로 `RectTransform.position`에 직접 대입 |
+| 커서 위치 | 손바닥 중심(landmark 0, 5, 9, 13, 17의 평균) → `screenX = x * Screen.width`, `screenY = (1-y) * Screen.height`. 손가락을 쥐고 펼 때에도 같은 기준을 사용하며, Overlay 캔버스의 `RectTransform.position`에 직접 대입 |
 | 좌/우 구분 | handedness `"Left"` → `leftCursor` + `leftColor`(청색 계열), `"Right"` → `rightCursor` + `rightColor`(주황 계열). 색은 Inspector에서 변경 가능 |
 | 핀치 판정 | 히스테리시스: `pinch < pinchThreshold`면 핀치 시작, `pinch > pinchReleaseThreshold`면 해제. 경계 떨림 방지 |
 | 핀치 표현 | 핀치 중 커서 스케일 `pinchScale`배 축소 + 색 강조(채도/밝기 변경) |
@@ -85,6 +85,7 @@ public event Action<string, Vector2> OnPinchMove;  // 핀치 유지 중 매 프�
 public event Action<string> OnPinchEnd;
 ```
 - Phase 1에서는 발행만 하고 구독자 없음. 드로잉은 이 이벤트만 구독해 붙는다 (`docs/01_architecture.md` §4).
+- 조준점은 핀치 여부와 무관하게 손바닥 중심을 따른다. `NetSession`의 커서 송신도 `HandData.GetPalmCenter()`를 사용하며, 핀치 비율과 기존 Python 필터는 변경하지 않는다.
 
 ### Inspector 노출 ([SerializeField])
 | 필드 | 기본값 | 설명 |

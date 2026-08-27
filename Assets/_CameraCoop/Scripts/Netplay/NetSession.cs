@@ -154,13 +154,13 @@ namespace CameraCoop.Netplay
                 {
                     continue;
                 }
-                Vector3 tip = hand.GetLandmark(8);
+                Vector3 palm = hand.GetPalmCenter();
                 bool was;
                 localPinch.TryGetValue(hand.handedness, out was);
                 bool now = PinchStateMachine.Next(was, hand.pinch, pinchThreshold, pinchReleaseThreshold);
                 localPinch[hand.handedness] = now;
                 localCursorSeq++;
-                var payload = new CursorPayload { hand = hand.handedness, x = tip.x, y = tip.y, pinched = now, seq = localCursorSeq };
+                var payload = new CursorPayload { hand = hand.handedness, x = palm.x, y = palm.y, pinched = now, seq = localCursorSeq };
                 if (IsHost)
                 {
                     Broadcast(NetProtocol.TypeCursor, payload, reliable: false, exceptId: null);

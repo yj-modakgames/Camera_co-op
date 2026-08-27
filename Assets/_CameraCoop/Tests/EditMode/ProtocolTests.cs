@@ -1,6 +1,10 @@
 using CameraCoop;
+using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace CameraCoop.Tests
 {
@@ -211,6 +215,84 @@ namespace CameraCoop.Tests
         }
 
         // ---- CursorStateLogic (HandCursorController.cs 내부 internal 순수 함수) ----
+
+        [TestCase("Left", false)]
+        [TestCase("Right", false)]
+        [TestCase("Left", true)]
+        [TestCase("Right", true)]
+        public void CursorAndPinchPosition_FollowPalmInsteadOfFingerFlexion(string handedness, bool movePalm)
+        {
+            var rig = new GameObject("hand aim test");
+            rig.SetActive(false);
+            try
+            {
+                var left = new GameObject("left", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+                var right = new GameObject("right", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+                left.transform.SetParent(rig.transform);
+                right.transform.SetParent(rig.transform);
+                var controller = rig.AddComponent<HandCursorController>();
+                var serialized = new SerializedObject(controller);
+                serialized.FindProperty("leftCursor").objectReferenceValue = left.transform;
+                serialized.FindProperty("rightCursor").objectReferenceValue = right.transform;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                typeof(HandCursorController).GetMethod("Awake", flags).Invoke(controller, null);
+                object state = typeof(HandCursorController)
+                    .GetField(handedness == "Left" ? "leftState" : "rightState", flags).GetValue(controller);
+                MethodInfo updateHand = typeof(HandCursorController).GetMethod("UpdateHand", flags);
+                Transform cursor = handedness == "Left" ? left.transform : right.transform;
+                var emitted = new List<Vector2>();
+                controller.OnPinchStart += (hand, position) => emitted.Add(position);
+                controller.OnPinchMove += (hand, position) => emitted.Add(position);
+                int ends = 0;
+                controller.OnPinchEnd += hand => ends++;
+                var input = new HandData { handedness = handedness, landmarks = new float[63] };
+                int[] palmIndices = { 0, 5, 9, 13, 17 };
+                Vector2[] palmOffsets =
+                {
+                    new Vector2(0f, 0.10f), new Vector2(-0.06f, -0.02f),
+                    new Vector2(-0.02f, -0.04f), new Vector2(0.02f, -0.03f), new Vector2(0.06f, -0.01f)
+                };
+                float[] fingerY = { 0.20f, 0.55f, 0.70f, 0.20f };
+                float[] pinch = { 0.90f, 0.15f, 0.15f, 0.90f };
+                var actual = new List<Vector2>();
+                var expected = new List<Vector2>();
+
+                for (int frame = 0; frame < fingerY.Length; frame++)
+                {
+                    Vector2 palm = new Vector2(0.5f, 0.5f) + (movePalm ? new Vector2(0.04f, -0.025f) * frame : Vector2.zero);
+                    for (int landmark = 0; landmark < 21; landmark++)
+                    {
+                        input.landmarks[landmark * 3] = palm.x;
+                        input.landmarks[landmark * 3 + 1] = fingerY[frame];
+                    }
+                    for (int index = 0; index < palmIndices.Length; index++)
+                    {
+                        Vector2 position = palm + palmOffsets[index];
+                        input.landmarks[palmIndices[index] * 3] = position.x;
+                        input.landmarks[palmIndices[index] * 3 + 1] = position.y;
+                    }
+                    input.pinch = pinch[frame];
+                    updateHand.Invoke(controller, new object[] { state, input, handedness });
+                    actual.Add(cursor.position);
+                    expected.Add(HandScreenMapper.ToScreen(palm.x, palm.y, Screen.width, Screen.height));
+                }
+
+                for (int frame = 0; frame < actual.Count; frame++)
+                {
+                    Assert.That(Vector2.Distance(expected[frame], actual[frame]), Is.LessThan(0.01f),
+                        "손가락 굽힘/펴짐과 무관하게 커서는 손바닥 이동만 따라야 한다: frame " + frame);
+                }
+                Assert.AreEqual(2, emitted.Count);
+                Assert.That(Vector2.Distance(expected[1], emitted[0]), Is.LessThan(0.01f));
+                Assert.That(Vector2.Distance(expected[2], emitted[1]), Is.LessThan(0.01f));
+                Assert.AreEqual(1, ends);
+            }
+            finally
+            {
+                Object.DestroyImmediate(rig);
+            }
+        }
 
         [Test]
         public void TargetAlpha_MatchesPresence()

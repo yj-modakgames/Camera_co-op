@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Reflection;
 using CameraCoop.Netplay;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace CameraCoop.Tests
@@ -26,6 +28,55 @@ namespace CameraCoop.Tests
             Assert.AreEqual(0.75f, back.y);
             Assert.IsTrue(back.pinched);
             Assert.AreEqual(42u, back.seq);
+        }
+
+        [Test]
+        public void CursorSender_UsesPalmCenterForBothHands()
+        {
+            var rig = new GameObject("network hand aim test");
+            rig.SetActive(false);
+            try
+            {
+                var receiver = rig.AddComponent<UdpHandReceiver>();
+                var session = rig.AddComponent<NetSession>();
+                var transport = new LoopbackTransport(false, "local-client");
+                var hands = new[]
+                {
+                    new HandData { handedness = "Left", landmarks = new float[63], pinch = 0.9f },
+                    new HandData { handedness = "Right", landmarks = new float[63], pinch = 0.15f }
+                };
+                Vector2[] palms = { new Vector2(0.3f, 0.4f), new Vector2(0.7f, 0.6f) };
+                for (int hand = 0; hand < hands.Length; hand++)
+                {
+                    foreach (int index in new[] { 0, 5, 9, 13, 17 })
+                    {
+                        hands[hand].landmarks[index * 3] = palms[hand].x;
+                        hands[hand].landmarks[index * 3 + 1] = palms[hand].y;
+                    }
+                }
+                typeof(UdpHandReceiver).GetProperty("LatestPacket").SetValue(receiver, new HandPacket { v = 1, seq = 1, hands = hands });
+                var serialized = new SerializedObject(session);
+                serialized.FindProperty("receiver").objectReferenceValue = receiver;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                typeof(NetSession).GetField("transport", flags).SetValue(session, transport);
+                typeof(NetSession).GetField("lastCursorSendTime", flags).SetValue(session, float.NegativeInfinity);
+
+                typeof(NetSession).GetMethod("SendCursorIfDue", flags).Invoke(session, null);
+
+                Assert.AreEqual(2, transport.SentToHost.Count);
+                for (int hand = 0; hand < hands.Length; hand++)
+                {
+                    var payload = NetProtocol.DecodePayload<CursorPayload>(NetProtocol.Decode(transport.SentToHost[hand]));
+                    Assert.AreEqual(hands[hand].handedness, payload.hand);
+                    Assert.AreEqual(palms[hand].x, payload.x, 0.0001f);
+                    Assert.AreEqual(palms[hand].y, payload.y, 0.0001f);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(rig);
+            }
         }
 
         [Test]
