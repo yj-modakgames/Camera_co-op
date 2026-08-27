@@ -57,6 +57,24 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 - 핀치 판정이 `HandCursorController`와 `NetSession`에 중복 (Inspector 한쪽만 바꾸면 갈림)
 - 비호스트 Clear 클릭 무피드백 / `lobby.SetData("hostId")` 죽은 줄
 
+## 3-1. Windows 실동작 검증 결과 (2026-08-27)
+
+설치 항목(§2)은 전부 확인 완료. 그 위에서 실제 구동을 처음으로 검증했다.
+
+| 대상 | 결과 | 증거 |
+|---|---|---|
+| Python venv | OK | mediapipe 1.0.1 / cv2 5.0.0 / Python 3.14.4, 모델 7,819,105 bytes |
+| handedness 방향 | OK, 반전 유지 | 양손 30프레임 (§4 참조) |
+| 웹캠 → UDP → 커서 | OK | 실드로잉 캡처, 왼손=파랑·오른손=주황 일치 |
+| 핀치 드로잉 (Phase 2) | OK | 동일 캡처 |
+| Loopback 세션 (Phase 3a) | OK | `[HOST] players: 3` (LocalHost#0/Alice#1/Bob#2), 원격 스트로크 렌더 |
+| UI 버튼 | **수정 후 OK** | GraphicRaycaster 누락으로 전부 무반응이었다 (아래 §4) |
+| Steam Init (Editor·빌드) | OK | id=76561199085658857, 빌드 로그 `Setting breakpad minidump AppID = 480` |
+| Windows 빌드 | OK | Succeeded, errors 0. `Builds/CameraCoop/` |
+| EditMode | 72/72 | client role 4건 추가분 포함 |
+
+미검증으로 남은 것: **N-5 (Steam 2인)** — Steam 계정 2개가 필요해 보류. `Builds/CameraCoop_Steam2p.zip`(41MB)에 빌드 + 안내문 + `fake_hand.py`를 묶어 뒀다.
+
 ## 4. 알려진 함정 (Mac에서 실증된 것)
 
 - **Play 모드 중 `unity cmd recompile` 금지** — domain reload로 비직렬화 필드 null → 프레임당 NRE burst. 반드시 editor_stop 먼저
@@ -64,6 +82,8 @@ Phase 3a 채점 (N-6): **9.6/10** — 감점: client role 실행 커버리지 0 
 - ~~**handedness 반전 (docs/02 §2)**~~ **2026-08-27 Windows 검증 완료 — 코드 변경 불필요.** mediapipe 1.0.1도 0.10.21과 동일하게 flip 후 raw 라벨이 실제 손과 반대다 (양손 동시 검출 30프레임: 실제 왼손→raw `Right`, 실제 오른손→raw `Left`, score 0.975). `hand_tracker.py:181`의 반전 1줄 유지. 단, **한 손만** 올리면 라벨이 한쪽으로 고정되는 현상이 있으니 검증은 반드시 양손으로 할 것
 - Unity CLI: instanceId는 Play 진입/domain reload마다 무효화. eval에서 `Object`는 `UnityEngine.Object`로 명시 (모호성 컴파일 에러)
 - `capture_game_view --save_path`는 프로젝트 루트 상대 경로만, 실제로는 `Assets/` 밑에 저장됨 — 검증 후 .meta와 함께 삭제
+- **UI 버튼이 조용히 안 눌리면 Canvas의 `GraphicRaycaster`를 먼저 확인**한다. 없으면 EventSystem이 포인터 이벤트를 UI로 전달하지 못하는데 에러도 로그도 남지 않는다. 2026-08-27 NetplayTest에서 실제로 발생 (Editor에서도 처음부터 안 눌렸다). 검증: eval에서 `EventSystem.current.RaycastAll`로 버튼이 잡히는지 본다
+- **`unity cmd eval`은 코드를 메서드 본문에 감싸므로 `using` 지시문을 쓸 수 없다.** 전부 전체 이름(`CameraCoop.Netplay.NetSession`)으로 적는다. 또한 Roslyn 컴파일이 메인 스레드를 ~0.5초 멈추므로, eval에서 읽은 시간 기반 값(`Time.realtimeSinceStartup` 차이 등)은 그만큼 낡게 나온다 — `UdpHandReceiver.IsServerLost`가 정상 수신 중에도 true로 보이는 것이 그 예다. 시간 판정은 eval 대신 `capture_game_view`로 확인할 것
 - pipeline test-runner가 timeout으로 취소되면 editor update 펌프가 죽어 모든 CLI 명령이 timeout될 수 있다 — Editor 재시작으로 복구 (Mac에서 1회 발생)
 
 ## 5. 문서 지도
