@@ -225,9 +225,13 @@ public void SendGameToHost<T>(string type, T payload);                          
   - `SendGameTo`/`BroadcastGameMsg`/`SendGameToHost` 왕복: 임의 payload가 수신 측 `OnGameMessage`에 JSON 그대로 도착
 - [ ] **Step 2: 테스트 실행 → fail 확인**
 - [ ] **Step 3: 구현**
-  - `HandleMessage`의 host 중계 분기를 `RelayRaw(무조건)` → 화이트리스트로 교체: `static readonly HashSet<string> RelayTypes = { TypeCursor, TypeStrokeStart, TypeStrokePoints, TypeStrokeEnd, TypeStrokeErase, TypeClear }`
+  - **타입을 2개 집합으로 구분한다 (혼동 금지 — 사전 스캔 판정):**
+    - `RelayTypes` = `{ TypeCursor, TypeStrokeStart, TypeStrokePoints, TypeStrokeEnd, TypeStrokeErase, TypeClear }` — host 자동 중계 대상 (이것만)
+    - 코어 Apply 타입 = RelayTypes + `{ TypeWelcome, TypePeerJoined, TypePeerLeft }` — 기존 `Apply` switch가 처리 (**이 3종은 중계 대상이 아니어도 Apply는 반드시 기존대로 태운다** — 빼먹으면 클라 세션이 통째로 깨진다)
+  - `HandleMessage`의 host 중계 분기를 `RelayRaw(무조건)` → `RelayTypes.Contains(env.type)`일 때만으로 교체
   - 스트로크 4종(`StrokeStart/Points/End/Erase`)은 중계·Apply 전에 `StrokeGate` 검사 — 거부면 조용히 폐기(스팸 방지 위해 로그 없음, 주석으로 이유 명시)
-  - 화이트리스트 밖 타입: 중계하지 않고 `OnGameMessage?.Invoke(env.type, env.sender, env.payload)` 후 return (Apply의 switch에 안 들어간다)
+  - **코어 Apply 타입에도 안 속하는 미지 타입만** `OnGameMessage?.Invoke(env.type, env.sender, env.payload)` 후 return (Apply의 switch에 안 들어간다)
+  - 회귀 가드 테스트: 화이트리스트 도입 후에도 클라가 `Welcome`(플레이어+스냅샷)·`PeerJoined`·`PeerLeft`를 정상 적용하는 기존 테스트 전건 유지
   - `HandleLocalStrokeStart` 첫 줄에 `if (StrokeGate != null && !StrokeGate(transport.LocalPlayerId)) return;`
   - 송신 3종은 기존 `Broadcast`/`SendToHostMsg`/`transport.SendTo` 재사용. host/클라 역할이 안 맞으면 `Debug.LogWarning` 1회 후 무시(조용한 실패 금지)
   - `HostPlayerId`: StartSession(host면 자기 id) / Apply의 Welcome 케이스(`env.sender`) / StopSession(null)
