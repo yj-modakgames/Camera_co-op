@@ -65,6 +65,13 @@ namespace CameraCoop.Tests
             Assert.IsNull(NetProtocol.Decode(data));
         }
 
+        [Test]
+        public void Decode_MissingPayload_ReturnsNull()
+        {
+            byte[] data = System.Text.Encoding.UTF8.GetBytes("{\"v\":1,\"type\":\"Hello\",\"sender\":\"x\"}");
+            Assert.IsNull(NetProtocol.Decode(data));
+        }
+
         // ---- 커서 seq 폐기 (docs/08 §4) ----
 
         [Test]

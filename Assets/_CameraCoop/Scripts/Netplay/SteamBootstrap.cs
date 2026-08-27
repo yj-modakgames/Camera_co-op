@@ -37,5 +37,13 @@ namespace CameraCoop.Netplay
                 Steamworks.SteamClient.Shutdown();
             }
         }
+
+        // play 종료/앱 종료 시 native Steam 정리 — asyncCallbacks 펌프가 domain reload를 넘기지 않게 (최종 리뷰 I-4)
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void HookQuitting()
+        {
+            Application.quitting -= Shutdown;
+            Application.quitting += Shutdown;
+        }
     }
 }

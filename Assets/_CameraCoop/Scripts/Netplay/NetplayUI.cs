@@ -67,6 +67,10 @@ namespace CameraCoop.Netplay
         // 초대 수락 -> 로비 참가 (docs/08 §5). 참가 결과는 OnLobbyEntered로 이어진다.
         private async void HandleJoinRequested(Steamworks.Data.Lobby lobby, Steamworks.SteamId friendId)
         {
+            if (session.IsRunning)
+            {
+                return; // 세션 중 초대 수락 무시 — 로비 멤버십 어긋남 방지 (docs/08 §4)
+            }
             if (!SteamBootstrap.TryInit())
             {
                 if (statusText != null) { statusText.text = "Steam 미실행 — Steam 로그인 후 재시도"; }
@@ -74,7 +78,11 @@ namespace CameraCoop.Netplay
             }
             try
             {
-                await lobby.Join();
+                Steamworks.RoomEnter result = await lobby.Join();
+                if (result != Steamworks.RoomEnter.Success && statusText != null)
+                {
+                    statusText.text = "로비 참가 실패: " + result; // 조용한 실패 금지 (docs/08 §4)
+                }
             }
             catch (System.Exception e)
             {

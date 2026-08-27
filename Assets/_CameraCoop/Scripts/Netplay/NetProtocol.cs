@@ -58,9 +58,9 @@ namespace CameraCoop.Netplay
             try
             {
                 var env = JsonUtility.FromJson<NetEnvelope>(System.Text.Encoding.UTF8.GetString(data));
-                if (env == null || env.v != Version || string.IsNullOrEmpty(env.type))
+                if (env == null || env.v != Version || string.IsNullOrEmpty(env.type) || env.payload == null)
                 {
-                    return null;
+                    return null; // payload 누락 envelope 폐기 — 수신 루프 예외 방지
                 }
                 return env;
             }

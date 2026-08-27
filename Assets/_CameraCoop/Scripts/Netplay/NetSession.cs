@@ -61,14 +61,11 @@ namespace CameraCoop.Netplay
             localPinch.Clear();
             localStrokeCounter = 0;
             localCursorSeq = 0;
+            OnCanvasCleared?.Invoke(); // 이전 세션의 원격 표시·strokeId 재사용 충돌 정리 (최종 리뷰 I-2)
 
             if (transport.IsHost)
             {
                 players[transport.LocalPlayerId] = new PlayerInfo { playerId = transport.LocalPlayerId, name = localName, colorIndex = 0 };
-            }
-            else
-            {
-                SendToHostMsg(NetProtocol.TypeHello, new HelloPayload { name = localName }, reliable: true);
             }
 
             cursorController.OnPinchStart += HandleLocalPinchStart;
@@ -93,6 +90,7 @@ namespace CameraCoop.Netplay
             transport.Shutdown();
             transport = null;
             players.Clear();
+            OnCanvasCleared?.Invoke(); // 이전 세션의 원격 표시·strokeId 재사용 충돌 정리 (최종 리뷰 I-2)
             OnPlayersChanged?.Invoke();
         }
 
@@ -103,6 +101,8 @@ namespace CameraCoop.Netplay
                 return; // 3a에서 Clear는 host 전용 (docs/08 §3)
             }
             strokes.Clear();
+            localActiveStroke.Clear(); // Clear 중 진행 스트로크의 고아 참조 방지 (불변식: 이 둘은 strokes와 함께 리셋)
+            pendingPoints.Clear();
             Broadcast(NetProtocol.TypeClear, new EmptyPayload(), reliable: true, exceptId: null);
             OnCanvasCleared?.Invoke();
         }
@@ -385,6 +385,8 @@ namespace CameraCoop.Netplay
                     break;
                 case NetProtocol.TypeClear:
                     strokes.Clear();
+                    localActiveStroke.Clear();
+                    pendingPoints.Clear();
                     OnCanvasCleared?.Invoke();
                     break;
             }
@@ -415,7 +417,11 @@ namespace CameraCoop.Netplay
 
         private void HandlePeerConnected(string peerId)
         {
-            // Hello 수신 시 players에 등록하므로 여기서는 대기만 (Steam/Loopback 공통)
+            if (!IsHost)
+            {
+                // 연결 수립 후에만 Hello — connecting 상태 송신 유실 방지 (docs/08 §3)
+                SendToHostMsg(NetProtocol.TypeHello, new HelloPayload { name = localName }, reliable: true);
+            }
         }
 
         private void HandlePeerDisconnected(string peerId)
