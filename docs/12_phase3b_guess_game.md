@@ -43,6 +43,7 @@
 ```
 Scripts/Game/GameProtocol.cs   — 게임 메시지 type 상수 + payload 클래스 (순수 데이터)
 Scripts/Game/GuessGameLogic.cs — 게임 상태 머신·턴 순환·점수·판정 위임 (순수, host에서만 구동)
+Scripts/Game/GameClientState.cs— 수신 메시지 → 표시 상태 미러 (순수, host 포함 전원의 표시 단일 경로)
 Scripts/Game/GuessJudge.cs     — 정답 정규화·일치 판정 (순수 static)
 Scripts/Game/WordBank.cs       — 단어장 로드·무중복 랜덤 추출 (순수, 시드 주입 가능)
 Scripts/Game/GameSession.cs    — MonoBehaviour. host: 로직 구동+타이머+브로드캐스트 / 전원: 수신 상태 미러+이벤트 발행
@@ -66,7 +67,7 @@ PlayerController · DrawingController ──조회──> InputFocus.IsTyping (s
 
 `NetSession`·`HandPointer`는 소비자를 모른다. `NetplayUI`는 무수정.
 
-### NetSession 변경 (게임 무지 유지, 5건)
+### NetSession 변경 (게임 무지 유지, 6건)
 
 | # | 변경 | 이유 |
 |---|---|---|
@@ -75,6 +76,7 @@ PlayerController · DrawingController ──조회──> InputFocus.IsTyping (s
 | 3 | `Func<string, bool> StrokeGate` 프로퍼티 (playerId→허용, null=전원 허용) | host가 라운드 중 출제자 아닌 피어의 `StrokeStart/Points/End/Erase`를 중계·반영 거부 (권위 게이트). 로컬 게이트(HandPointer)와 이중 방어 |
 | 4 | `OnPeerJoinedSession(string playerId)` 이벤트 (host: HandleHello 직후 / 클라: PeerJoined 적용 직후) | 늦은 참가자에게 host가 `GameStateSync`를 보낼 트리거. `OnPlayersChanged`는 누가 새로 왔는지 알려주지 않는다 |
 | 5 | `NetProtocol.Version = 2 → 3` | 게임 메시지를 모르는 구버전과 섞이면 게임 진행이 조용히 깨진다 — 기존 정책(docs/11 §3)대로 거부 |
+| 6 | `string HostPlayerId` 프로퍼티 (host: 자기 id / 클라: Welcome sender, StopSession 시 null) | 클라 GameSession이 "host가 보낸 게임 메시지만 적용"(§5 위조 방어)을 판정할 기준. colorIndex 0 추정 같은 간접 추론 금지 |
 
 StrokeGate는 로컬 송신에도 적용한다 — host 자신이 출제자가 아닐 때 자기 스트로크를 만들지 않도록 `HandleLocalStrokeStart`에서도 검사한다. 단 1차 방어는 HandPointer 게이트라 정상 경로에서는 도달하지 않는다.
 
@@ -123,7 +125,7 @@ host: GuessGameLogic.SubmitGuess(playerId, text, 남은 초)
 | 메시지 | 방향 | payload | 비고 |
 |---|---|---|---|
 | `GameStart` | host→전원 | `{ gameId, mode }` | gameId=0(GuessGame). mode 0=기본 1=릴레이 |
-| `RoundBegin` | host→전원 | `{ round, totalRounds, activeId, wordLen, durationSec }` | activeId = 기본:출제자 / 릴레이:맞히는 사람 |
+| `RoundBegin` | host→전원 | `{ round, totalRounds, activeId, wordLen, introSec, durationSec }` | activeId = 기본:출제자 / 릴레이:맞히는 사람. 클라는 introSec 뒤 Drawing 표시로 자체 전환(별도 메시지 없음 — 드리프트는 표시용) |
 | `WordAssign` | host→일부 | `{ word }` | SendTo — 기본:출제자 1명 / 릴레이:맞히는 사람 제외 전원 |
 | `RelaySwap` | host→전원 | `{ drawerId }` | 릴레이 모드 교대 |
 | `GuessSubmit` | 클라→host | `{ text }` | host는 중계하지 않는다 (화이트리스트 §2) |
@@ -137,7 +139,7 @@ host: GuessGameLogic.SubmitGuess(playerId, text, 남은 초)
 
 ## 4. 씬 — Netplay3D.unity 변경
 
-- **신규 오브젝트**: `GameSession`(GameSession 컴포넌트 — netSession·handPointer·drawingController·wordAsset 참조), `GameUI`(기존 UI Canvas 아래).
+- **신규 오브젝트**: `GameSession`(GameSession 컴포넌트 — netSession·handPointer·wordAsset 참조. 캔버스 클리어는 기존 `OnCanvasCleared`→`NetplayUI`→`DrawingController.ClearAll` 경로 재사용이라 직접 참조 불필요), `GameUI`(기존 UI Canvas 아래).
 - **UI (기존 로비 Canvas에 추가, 전부 legacy uGUI — 프로젝트에 TMP 미사용)**:
   - host 전용: `게임 시작(기본)` / `게임 시작(릴레이)` 버튼 (세션 중 + 2인 이상일 때만 표시, 릴레이는 3인 이상)
   - 상단 중앙: 라운드 배너(`라운드 2/8 — ○○님이 그립니다`), 타이머, 제시어(출제자)/글자수 힌트(게서)
