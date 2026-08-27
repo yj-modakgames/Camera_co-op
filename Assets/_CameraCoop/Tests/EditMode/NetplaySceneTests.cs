@@ -18,7 +18,15 @@ namespace CameraCoop.Tests
         public void NetplayScene_ButtonsAreClickable(string scenePath)
         {
             string tag = "[" + System.IO.Path.GetFileNameWithoutExtension(scenePath) + "] ";
-            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            // 이미 Editor에 열려 있는 씬은 다시 열지 않는다. OpenScene(Additive)로 재차 열면 그 씬을
+            // reload하고, 뒤이은 CloseScene(scene, true)이 사용자의 active 씬을 닫아버린다 (Task 7 진단).
+            // 열지 않았으면 닫지도 않는다.
+            Scene scene = SceneManager.GetSceneByPath(scenePath);
+            bool alreadyOpen = scene.IsValid() && scene.isLoaded;
+            if (!alreadyOpen)
+            {
+                scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            }
             try
             {
                 GameObject[] roots = scene.GetRootGameObjects();
@@ -38,7 +46,10 @@ namespace CameraCoop.Tests
             }
             finally
             {
-                EditorSceneManager.CloseScene(scene, true);
+                if (!alreadyOpen)
+                {
+                    EditorSceneManager.CloseScene(scene, true); // 열지 않았으면 닫지도 않는다
+                }
             }
         }
     }
