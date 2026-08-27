@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_CameraCoop/Scenes/NetplayTest.unity
     guid: c627199d6b6f048478c88143d588a21f
+  - enabled: 1
+    path: Assets/_CameraCoop/Scenes/Netplay3D.unity
+    guid: 531a939ec5105b14793fcc502dea4ae3
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
