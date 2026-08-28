@@ -4,11 +4,19 @@ using UnityEngine;
 
 namespace CameraCoop
 {
+    public enum HandPointerInputSource
+    {
+        LegacyCursorEvents = 0,
+        HandRouter = 1
+    }
+
     // 레이캐스트 조준의 단독 소유자 (docs/11 §2). 핀치 이벤트를 받아 카메라에서 레이를 쏘고,
     // 맞은 것이 팔레트 버튼인지 캔버스인지에 따라 도구 클릭 / 드로잉 / 지우개로 갈라 발행한다.
     // 이동해도 그리는 위치가 따라오는 이유가 여기다 — norm이 카메라 조준에서 파생된다.
     public class HandPointer : MonoBehaviour
     {
+        [SerializeField] private HandPointerInputSource inputSource;
+        [SerializeField] private InputModeManager inputModeManager;
         [SerializeField] private HandCursorController cursorController;
         [SerializeField] private Camera aimCamera;
         [SerializeField] private CanvasSurface canvasSurface;
@@ -23,6 +31,12 @@ namespace CameraCoop
 
         // 손별 "핀치가 캔버스에서 활성" 상태. Erase 모드에서도 true가 된다 (드래그 지우기 유지).
         private readonly Dictionary<string, bool> isDrawing = new Dictionary<string, bool>(2);
+        private readonly Dictionary<string, ToolState.Mode> localModes = new Dictionary<string, ToolState.Mode>(2);
+        private readonly Dictionary<string, CanvasSurface> localSurfaces = new Dictionary<string, CanvasSurface>(2);
+        private HandCursorController subscribedCursor;
+        private InputModeManager subscribedModes;
+
+        public HandPointerInputSource InputSource => inputSource;
 
         private bool strokesEnabled = true;
 
@@ -53,12 +67,22 @@ namespace CameraCoop
                     {
                         EndStroke(drawingHands[i]);
                     }
+                    EndLocalStrokes();
                 }
             }
         }
 
         private void Awake()
         {
+            if (inputSource == HandPointerInputSource.HandRouter)
+            {
+                if (inputModeManager == null || canvasSurface == null || toolState == null)
+                {
+                    Debug.LogError("HandPointer: HandRouter requires inputModeManager, canvasSurface and toolState.", this);
+                    enabled = false;
+                }
+                return;
+            }
             if (cursorController == null || aimCamera == null || canvasSurface == null || toolState == null)
             {
                 // 조용한 실패 금지 — docs/10 §7의 drawCamera 가드 누락 재발 방지
@@ -69,39 +93,127 @@ namespace CameraCoop
 
         private void OnEnable()
         {
+            Unsubscribe();
+            if (inputSource == HandPointerInputSource.HandRouter)
+            {
+                subscribedModes = inputModeManager;
+                if (subscribedModes != null) subscribedModes.OnModeChanged += HandleLocalModeChanged;
+                return;
+            }
             if (cursorController == null)
             {
                 return;
             }
-            cursorController.OnPinchStart += HandlePinchStart;
-            cursorController.OnPinchMove += HandlePinchMove;
-            cursorController.OnPinchEnd += HandlePinchEnd;
+            subscribedCursor = cursorController;
+            subscribedCursor.OnPinchStart += HandlePinchStart;
+            subscribedCursor.OnPinchMove += HandlePinchMove;
+            subscribedCursor.OnPinchEnd += HandlePinchEnd;
         }
 
         private void OnDisable()
         {
-            if (cursorController == null)
+            Unsubscribe();
+            EndLocalStrokes();
+        }
+
+        private void Unsubscribe()
+        {
+            if (subscribedCursor != null)
             {
+                subscribedCursor.OnPinchStart -= HandlePinchStart;
+                subscribedCursor.OnPinchMove -= HandlePinchMove;
+                subscribedCursor.OnPinchEnd -= HandlePinchEnd;
+            }
+            if (subscribedModes != null) subscribedModes.OnModeChanged -= HandleLocalModeChanged;
+            subscribedCursor = null;
+            subscribedModes = null;
+        }
+
+        private void HandleLocalModeChanged(InputMode mode) => EndLocalStrokes();
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) EndLocalStrokes();
+        }
+
+        private void Update()
+        {
+            if (localSurfaces.Count == 0) return;
+            var hands = new List<string>(localSurfaces.Keys);
+            foreach (string hand in hands)
+            {
+                if (localSurfaces.TryGetValue(hand, out CanvasSurface surface) && !CanUseCanvas(surface)) EndCanvasStroke(hand);
+            }
+        }
+
+        internal bool CanUseCanvas(CanvasSurface surface)
+        {
+            return inputSource == HandPointerInputSource.HandRouter && isActiveAndEnabled && StrokesEnabled &&
+                inputModeManager != null && inputModeManager.CanDraw && toolState != null &&
+                surface != null && surface == canvasSurface && surface.isActiveAndEnabled;
+        }
+
+        public void BeginCanvasStroke(string hand, CanvasSurface surface, Vector2 normalizedPosition)
+        {
+            if ((hand != "Left" && hand != "Right") || !CanUseCanvas(surface) || !ValidPosition(normalizedPosition) || localSurfaces.ContainsKey(hand)) return;
+            localSurfaces.Add(hand, surface);
+            localModes.Add(hand, toolState.CurrentMode);
+            EmitLocal(hand, surface, normalizedPosition, true);
+        }
+
+        public void MoveCanvasStroke(string hand, CanvasSurface surface, Vector2 normalizedPosition)
+        {
+            if (hand == null || !localSurfaces.TryGetValue(hand, out CanvasSurface captured)) return;
+            if (captured != surface || !CanUseCanvas(surface) || !ValidPosition(normalizedPosition))
+            {
+                EndCanvasStroke(hand);
                 return;
             }
-            cursorController.OnPinchStart -= HandlePinchStart;
-            cursorController.OnPinchMove -= HandlePinchMove;
-            cursorController.OnPinchEnd -= HandlePinchEnd;
+            EmitLocal(hand, surface, normalizedPosition, false);
+        }
+
+        public void EndCanvasStroke(string hand)
+        {
+            if (hand == null || !localSurfaces.Remove(hand)) return;
+            localModes.Remove(hand);
+            OnCanvasStrokeEnd?.Invoke(hand);
+        }
+
+        private void EndLocalStrokes()
+        {
+            var hands = new List<string>(localSurfaces.Keys);
+            foreach (string hand in hands) EndCanvasStroke(hand);
+        }
+
+        private void EmitLocal(string hand, CanvasSurface surface, Vector2 norm, bool isStart)
+        {
+            Vector3 world = surface.NormToWorld(norm);
+            if (localModes[hand] == ToolState.Mode.Erase) OnCanvasErase?.Invoke(world);
+            else if (isStart) OnCanvasStrokeStart?.Invoke(hand, norm, world);
+            else OnCanvasStrokeMove?.Invoke(hand, norm, world);
+        }
+
+        private static bool ValidPosition(Vector2 norm)
+        {
+            return !float.IsNaN(norm.x) && !float.IsNaN(norm.y) && norm.x >= 0f && norm.x <= 1f && norm.y >= 0f && norm.y <= 1f;
         }
 
         private void HandlePinchStart(string hand, Vector2 screenPos)
         {
+            if (inputSource != HandPointerInputSource.LegacyCursorEvents) return;
             Route(hand, screenPos, StrokeLogic.PinchKind.Start);
         }
 
         private void HandlePinchMove(string hand, Vector2 screenPos)
         {
+            if (inputSource != HandPointerInputSource.LegacyCursorEvents) return;
             Route(hand, screenPos, StrokeLogic.PinchKind.Move);
         }
 
         // End는 레이를 쏘지 않는다 — 손이 이미 사라졌을 수 있고, 분기표상 hit과 무관하게 끝난다 (docs/11 §2)
         private void HandlePinchEnd(string hand)
         {
+            if (inputSource != HandPointerInputSource.LegacyCursorEvents) return;
             if (PointerRouteLogic.Decide(PointerRouteLogic.HitKind.None, StrokeLogic.PinchKind.End, IsDrawing(hand))
                 != PointerRouteLogic.RouteAction.EndStroke)
             {

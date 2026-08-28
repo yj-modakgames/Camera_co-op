@@ -4,6 +4,7 @@ using CameraCoop;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace CameraCoop.Tests
 {
@@ -88,6 +89,46 @@ namespace CameraCoop.Tests
             FieldInfo eventField = typeof(HandPointer).GetField("OnToolClicked", BindingFlags.Instance | BindingFlags.NonPublic);
             var callback = eventField.GetValue(handPointer) as System.Action<ToolButton>;
             callback?.Invoke(button);
+        }
+
+        private static System.Type RequiredRuntimeType(string fullName)
+        {
+            System.Type type = typeof(ToolState).Assembly.GetType(fullName);
+            Assert.IsNotNull(type, fullName + " 타입이 필요하다");
+            return type;
+        }
+
+        private static PropertyInfo RequiredProperty(System.Type type, string name)
+        {
+            PropertyInfo property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+            Assert.IsNotNull(property, type.Name + "." + name + " 읽기 전용 API가 필요하다");
+            Assert.IsTrue(property.CanRead && !property.CanWrite, type.Name + "." + name + "는 읽기 전용이어야 한다");
+            return property;
+        }
+
+        private static FieldInfo RequiredField(System.Type type, string name)
+        {
+            FieldInfo field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, type.Name + "." + name + " 직접 Inspector 참조가 필요하다");
+            return field;
+        }
+
+        private static void InvokePrivate(object instance, string methodName)
+        {
+            MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, instance.GetType().Name + "." + methodName + "가 필요하다");
+            method.Invoke(instance, null);
+        }
+
+        private Image MakeFeedbackGraphic(Transform parent, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            spawned.Add(go);
+            go.transform.SetParent(parent, false);
+            Image graphic = go.GetComponent<Image>();
+            graphic.raycastTarget = false;
+            graphic.enabled = false;
+            return graphic;
         }
 
         [Test]
@@ -241,6 +282,144 @@ namespace CameraCoop.Tests
             Assert.AreEqual(originalPositions[4], brush0.transform.localPosition, "이전 브러시는 기준 위치로 돌아와야 한다");
             Assert.AreEqual(originalPositions[5].z - 0.02f, brush1.transform.localPosition.z, 1e-5f, "선택 브러시 표시");
             Assert.AreEqual(originalPositions[6], eraser.transform.localPosition, "색 선택으로 Draw 모드가 되면 지우개가 돌아와야 한다");
+        }
+
+        [Test]
+        public void PaletteReadOnlyApi_ReportsSelectionsAndBrushMaterialLookup()
+        {
+            ToolState state = MakeState();
+            System.Type type = typeof(ToolState);
+            PropertyInfo colorIndex = RequiredProperty(type, "CurrentColorIndex");
+            PropertyInfo widthIndex = RequiredProperty(type, "CurrentWidthIndex");
+            PropertyInfo brushCount = RequiredProperty(type, "BrushCount");
+            MethodInfo materialLookup = type.GetMethod("GetBrushMaterial", BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.IsNotNull(materialLookup, "ToolState.GetBrushMaterial(int)가 필요하다");
+            Assert.AreEqual(typeof(Material), materialLookup.ReturnType);
+            Assert.AreEqual(0, colorIndex.GetValue(state));
+            Assert.AreEqual(1, widthIndex.GetValue(state));
+            Assert.AreEqual(3, brushCount.GetValue(state));
+
+            state.Apply(MakeButton(ToolKind.Color, 4));
+            state.Apply(MakeButton(ToolKind.Width, 2));
+            Assert.AreEqual(4, colorIndex.GetValue(state));
+            Assert.AreEqual(2, widthIndex.GetValue(state));
+            Assert.IsNull(materialLookup.Invoke(state, new object[] { -1 }), "범위 밖 브러시는 null로 거부해야 한다");
+            Assert.IsNull(materialLookup.Invoke(state, new object[] { 3 }), "마지막 브러시 다음 인덱스는 null이어야 한다");
+        }
+
+        [Test]
+        public void Slider_DownAndHoldClampWidthAndExternalToolChangeSynchronizesNativeValue()
+        {
+            System.Type adapterType = RequiredRuntimeType("CameraCoop.HandSliderInteractable");
+            Assert.IsTrue(typeof(HandInteractable).IsAssignableFrom(adapterType), "슬라이더는 HandInteractable이어야 한다");
+
+            var root = new GameObject("slider", typeof(RectTransform), typeof(Slider));
+            root.SetActive(false);
+            spawned.Add(root);
+            RectTransform rect = root.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(100f, 24f);
+            Slider slider = root.GetComponent<Slider>();
+            CanvasGroup canvasGroup = root.AddComponent<CanvasGroup>();
+            Component component = root.AddComponent(adapterType);
+            ToolState state = MakeState();
+            ToolButton[] widths =
+            {
+                MakeButton(ToolKind.Width, 0), MakeButton(ToolKind.Width, 1), MakeButton(ToolKind.Width, 2)
+            };
+            RequiredField(adapterType, "targetSlider").SetValue(component, slider);
+            RequiredField(adapterType, "toolState").SetValue(component, state);
+            RequiredField(adapterType, "widthButtons").SetValue(component, widths);
+            RequiredField(adapterType, "hoverGraphic").SetValue(component, MakeFeedbackGraphic(root.transform, "hover"));
+            RequiredField(adapterType, "pressedGraphic").SetValue(component, MakeFeedbackGraphic(root.transform, "pressed"));
+            root.SetActive(true);
+            InvokePrivate(component, "Awake");
+            InvokePrivate(component, "OnEnable");
+
+            HandInteractable adapter = component as HandInteractable;
+            Assert.IsNotNull(adapter);
+            Assert.IsFalse(adapter.RequiresInside, "슬라이더는 영역 밖 hold도 양끝으로 제한해야 한다");
+            Assert.IsTrue(adapter.Exclusive, "슬라이더는 최초로 누른 손 하나만 소유해야 한다");
+            Assert.AreEqual(0f, slider.minValue);
+            Assert.AreEqual(2f, slider.maxValue);
+            Assert.IsTrue(slider.wholeNumbers);
+
+            HandInputSample down = new HandInputSample("Left", new Vector2(-100f, 0f), 1, 1, 0f, true, true);
+            adapter.Press(down, new Vector3(-100f, 0f, 0f), new HandClickContext("Left", 1, 1));
+            Assert.AreEqual(0, RequiredProperty(typeof(ToolState), "CurrentWidthIndex").GetValue(state));
+            HandInputSample held = new HandInputSample("Left", new Vector2(100f, 0f), 2, 2, 0f, true, true);
+            adapter.Hold(held, new Vector3(100f, 0f, 0f));
+            Assert.AreEqual(2, RequiredProperty(typeof(ToolState), "CurrentWidthIndex").GetValue(state));
+            Assert.IsTrue(adapter.Release(new HandInputSample("Left", new Vector2(100f, 0f), 3, 3, 0f, true, false), Vector3.zero));
+
+            state.Apply(widths[1]);
+            Assert.AreEqual(1f, slider.value, "외부 ToolState 변경은 slider를 갱신해야 한다");
+
+            adapter.Press(down, new Vector3(-100f, 0f, 0f), new HandClickContext("Left", 1, 4));
+            adapter.Cancel(held, new Vector3(100f, 0f, 0f));
+            Assert.AreEqual(0, RequiredProperty(typeof(ToolState), "CurrentWidthIndex").GetValue(state), "취소는 마지막 위치를 두께 변경으로 반영하면 안 된다");
+
+            canvasGroup.interactable = false;
+            Assert.IsFalse(adapter.IsAvailable, "비상호작용 CanvasGroup 아래 slider는 손 입력을 받으면 안 된다");
+        }
+
+        [Test]
+        public void Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers()
+        {
+            System.Type paletteType = RequiredRuntimeType("CameraCoop.HandToolPalette");
+            var root = new GameObject("palette");
+            root.SetActive(false);
+            spawned.Add(root);
+            Component palette = root.AddComponent(paletteType);
+            ToolState state = MakeState();
+            ToolButton color0 = MakeButton(ToolKind.Color, 0);
+            ToolButton color2 = MakeButton(ToolKind.Color, 2);
+            color0.gameObject.SetActive(false);
+            color2.gameObject.SetActive(false);
+            HandButtonInteractable firstButton = color0.gameObject.AddComponent<HandButtonInteractable>();
+            HandButtonInteractable secondButton = color2.gameObject.AddComponent<HandButtonInteractable>();
+            Image firstMarker = MakeFeedbackGraphic(color0.transform, "first marker");
+            Image secondMarker = MakeFeedbackGraphic(color2.transform, "second marker");
+
+            FieldInfo bindingsField = RequiredField(paletteType, "bindings");
+            System.Type bindingType = bindingsField.FieldType.GetElementType();
+            Assert.IsNotNull(bindingType, "bindings는 직렬화 가능한 배열이어야 한다");
+            System.Array bindings = System.Array.CreateInstance(bindingType, 2);
+            object firstBinding = System.Activator.CreateInstance(bindingType);
+            object secondBinding = System.Activator.CreateInstance(bindingType);
+            RequiredField(bindingType, "button").SetValue(firstBinding, firstButton);
+            RequiredField(bindingType, "toolButton").SetValue(firstBinding, color0);
+            RequiredField(bindingType, "selectedMarker").SetValue(firstBinding, firstMarker);
+            RequiredField(bindingType, "button").SetValue(secondBinding, secondButton);
+            RequiredField(bindingType, "toolButton").SetValue(secondBinding, color2);
+            RequiredField(bindingType, "selectedMarker").SetValue(secondBinding, secondMarker);
+            bindings.SetValue(firstBinding, 0);
+            bindings.SetValue(secondBinding, 1);
+            RequiredField(paletteType, "toolState").SetValue(palette, state);
+            bindingsField.SetValue(palette, bindings);
+            Behaviour paletteBehaviour = palette as Behaviour;
+            Assert.IsNotNull(paletteBehaviour, "HandToolPalette는 Behaviour여야 한다");
+            paletteBehaviour.enabled = true;
+            InvokePrivate(palette, "Awake");
+            root.SetActive(true);
+            InvokePrivate(palette, "OnEnable");
+
+            Assert.IsTrue(firstMarker.enabled);
+            Assert.IsFalse(secondMarker.enabled);
+            int changes = 0;
+            state.OnChanged += () => changes++;
+            FieldInfo clickEvent = typeof(HandButtonInteractable).GetField("OnHandClick", BindingFlags.Instance | BindingFlags.NonPublic);
+            var click = clickEvent.GetValue(secondButton) as System.Action<HandClickContext>;
+            click.Invoke(new HandClickContext("Right", 1, 1));
+
+            Assert.AreEqual(2, RequiredProperty(typeof(ToolState), "CurrentColorIndex").GetValue(state));
+            Assert.AreEqual(1, changes, "팔레트 클릭은 ToolState.Apply를 한 번만 호출해야 한다");
+            Assert.IsFalse(firstMarker.enabled);
+            Assert.IsTrue(secondMarker.enabled);
+
+            state.Apply(color0);
+            Assert.IsTrue(firstMarker.enabled, "외부 ToolState 변경도 선택 표시를 갱신해야 한다");
+            Assert.IsFalse(secondMarker.enabled);
         }
     }
 }

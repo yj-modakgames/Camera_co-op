@@ -230,8 +230,11 @@ namespace CameraCoop.Tests
                 var right = new GameObject("right", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
                 left.transform.SetParent(rig.transform);
                 right.transform.SetParent(rig.transform);
+                // 수신기 Awake는 호출하지 않아 소켓을 열지 않는다.
+                var receiver = rig.AddComponent<UdpHandReceiver>();
                 var controller = rig.AddComponent<HandCursorController>();
                 var serialized = new SerializedObject(controller);
+                serialized.FindProperty("receiver").objectReferenceValue = receiver;
                 serialized.FindProperty("leftCursor").objectReferenceValue = left.transform;
                 serialized.FindProperty("rightCursor").objectReferenceValue = right.transform;
                 serialized.ApplyModifiedPropertiesWithoutUndo();

@@ -12,6 +12,7 @@ namespace CameraCoop
     {
         [SerializeField] private HandPointer handPointer;
         [SerializeField] private ToolState toolState;
+        [SerializeField] private CanvasSurface canvasSurface;
         [SerializeField, Min(0f)] private float minPointDistance = 0.01f;         // 점 추가 최소 간격 (월드 단위)
         [SerializeField, Min(0f)] private float maxSegmentWorldDistance = 0.6f;   // 캔버스 폭(2.4)의 0.25. 초과 시 스트로크 분리 (docs/07 §6)
         [SerializeField] private Material lineMaterial;                           // 브러시 머티리얼 미할당 시 폴백
@@ -26,6 +27,8 @@ namespace CameraCoop
             public LineRenderer line;
             public Vector3 lastPoint;
             public List<Vector3> points;
+            public CanvasStrokeData data;
+            public List<float> xy;
         }
 
         private class FinishedStroke
@@ -33,12 +36,16 @@ namespace CameraCoop
             public int localId;
             public GameObject go;
             public List<Vector3> points;   // 지우개 판정용. LineRenderer.GetPositions는 할당이 생긴다
+            public CanvasStrokeData data;
         }
 
         // 손별 진행 중 스트로크 (Left/Right 키). 확정분은 finishedStrokes로 이동.
         private readonly Dictionary<string, ActiveStroke> activeStrokes = new Dictionary<string, ActiveStroke>(2);
         private readonly List<FinishedStroke> finishedStrokes = new List<FinishedStroke>();
         private int localIdCounter;
+        private int orderCounter = -1;
+
+        private bool IsLocalDrawing { get { return handPointer != null && handPointer.InputSource == HandPointerInputSource.HandRouter; } }
 
         private void Awake()
         {
@@ -46,6 +53,10 @@ namespace CameraCoop
             {
                 // 조용한 실패 금지 (docs/10 §7)
                 Debug.LogError("[DrawingController] handPointer/toolState 미할당 — 로컬 드로잉이 동작하지 않습니다 (docs/11 §4)");
+            }
+            else if (IsLocalDrawing)
+            {
+                RequireLocalDrawing();
             }
         }
 
@@ -63,6 +74,7 @@ namespace CameraCoop
 
         private void OnDisable()
         {
+            if (IsLocalDrawing) FinalizeActiveStrokes();
             if (handPointer == null)
             {
                 return;
@@ -72,6 +84,8 @@ namespace CameraCoop
             handPointer.OnCanvasStrokeEnd -= HandleStrokeEnd;
             handPointer.OnCanvasErase -= HandleErase;
         }
+
+        private void OnDestroy() { DestroyStrokeObjects(); }
 
         private void Update()
         {
@@ -84,23 +98,32 @@ namespace CameraCoop
             }
         }
 
-        // norm은 NetSession이 쓰고 여기서는 월드 좌표만 쓴다 (같은 이벤트를 둘이 구독한다)
         private void HandleStrokeStart(string handedness, Vector2 norm, Vector3 world)
         {
+            if (IsLocalDrawing)
+            {
+                if (!RequireLocalDrawing() || !IsValidNorm(norm)) return;
+                world = canvasSurface.NormToWorld(norm);
+            }
             switch (StrokeLogic.Decide(activeStrokes.ContainsKey(handedness), StrokeLogic.PinchKind.Start))
             {
                 case StrokeLogic.StrokeAction.EndThenStartNew: // 방어: 중복 Start (docs/07 §6)
                     FinishStroke(handedness);
-                    BeginStroke(handedness, world);
+                    BeginStroke(handedness, norm, world);
                     break;
                 case StrokeLogic.StrokeAction.StartNew:
-                    BeginStroke(handedness, world);
+                    BeginStroke(handedness, norm, world);
                     break;
             }
         }
 
         private void HandleStrokeMove(string handedness, Vector2 norm, Vector3 world)
         {
+            if (IsLocalDrawing)
+            {
+                if (!RequireLocalDrawing() || !IsValidNorm(norm)) return;
+                world = canvasSurface.NormToWorld(norm);
+            }
             if (StrokeLogic.Decide(activeStrokes.ContainsKey(handedness), StrokeLogic.PinchKind.Move) != StrokeLogic.StrokeAction.Append)
             {
                 return; // 고아 Move (docs/07 §6)
@@ -110,7 +133,7 @@ namespace CameraCoop
             if (StrokeLogic.ShouldSplitStroke(stroke.lastPoint, world, maxSegmentWorldDistance))
             {
                 FinishStroke(handedness); // 재검출 스냅: 점프 선 대신 스트로크 분리 (docs/07 §6)
-                BeginStroke(handedness, world);
+                BeginStroke(handedness, norm, world);
                 return;
             }
             if (!StrokeLogic.ShouldAppendPoint(hasLastPoint: true, stroke.lastPoint, world, minPointDistance))
@@ -122,6 +145,11 @@ namespace CameraCoop
             stroke.line.positionCount = count + 1;
             stroke.line.SetPosition(count, world);
             stroke.points.Add(world);
+            if (stroke.xy != null)
+            {
+                stroke.xy.Add(norm.x);
+                stroke.xy.Add(norm.y);
+            }
             stroke.lastPoint = world;
         }
 
@@ -148,15 +176,42 @@ namespace CameraCoop
                 finishedStrokes.RemoveAt(i);
                 if (hit.go != null)
                 {
-                    Destroy(hit.go);
+                    CanvasDrawingRender.DestroyOwned(hit.go);
                 }
+                if (IsLocalDrawing) RefreshRenderOrder();
                 OnLocalStrokeErased?.Invoke(hit.localId);
                 return;
             }
         }
 
-        private void BeginStroke(string handedness, Vector3 world)
+        private void BeginStroke(string handedness, Vector2 norm, Vector3 world)
         {
+            if (localIdCounter == int.MaxValue || (IsLocalDrawing && orderCounter == int.MaxValue))
+            {
+                Debug.LogError("[DrawingController] Stroke id/order capacity exhausted.");
+                return;
+            }
+            CanvasStrokeData data = null;
+            if (IsLocalDrawing)
+            {
+                float width = toolState.CurrentWidth / CanvasDrawingRender.ShortSide(canvasSurface);
+                if (!CanvasDrawingData.IsFinite(width) || width <= 0f ||
+                    toolState.CurrentBrushIndex < 0 || toolState.CurrentBrushIndex >= toolState.BrushCount)
+                {
+                    Debug.LogError("[DrawingController] Invalid local brush style.");
+                    return;
+                }
+                Color32 packedColor = toolState.CurrentColor;
+                data = new CanvasStrokeData
+                {
+                    strokeId = localIdCounter + 1,
+                    order = ++orderCounter,
+                    colorArgb = (packedColor.a << 24) | (packedColor.r << 16) | (packedColor.g << 8) | packedColor.b,
+                    widthNormalized = width,
+                    brushId = toolState.CurrentBrushIndex,
+                    xy = new[] { norm.x, norm.y }
+                };
+            }
             var strokeObject = new GameObject("Stroke_" + handedness);
             strokeObject.transform.SetParent(transform, worldPositionStays: true);
 
@@ -184,8 +239,11 @@ namespace CameraCoop
                 localId = localId,
                 line = line,
                 lastPoint = world,
-                points = new List<Vector3>(64) { world }
+                points = new List<Vector3>(64) { world },
+                data = data,
+                xy = data != null ? new List<float>(128) { norm.x, norm.y } : null
             };
+            if (data != null) RefreshRenderOrder();
             OnLocalStrokeStarted?.Invoke(localId, handedness);
         }
 
@@ -196,33 +254,128 @@ namespace CameraCoop
 
             if (StrokeLogic.ShouldDiscardOnEnd(stroke.line.positionCount))
             {
-                Destroy(stroke.line.gameObject); // 점 찍기 미지원 (docs/07 §6)
+                CanvasDrawingRender.DestroyOwned(stroke.line.gameObject); // 점 찍기 미지원 (docs/07 §6)
+                if (stroke.data != null) RefreshRenderOrder();
                 return;
             }
+            if (stroke.data != null) stroke.data.xy = stroke.xy.ToArray();
             finishedStrokes.Add(new FinishedStroke
             {
                 localId = stroke.localId,
                 go = stroke.line.gameObject,
-                points = stroke.points
+                points = stroke.points,
+                data = stroke.data
             });
+            if (stroke.data != null)
+            {
+                finishedStrokes.Sort((left, right) => left.data.order.CompareTo(right.data.order));
+                RefreshRenderOrder();
+            }
         }
 
         public void ClearAll()
+        {
+            if (IsLocalDrawing) FinalizeActiveStrokes();
+            DestroyStrokeObjects();
+        }
+
+        private void DestroyStrokeObjects()
         {
             for (int i = 0; i < finishedStrokes.Count; i++)
             {
                 if (finishedStrokes[i].go != null)
                 {
-                    Destroy(finishedStrokes[i].go);
+                    CanvasDrawingRender.DestroyOwned(finishedStrokes[i].go);
                 }
             }
             finishedStrokes.Clear();
 
             foreach (KeyValuePair<string, ActiveStroke> pair in activeStrokes)
             {
-                Destroy(pair.Value.line.gameObject);
+                CanvasDrawingRender.DestroyOwned(pair.Value.line.gameObject);
             }
             activeStrokes.Clear(); // 이후 Move/End는 고아로 무시된다 (docs/07 §6)
+        }
+
+        public void FinalizeActiveStrokes()
+        {
+            var hands = new List<string>(activeStrokes.Keys);
+            foreach (string hand in hands) FinishStroke(hand);
+        }
+
+        public CanvasDrawingData ExportDrawing()
+        {
+            if (!RequireLocalDrawing()) return null;
+            FinalizeActiveStrokes();
+            var strokes = new CanvasStrokeData[finishedStrokes.Count];
+            for (int i = 0; i < strokes.Length; i++) strokes[i] = finishedStrokes[i].data.Copy();
+            return new CanvasDrawingData { strokes = strokes };
+        }
+
+        public bool LoadDrawing(CanvasDrawingData data)
+        {
+            if (!RequireLocalDrawing()) return false;
+            CanvasDrawingData copy;
+            string error;
+            if (!CanvasDrawingData.TryCopy(data, toolState.BrushCount, out copy, out error))
+            {
+                Debug.LogError("[DrawingController] " + error);
+                return false;
+            }
+
+            ClearAll();
+            foreach (CanvasStrokeData stroke in copy.strokes)
+            {
+                Material brush = toolState.GetBrushMaterial(stroke.brushId);
+                LineRenderer line = CanvasDrawingRender.Create(stroke, canvasSurface, transform, brush != null ? brush : lineMaterial);
+                var points = new List<Vector3>(stroke.xy.Length / 2);
+                for (int i = 0; i < stroke.xy.Length; i += 2)
+                    points.Add(canvasSurface.NormToWorld(new Vector2(stroke.xy[i], stroke.xy[i + 1])));
+                finishedStrokes.Add(new FinishedStroke { localId = stroke.strokeId, go = line.gameObject, points = points, data = stroke });
+                localIdCounter = Math.Max(localIdCounter, stroke.strokeId);
+                orderCounter = Math.Max(orderCounter, stroke.order);
+            }
+            RefreshRenderOrder();
+            return true;
+        }
+
+        public bool UndoLastStroke()
+        {
+            if (!RequireLocalDrawing()) return false;
+            FinalizeActiveStrokes();
+            if (finishedStrokes.Count == 0) return false;
+            int index = finishedStrokes.Count - 1;
+            CanvasDrawingRender.DestroyOwned(finishedStrokes[index].go);
+            finishedStrokes.RemoveAt(index);
+            RefreshRenderOrder();
+            return true;
+        }
+
+        private bool RequireLocalDrawing()
+        {
+            if (!IsLocalDrawing || toolState == null || canvasSurface == null || !CanvasDrawingRender.HasValidSize(canvasSurface))
+            {
+                Debug.LogError("[DrawingController] Local drawing requires HandRouter, ToolState and a non-degenerate CanvasSurface.");
+                return false;
+            }
+            return true;
+        }
+
+        private static bool IsValidNorm(Vector2 norm)
+        {
+            return CanvasDrawingData.IsFinite(norm.x) && CanvasDrawingData.IsFinite(norm.y) &&
+                norm.x >= 0f && norm.x <= 1f && norm.y >= 0f && norm.y <= 1f;
+        }
+
+        private void RefreshRenderOrder()
+        {
+            var lines = new List<KeyValuePair<int, LineRenderer>>(finishedStrokes.Count + activeStrokes.Count);
+            foreach (FinishedStroke stroke in finishedStrokes)
+                lines.Add(new KeyValuePair<int, LineRenderer>(stroke.data.order, stroke.go.GetComponent<LineRenderer>()));
+            foreach (ActiveStroke stroke in activeStrokes.Values)
+                lines.Add(new KeyValuePair<int, LineRenderer>(stroke.data.order, stroke.line));
+            lines.Sort((left, right) => left.Key.CompareTo(right.Key));
+            for (int i = 0; i < lines.Count; i++) lines[i].Value.sortingOrder = i;
         }
     }
 }

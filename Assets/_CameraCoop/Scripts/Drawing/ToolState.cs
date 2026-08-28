@@ -45,8 +45,18 @@ namespace CameraCoop
         private Vector3[] baseButtonPositions;
 
         public Mode CurrentMode { get { return mode; } }
+        public int CurrentColorIndex { get { return colorIndex; } }
+        public int CurrentWidthIndex { get { return widthIndex; } }
         public int CurrentBrushIndex { get { return brushIndex; } }
+        public int BrushCount { get { return brushes != null ? brushes.Length : 0; } }
         public float EraseRadius { get { return eraseRadius; } }
+
+        public Material GetBrushMaterial(int index)
+        {
+            return brushes != null && index >= 0 && index < brushes.Length && brushes[index] != null
+                ? brushes[index].material
+                : null;
+        }
 
         // 팔레트 색에 브러시 알파를 적용한 최종 색
         public Color CurrentColor

@@ -1,5 +1,7 @@
 # 02. UDP 프로토콜 명세 (v1)
 
+> 갱신: 2026-08-28 · 현재 wire 계약은 v1 유지. 로컬 손 UI 확장은 [07_hand_interaction](07_hand_interaction.md)의 **구현 대기 설계**이며 wire 변경이 아니다.
+
 ## 1. 전송 계층
 
 | 항목 | 값 |
@@ -7,7 +9,7 @@
 | 방향 | Python → Unity 단방향 |
 | 주소 | `127.0.0.1:5052` (루프백 전용, 외부 바인딩 금지) |
 | 인코딩 | UTF-8 JSON, 패킷당 1개 JSON 객체 |
-| 전송 주기 | 추론 프레임마다 (카메라 fps 동기, 기본 ~30Hz) |
+| 전송 주기 | 성공적으로 캡처·추론한 프레임마다. 처리 시간에 의존하며 고정 Hz가 아님 |
 | 패킷 크기 | 손 2개 기준 약 2~3KB. 루프백이므로 단편화 무관 |
 
 ## 2. JSON 스키마
@@ -31,13 +33,16 @@
 |---|---|---|---|
 | `v` | int | 1 | 프로토콜 버전. 수신 측은 미지원 버전 패킷을 무시하고 경고 1회 로그 |
 | `seq` | uint | 0부터 증가 | 패킷 순번. 수신 측은 마지막 처리 seq 이하인 패킷을 폐기 (UDP 역전/중복 대응) |
-| `timestamp` | double | Unix epoch 초 | Python `time.time()`. 동일 머신이므로 Unity 측 epoch와 직접 비교해 레이턴시 측정 가능 |
-| `hands` | array | 0~2개 | 검출된 손. **미검출 시에도 빈 배열로 계속 전송** (heartbeat 겸용) |
+| `timestamp` | double | Unix epoch 초 | 추론 완료 후, 필터·직렬화 전의 `time.time()`. Unity 수용 시각과의 차이는 추론 이후 구간 지연이며 캡처·추론은 포함하지 않음 |
+| `hands` | array | 0~2개 | 캡처·추론 성공 후 **손 미검출이면 빈 배열 전송**. 카메라 read 실패 중에는 송신하지 않음 |
 | `handedness` | string | `"Left"` \| `"Right"` | 사용자 기준 실제 손. 셀피 미러(flip) 후 추론 시 MediaPipe 판정값이 실제 손과 반대로 나오므로 Python이 좌우 반전해 송신한다 (2026-08-26 Intel Mac·mediapipe 0.10.21, 2026-08-27 Windows·mediapipe 1.0.1 양쪽 실물 검증 — 두 스택 모두 반전 필요. 검증법: 양손을 동시에 올려 flip 후 `wrist.x`가 큰 쪽이 실제 오른손임을 정답으로 두고 raw 라벨과 대조) |
 | `landmarks` | float[63] | 아래 좌표계 | 21개 랜드마크 × (x,y,z) **평탄화 배열**. index i번 랜드마크 = `[i*3], [i*3+1], [i*3+2]` |
 | `pinch` | float | 비율 (무단위) | `dist2D(4,8) / dist2D(0,9)`. 손 크기로 정규화된 엄지-검지 거리 |
 
+confidence, tracking-valid, pinched boolean은 wire에 없다. MediaPipe의 confidence 설정은 추론 옵션이다. 현재 수신부는 파싱·버전·seq를 검사하며 landmarks 길이·유한값 등 완전한 스키마 검증은 하지 않는다. 새 손 UI의 유효성 검사는 기존 wire 계약과 별도로 설계한다.
+
 ### 초안 대비 변경점과 근거
+
 1. **`landmarks`를 `[[x,y,z],...]` 중첩 배열 → 평탄화 float[63]으로 변경.** Unity `JsonUtility`는 중첩 배열(`float[][]`)을 파싱하지 못한다. 평탄화하면 JsonUtility만으로 충분해 외부 JSON 패키지 추가가 필요 없다 (`docs/04_unity_client.md` 참조).
 2. **`v` 버전 필드 추가** (초안의 검토 항목 채택). 스키마 변경 시 v를 올리고 수신 측이 방어한다.
 3. **`seq` 필드 추가.** UDP 순서 역전·중복을 수신 측에서 한 줄 비교로 걸러낸다.
@@ -60,12 +65,14 @@
 |---|---|---|
 | 패킷 유실 | 대응 없음 | 상태 스냅샷 방식이므로 다음 패킷이 자연 대체. 재전송 없음 |
 | 패킷 역전/중복 | `seq <= lastSeq` | 폐기 |
-| 손 lost | 최신 패킷의 `hands`에 해당 handedness 없음 | 해당 커서 fade out |
-| 서버 lost | **0.5초 무수신** | 전체 커서 fade out. 수신 재개 시 자동 복구 |
-| 송신 측 재시작 | 서버 lost 이후 첫 패킷 | **`lastSeq` 리셋 후 수용** (아래 참조) |
+| 손 lost | 최신 수용 패킷의 `hands`에 해당 handedness 없음 | 진행 중 pinch End 후 해당 커서 fade out |
+| 서버 lost | 메인 스레드의 마지막 패킷 **수용 이후 0.5초 이상** | controller가 관측한 Update에서 pinch End·전체 fade 시작. 새 수용 패킷으로 복구 |
+| 송신 측 재시작 | timeout 이후 새 패킷 | 버전 확인 후 seq 비교를 생략하고 새 seq로 체인 시작 |
 
-- 손 lost와 서버 lost를 구분하기 위해 Python은 손이 없어도 빈 `hands`로 계속 전송한다.
-- **`seq` 체인 리셋:** Python은 재시작하면 `seq`를 0부터 다시 보낸다. `seq <= lastSeq` 폐기 규칙만 적용하면 재시작 패킷이 영구히 폐기돼 자동 복구가 불가능하다. 따라서 수신 측은 **서버 lost 상태(0.5초 무수신)에서 온 패킷을 새 세션의 첫 패킷으로 보고 `lastSeq`를 리셋**한다 (`PacketFilter.IsNewSession`). <!-- ponytail: 0.5초 안에 재시작하면 이 리셋이 걸리지 않아 옛 seq를 넘을 때까지 폐기된다. MediaPipe 초기화가 수 초 걸리므로 실제로는 발생하지 않는다. 문제되면 프로토콜에 session id 추가 -->
+- 손 lost와 서버 lost를 구분하기 위해 Python은 캡처·추론에 성공하면 손이 없어도 빈 `hands`를 전송한다. 카메라 read 실패는 heartbeat와 다르다.
+- **`seq` 체인 리셋:** 최초 패킷 또는 마지막 수용 이후 timeout에 도달한 패킷은 새 세션으로 처리한다 (`PacketFilter.IsNewSession`). 그 외에는 seq가 이전 값보다 커야 한다. 빠른 재시작은 즉시 구분하지 못하며 이전 seq를 넘거나 수용 timeout에 도달해야 한다.
+- 거부 패킷의 UDP 도착은 lost 시계를 갱신하지 않는다. 최초 수용 전 `IsServerLost`는 false이며, 커서는 `LatestPacket == null`을 별도로 미수신 상태로 처리한다.
+- 현재 `OnPinchEnd`에는 종료 사유·해제 좌표가 없다. 손/server lost를 정상 release와 같은 클릭 확정으로 해석하면 안 된다. fade 기본 0.2초는 lost 판정 시간과 별개다.
 - `seq`는 uint 롤오버를 무시한다. <!-- ponytail: 30Hz 기준 롤오버까지 4.5년. 문제되면 wrap-around 비교로 교체 -->
 
 ## 5. 버전 정책

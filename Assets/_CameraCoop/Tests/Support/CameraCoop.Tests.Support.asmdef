@@ -1,0 +1,17 @@
+{
+    "name": "CameraCoop.Tests.Support",
+    "rootNamespace": "CameraCoop.Tests",
+    "references": [
+        "CameraCoop.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "CameraCoop.Runtime",
+        "CameraCoop.Tests.Support",
         "UnityEngine.UI",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

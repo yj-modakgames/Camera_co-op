@@ -13,12 +13,21 @@ namespace CameraCoop
         [SerializeField] private Text buttonLabel;
 
         private Process proc;
+        private bool ownsProcess;
 
-        public bool IsRunning { get { return proc != null && !proc.HasExited; } }
+        public bool IsRunning { get { return IsProcessRunning; } }
+        public string LastError { get; private set; } = string.Empty;
+
+        protected virtual bool IsProcessRunning { get { return proc != null && !proc.HasExited; } }
 
         private void Start()
         {
-            UpdateLabel();
+            RefreshStatus();
+        }
+
+        private void Update()
+        {
+            RefreshStatus();
         }
 
         public void OnClickToggle()
@@ -31,24 +40,94 @@ namespace CameraCoop
             {
                 StartTracker();
             }
+        }
+
+        public bool StartTracker()
+        {
+            RefreshStatus();
+            LastError = string.Empty;
+            if (IsRunning)
+            {
+                UpdateLabel();
+                return true;
+            }
+
+            string error;
+            if (!TryLaunchProcess(out error))
+            {
+                LastError = string.IsNullOrEmpty(error) ? "캠: 실행 실패" : error;
+                UpdateLabel();
+                return false;
+            }
+
+            ownsProcess = true;
+            RefreshStatus();
+            return IsRunning;
+        }
+
+        public void StopTracker()
+        {
+            LastError = string.Empty;
+            if (ownsProcess)
+            {
+                try
+                {
+                    StopProcess();
+                    if (IsRunning)
+                    {
+                        LastError = "캠: 종료 실패";
+                    }
+                    else
+                    {
+                        ownsProcess = false;
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    LastError = "캠: 종료 실패";
+                    Debug.LogWarning("[TrackerLauncher] tracker 종료 실패: " + e.Message);
+                }
+            }
             UpdateLabel();
         }
 
-        private void StartTracker()
+        public void RefreshStatus()
         {
+            if (ownsProcess && !IsRunning)
+            {
+                if (string.IsNullOrEmpty(LastError))
+                {
+                    LastError = "캠: tracker 종료됨";
+                }
+                try
+                {
+                    StopProcess();
+                    ownsProcess = false;
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[TrackerLauncher] 종료된 tracker 정리 실패: " + e.Message);
+                }
+            }
+            UpdateLabel();
+        }
+
+        protected virtual bool TryLaunchProcess(out string error)
+        {
+            error = string.Empty;
             string dir = ResolveTrackerDir();
             if (dir == null)
             {
-                SetLabel("캠: tracker 폴더 없음");
+                error = "캠: tracker 폴더 없음";
                 Debug.LogWarning("[TrackerLauncher] tracker 폴더를 찾지 못했습니다. 빌드는 exe 옆 tracker/, Editor는 PythonTracker/ 를 씁니다.");
-                return;
+                return false;
             }
             string python = ResolvePython(dir);
             if (python == null)
             {
-                SetLabel("캠: setup 먼저 실행");
+                error = "캠: setup 먼저 실행";
                 Debug.LogWarning("[TrackerLauncher] venv를 찾지 못했습니다. tracker/setup_tracker.bat 을 먼저 실행하세요: " + dir);
-                return;
+                return false;
             }
             try
             {
@@ -59,37 +138,39 @@ namespace CameraCoop
                     CreateNoWindow = true,
                 };
                 proc = Process.Start(info);
+                if (proc == null)
+                {
+                    error = "캠: 실행 실패";
+                    Debug.LogWarning("[TrackerLauncher] tracker 실행 실패: 프로세스가 생성되지 않았습니다.");
+                    return false;
+                }
+                return true;
             }
             catch (System.Exception e)
             {
                 proc = null;
-                SetLabel("캠: 실행 실패");
+                error = "캠: 실행 실패";
                 Debug.LogWarning("[TrackerLauncher] tracker 실행 실패: " + e.Message);
+                return false;
             }
         }
 
-        private void StopTracker()
+        protected virtual void StopProcess()
         {
             if (proc == null)
             {
                 return;
             }
-            try
+            if (!proc.HasExited)
             {
-                if (!proc.HasExited)
+                KillTree(proc);
+                if (!proc.WaitForExit(3000))
                 {
-                    KillTree(proc);
+                    return;
                 }
             }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[TrackerLauncher] tracker 종료 실패: " + e.Message);
-            }
-            finally
-            {
-                proc.Dispose();
-                proc = null;
-            }
+            proc.Dispose();
+            proc = null;
         }
 
         // tracker는 자식 프로세스를 하나 더 띄운다 (2026-08-27 실측). 부모만 죽이면 자식이 캠을 계속 잡는다.
@@ -112,7 +193,14 @@ namespace CameraCoop
             };
             using (Process p = Process.Start(info))
             {
-                p.WaitForExit(3000);
+                if (p == null)
+                {
+                    throw new System.InvalidOperationException(file + " 프로세스를 시작하지 못했습니다.");
+                }
+                if (!p.WaitForExit(3000))
+                {
+                    throw new System.TimeoutException(file + " 프로세스 종료 대기 시간이 초과되었습니다.");
+                }
             }
         }
 
@@ -153,7 +241,7 @@ namespace CameraCoop
 
         private void UpdateLabel()
         {
-            SetLabel(IsRunning ? "캠 끄기" : "캠 켜기");
+            SetLabel(!string.IsNullOrEmpty(LastError) ? LastError : IsRunning ? "캠 끄기" : "캠 켜기");
         }
 
         private void SetLabel(string text)
