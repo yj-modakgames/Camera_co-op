@@ -105,7 +105,9 @@ HandCursorController의 `OnHandSample`은 새로 수용된 LatestPacket 참조�
 4. 맞은 오브젝트의 HandCanvasInteractable과 **실제 CanvasSurface**를 확인한다. 등록된 현재 작업 캔버스 하나만 허용한다.
 5. 캔버스를 벗어나거나 중간에 UI가 가리면 선을 끝낸다. 핀치를 유지한 채 돌아와도 이어 그리지 않는다.
 
-커서 Image·단순 타이머 Text는 raycastTarget=false다. 차폐 패널은 전체 화면에서 raycastTarget=true이며 최상위에 둔다. 입력 대상 탐색에 `Camera.main`이나 런타임 Find를 사용하지 않는다. Gallery의 CanvasSurface는 시각 배치에만 쓰고 HandCanvasInteractable을 붙이지 않는다.
+커서 Image·커서 라벨·단순 타이머 Text는 raycastTarget=false다. 차폐 패널은 전체 화면에서 raycastTarget=true이며 입력 UI 중 최상위에 둔다. 입력 대상 탐색에 `Camera.main`이나 런타임 Find를 사용하지 않는다. Gallery의 CanvasSurface는 시각 배치에만 쓰고 HandCanvasInteractable을 붙이지 않는다.
+
+`LeftHandCursor`와 `RightHandCursor`에는 각각 중첩 Canvas를 두고 `overrideSorting=true`, `sortingOrder=32767`을 지정한다. OverlayRoot는 100을 유지하고 다른 UI는 커서보다 낮은 순서를 사용해, 팔레트·팝업·차폐 패널 위에서도 양손 커서가 보이게 한다. 커서 Canvas에는 GraphicRaycaster를 붙이지 않으며 기존 CanvasGroup의 `interactable=false`, `blocksRaycasts=false`를 유지한다. 커서 위치·크기·추적 유실 시 fade 동작은 바꾸지 않는다.
 
 ### EventSystem·마우스 차단
 
@@ -161,6 +163,7 @@ AudioSource는 2D(spatialBlend=0), playOnAwake=false, volume=0.2다. Step 2에�
 | 오브젝트 / 컴포넌트 | 직접 할당·설정 |
 |---|---|
 | HandTracking / HandCursorController | receiver, leftCursor, rightCursor; 기존 threshold·fade |
+| LeftHandCursor·RightHandCursor / Canvas | overrideSorting=true, sortingOrder=32767, Sorting Layer=Default; GraphicRaycaster 없음 |
 | InputRoot / HandInputRouter | cursorController, inputModeManager, playerCamera, eventSystem, 활성 UI raycaster 목록, AudioSource·두 clip·상태 Text. activeCanvas·handPointer는 Step 3 연결 |
 | HandInputRouter | inputFreshnessSeconds=0.20, rearmOpenSeconds=0.10, clickCooldownSeconds=0.15, maxDistance=20 |
 | DrawingRoot / HandPointer | inputSource=HandRouter, aimCamera, canvasSurface, toolState. Legacy 이벤트 구독은 비활성 |
