@@ -19,7 +19,7 @@ namespace CameraCoop
             {
                 strokeId = strokeId,
                 order = order,
-                xy = (float[])xy.Clone(),
+                xy = xy != null ? (float[])xy.Clone() : Array.Empty<float>(),
                 colorArgb = colorArgb,
                 widthNormalized = widthNormalized,
                 brushId = brushId
@@ -32,6 +32,21 @@ namespace CameraCoop
     {
         public int version = 1;
         public CanvasStrokeData[] strokes = Array.Empty<CanvasStrokeData>();
+
+        // 검증 없이 배열·stroke까지 복사한다. archive가 이후 작업 캔버스 변경에 영향받지 않게 한다 (docs/09 §8).
+        internal static CanvasDrawingData DeepCopy(CanvasDrawingData source)
+        {
+            if (source == null || source.strokes == null)
+            {
+                return new CanvasDrawingData();
+            }
+            var strokes = new CanvasStrokeData[source.strokes.Length];
+            for (int i = 0; i < strokes.Length; i++)
+            {
+                strokes[i] = source.strokes[i] != null ? source.strokes[i].Copy() : null;
+            }
+            return new CanvasDrawingData { version = source.version, strokes = strokes };
+        }
 
         public static bool TryCopy(CanvasDrawingData source, int brushCount, out CanvasDrawingData copy, out string error)
         {

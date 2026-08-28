@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba154c852926df7459c8fc0e5cd72af1, type: 3}
+  m_Name: RelayQuizWords
+  m_EditorClassIdentifier: CameraCoop.Runtime::CameraCoop.RelayQuizWordList
+  entries:
+  - text: "\uC0AC\uACFC"
+    difficulty: 0
+  - text: "\uBC14\uB098\uB098"
+    difficulty: 0
+  - text: "\uACE0\uC591\uC774"
+    difficulty: 0
+  - text: "\uAC15\uC544\uC9C0"
+    difficulty: 0
+  - text: "\uC9D1"
+    difficulty: 0
+  - text: "\uC790\uB3D9\uCC28"
+    difficulty: 0
+  - text: "\uC6B0\uC0B0"
+    difficulty: 0
+  - text: "\uC790\uC804\uAC70"
+    difficulty: 1
+  - text: "\uD53C\uC544\uB178"
+    difficulty: 1
+  - text: "\uC18C\uBC29\uCC28"
+    difficulty: 1
+  - text: "\uB208\uC0AC\uB78C"
+    difficulty: 1
+  - text: "\uC120\uD48D\uAE30"
+    difficulty: 1
+  - text: "\uB85C\uBD07"
+    difficulty: 1
+  - text: "\uD574\uBC14\uB77C\uAE30"
+    difficulty: 1
+  - text: "\uB864\uB7EC\uCF54\uC2A4\uD130"
+    difficulty: 2
+  - text: "\uC7A0\uC218\uD568"
+    difficulty: 2
+  - text: "\uC6B0\uC8FC\uC815\uAC70\uC7A5"
+    difficulty: 2
+  - text: "\uC2E0\uD638\uB4F1"
+    difficulty: 2
+  - text: "\uD68C\uC804\uBAA9\uB9C8"
+    difficulty: 2
+  - text: "\uB9DD\uC6D0\uACBD"
+    difficulty: 2

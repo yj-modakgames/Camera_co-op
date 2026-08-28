@@ -118,6 +118,27 @@ namespace CameraCoop
             transform.position = PlayerMoveLogic.ClampToRoom(next, minXZ, maxXZ);
         }
 
+        // 차폐 중 작업·갤러리 시점 정렬 (docs/06 §6). CharacterController 제약을 배치 구간에서만 끈다.
+        public void PlaceAt(Transform pose)
+        {
+            if (controlProfile != PlayerControlProfile.ModalFirstPerson)
+            {
+                return;
+            }
+            if (pose == null || !HasLocalReferences)
+            {
+                Debug.LogError("PlayerController.PlaceAt requires a pose and the ModalFirstPerson references.", this);
+                return;
+            }
+            bool wasEnabled = characterController.enabled;
+            characterController.enabled = false;
+            transform.SetPositionAndRotation(pose.position, Quaternion.Euler(0f, pose.eulerAngles.y, 0f));
+            characterController.enabled = wasEnabled;
+            pitch = 0f;
+            verticalVelocity = 0f;
+            playerCamera.localRotation = Quaternion.identity;
+        }
+
         private void ApplyLook()
         {
             if (controlProfile == PlayerControlProfile.ModalFirstPerson && !CanLookLocally)

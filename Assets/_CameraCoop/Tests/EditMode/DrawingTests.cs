@@ -614,6 +614,99 @@ namespace CameraCoop.Tests
             }
         }
 
+        // ---- docs/09 §8 릴레이 archive 계약 (별도 DrawingArchiveTests를 만들지 않는다) ----
+
+        [Test]
+        public void RelayArchive_IsUnaffectedByLaterUndoClearAndNewStrokes()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Stroke("Left", .1f);
+                fixture.Stroke("Right", .4f);
+
+                var logic = new RelayQuizLogic(new RelayQuizTimings(), () => "사과",
+                    fixture.Controller.ExportDrawing, () => string.Empty);
+                logic.SetPlayerCount(2, logic.PhaseGeneration);
+                logic.StartGame(logic.PhaseGeneration);
+                logic.ConfirmReady(logic.PhaseGeneration);
+                logic.Tick(5f);
+                Assert.IsTrue(logic.CompleteDrawing(logic.PhaseGeneration));
+
+                CanvasDrawingData archived = logic.Records[0].drawing;
+                Assert.AreEqual(2, archived.strokes.Length);
+                float[] before = (float[])archived.strokes[0].xy.Clone();
+
+                Assert.IsTrue(fixture.Controller.UndoLastStroke());
+                fixture.Stroke("Left", .7f);
+                fixture.Controller.ClearAll();
+
+                Assert.AreEqual(2, archived.strokes.Length, "archive는 이후 작업 그림 변경에 영향받지 않는다.");
+                CollectionAssert.AreEqual(before, archived.strokes[0].xy);
+            }
+        }
+
+        [Test]
+        public void RelayArchive_DeepCopiesEveryStrokeArray()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Stroke("Left", .1f);
+                CanvasDrawingData exported = fixture.Controller.ExportDrawing();
+
+                var logic = new RelayQuizLogic(new RelayQuizTimings(), () => "사과",
+                    () => exported, () => string.Empty);
+                logic.SetPlayerCount(2, logic.PhaseGeneration);
+                logic.StartGame(logic.PhaseGeneration);
+                logic.ConfirmReady(logic.PhaseGeneration);
+                logic.Tick(5f);
+                logic.CompleteDrawing(logic.PhaseGeneration);
+
+                CanvasDrawingData archived = logic.Records[0].drawing;
+                Assert.AreNotSame(exported, archived);
+                Assert.AreNotSame(exported.strokes, archived.strokes);
+                Assert.AreNotSame(exported.strokes[0], archived.strokes[0]);
+                Assert.AreNotSame(exported.strokes[0].xy, archived.strokes[0].xy);
+            }
+        }
+
+        [Test]
+        public void SetStrokesVisible_TogglesRenderObjectsWithoutLosingData()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Stroke("Left", .1f);
+                fixture.Stroke("Right", .4f);
+                Assert.AreEqual(2, fixture.Lines.Length);
+
+                fixture.Controller.SetStrokesVisible(false);
+                foreach (LineRenderer line in fixture.Lines)
+                {
+                    Assert.IsFalse(line.gameObject.activeSelf, "차폐 중에는 실제 선 렌더를 끈다.");
+                }
+
+                CanvasDrawingData exported = fixture.Controller.ExportDrawing();
+                Assert.AreEqual(2, exported.strokes.Length, "숨김은 데이터를 지우지 않는다.");
+
+                fixture.Controller.SetStrokesVisible(true);
+                foreach (LineRenderer line in fixture.Lines)
+                {
+                    Assert.IsTrue(line.gameObject.activeSelf);
+                }
+            }
+        }
+
+        [Test]
+        public void SetStrokesVisible_AppliesToStrokesStartedWhileHidden()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Controller.SetStrokesVisible(false);
+                fixture.Stroke("Left", .1f);
+                Assert.AreEqual(1, fixture.Lines.Length);
+                Assert.IsFalse(fixture.Lines[0].gameObject.activeSelf);
+            }
+        }
+
         private static object Call(object target, string name, params object[] args)
         {
             MethodInfo method = target.GetType().GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);

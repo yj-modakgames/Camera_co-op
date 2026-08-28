@@ -44,6 +44,24 @@ namespace CameraCoop
 
         public event Action<HandClickContext> OnHandClick;
 
+        // IME 조합 중 제출 차단처럼 게임 상태가 버튼 하나를 끌 때 쓴다. interactable=false면 down·select도 막힌다.
+        public void SetInteractable(bool value)
+        {
+            if (target == null || target.interactable == value)
+            {
+                return;
+            }
+            target.interactable = value;
+            if (!value)
+            {
+                ResetInteraction();
+            }
+            else
+            {
+                ApplyFeedback();
+            }
+        }
+
         private void Awake()
         {
             if (initialized)

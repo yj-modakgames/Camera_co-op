@@ -44,6 +44,7 @@ namespace CameraCoop
         private readonly List<FinishedStroke> finishedStrokes = new List<FinishedStroke>();
         private int localIdCounter;
         private int orderCounter = -1;
+        private bool strokesVisible = true;
 
         private bool IsLocalDrawing { get { return handPointer != null && handPointer.InputSource == HandPointerInputSource.HandRouter; } }
 
@@ -214,6 +215,7 @@ namespace CameraCoop
             }
             var strokeObject = new GameObject("Stroke_" + handedness);
             strokeObject.transform.SetParent(transform, worldPositionStays: true);
+            strokeObject.SetActive(strokesVisible);
 
             LineRenderer line = strokeObject.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
@@ -270,6 +272,20 @@ namespace CameraCoop
             {
                 finishedStrokes.Sort((left, right) => left.data.order.CompareTo(right.data.order));
                 RefreshRenderOrder();
+            }
+        }
+
+        // 인계·일시정지 차폐에서 실제 선 렌더를 끈다 (docs/09 §7). 데이터는 그대로 둔다.
+        public void SetStrokesVisible(bool visible)
+        {
+            strokesVisible = visible;
+            for (int i = 0; i < finishedStrokes.Count; i++)
+            {
+                if (finishedStrokes[i].go != null) finishedStrokes[i].go.SetActive(visible);
+            }
+            foreach (KeyValuePair<string, ActiveStroke> pair in activeStrokes)
+            {
+                if (pair.Value.line != null) pair.Value.line.gameObject.SetActive(visible);
             }
         }
 
