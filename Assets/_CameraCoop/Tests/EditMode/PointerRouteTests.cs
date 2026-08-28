@@ -127,6 +127,54 @@ namespace CameraCoop.Tests
                 "잠금 중이어도 End는 그대로 회수한다");
         }
 
+        // Task 4 리뷰 Minor 1 — StrokesEnabled setter가 진행 중 스트로크를 실제로 회수하는지 (양손 포함).
+        // 분기표(Decide)와 달리 이건 HandPointer의 상태 회수 경로다 — 라운드 종료 시 그리다 만 선의 고아 방지 (docs/12 §5)
+        [Test]
+        public void StrokesEnabled_FalseWhileDrawing_EndsEveryHandsStroke()
+        {
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            var rig = new GameObject("strokes enabled test");
+            rig.SetActive(false);
+            try
+            {
+                quad.transform.position = new Vector3(100f, 100f, 0f);
+                var surface = quad.AddComponent<CanvasSurface>();
+                var camera = rig.AddComponent<Camera>();
+                camera.transform.position = new Vector3(100f, 100f, -3f);
+                camera.pixelRect = new Rect(0f, 0f, 1920f, 1080f);
+                var state = rig.AddComponent<ToolState>();
+                var pointer = rig.AddComponent<HandPointer>();
+                var so = new SerializedObject(pointer);
+                so.FindProperty("aimCamera").objectReferenceValue = camera;
+                so.FindProperty("canvasSurface").objectReferenceValue = surface;
+                so.FindProperty("toolState").objectReferenceValue = state;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                var ended = new System.Collections.Generic.List<string>();
+                pointer.OnCanvasStrokeEnd += hand => ended.Add(hand);
+                Physics.SyncTransforms();
+                Vector2 screen = camera.WorldToScreenPoint(quad.transform.position);
+                const System.Reflection.BindingFlags flags =
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                System.Reflection.MethodInfo pinchStart = typeof(HandPointer).GetMethod("HandlePinchStart", flags);
+                System.Reflection.MethodInfo isDrawing = typeof(HandPointer).GetMethod("IsDrawing", flags);
+                pinchStart.Invoke(pointer, new object[] { "Left", screen });
+                pinchStart.Invoke(pointer, new object[] { "Right", screen });
+                Assert.IsTrue((bool)isDrawing.Invoke(pointer, new object[] { "Left" }), "양손 모두 그리는 중이어야 한다");
+                Assert.IsTrue((bool)isDrawing.Invoke(pointer, new object[] { "Right" }));
+
+                pointer.StrokesEnabled = false;
+
+                Assert.AreEqual(2, ended.Count, "잠금 순간 양손의 진행 중 스트로크를 모두 End로 회수한다");
+                Assert.IsFalse((bool)isDrawing.Invoke(pointer, new object[] { "Left" }));
+                Assert.IsFalse((bool)isDrawing.Invoke(pointer, new object[] { "Right" }));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rig);
+                Object.DestroyImmediate(quad);
+            }
+        }
+
         // 회귀 가드 — 기존 3인자 호출이 4인자 strokesEnabled:true와 전 조합에서 동일해야 한다
         [Test]
         public void Decide_ThreeArgOverload_MatchesFourArgTrue_ForAllCombinations()
