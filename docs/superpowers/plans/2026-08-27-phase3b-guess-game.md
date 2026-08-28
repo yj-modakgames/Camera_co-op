@@ -346,7 +346,7 @@ namespace CameraCoop.Game
 |---|---|
 | StartGame 성공 | `BroadcastGameMsg(GameStart)` → 라운드 세팅 공통(아래) |
 | 라운드 세팅 공통 (StartGame 직후·ToRoundIntro) | `netSession.SendClear()` → `BroadcastGameMsg(RoundBegin{...})` → WordAssign: Turns면 출제자 1명에게 `SendGameTo`(출제자==로컬이면 로컬 적용만), Relay면 ActiveId 제외 전원에게 각각 `SendGameTo`(+로컬이 drawer면 로컬 적용) → 게이트 갱신 |
-| Tick=ToDrawing | 메시지 없음 (클라 자체 전환). 게이트 갱신 |
+| Tick=ToDrawing | ~~메시지 없음~~ → **Turns는 메시지 없음, Relay는 `RelaySwap{drawerId}` 1건 송신** (2026-08-28 판정, 아래 주석). 게이트 갱신 |
 | Tick=RelaySwap | `BroadcastGameMsg(RelaySwap{drawerId})` + 게이트 갱신 |
 | SubmitGuess=Wrong | `BroadcastGameMsg(GuessFeed{playerId, text, false})` |
 | SubmitGuess=Correct | `BroadcastGameMsg(GuessFeed{playerId, "", true})` — **text를 비운다 (정답 유출 방지, docs/12 §2)** |
@@ -357,6 +357,8 @@ namespace CameraCoop.Game
 | PlayerLeft→ToIdle | `BroadcastGameMsg(GameAbort)` |
 | OnPeerJoinedSession && 게임 중 | `logic.AddPlayer(id)` → `SendGameTo(id, GameStateSync{현재 상태})` |
 | 세션 종료 (host 이탈·StopSession — `OnPlayersChanged` 시 `!netSession.IsRunning`) | host·클라 공통: State를 Idle로 리셋 + 게이트 전부 해제 (docs/12 §5 "host 이탈 — 게임도 함께 끝") |
+
+> **2026-08-28 판정 (구현·리뷰 후 확정 — 되돌리지 말 것):** 위 표의 `Tick=ToDrawing` "메시지 없음"은 **Relay 모드에서 틀렸다.** 아래 게이트 갱신 규칙이 `State.CurrentDrawerId`를 쓰는데 `ApplyRoundBegin`은 Relay에서 drawer를 null로 두고, 클라는 Relay의 첫 drawer를 계산할 정보가 없다 — 표대로 구현하면 host의 `StrokeGate`도 로컬 게이트도 **첫 relaySwapSec 동안 전원을 차단**한다. 그래서 Drawing 진입 시 `RelaySwap{drawerId}`를 1건 보낸다. 인계 §6-3("drawerId가 실제로 바뀐 경우에만")을 만족시키는 단일 헬퍼(`SyncDrawer`)로 처리해 **Turns 모드에서는 `RelaySwap`이 한 건도 발생하지 않는다** (`Host_TurnsMode_NeverSendsRelaySwap`·`Host_DrawingEntry_SendsNoMessage_AndUpdatesGates`가 와이어에서 단정). 프로토콜(docs/12 §3)에 신규 타입 추가는 없고 `RelaySwap`의 기존 의미와도 충돌하지 않는다 — **스펙 위반이 아니라 이 표만 현실과 어긋난 것**이다. 상세: `docs/14_handoff_phase3b.md` §8-6.
 
 **게이트 갱신 규칙 (host·클라 공통 함수 1개로):**
 - `handPointer.StrokesEnabled` = `!IsGameRunning || (State.CurrentPhase == Drawing && State.CurrentDrawerId == netSession.LocalPlayerId)`
