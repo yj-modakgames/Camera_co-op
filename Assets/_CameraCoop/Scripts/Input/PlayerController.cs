@@ -26,6 +26,10 @@ namespace CameraCoop
             {
                 return; // 장치 없음 방어. legacy Input API는 이 프로젝트에서 예외를 던진다
             }
+            if (InputFocus.IsTyping)
+            {
+                return; // 정답 입력 중 WASD 이동 차단 (docs/12 §2). 마우스 룩은 ApplyLook에서 이미 처리됐다
+            }
             var input = new Vector2(
                 (keyboard[Key.D].isPressed ? 1f : 0f) - (keyboard[Key.A].isPressed ? 1f : 0f),
                 (keyboard[Key.W].isPressed ? 1f : 0f) - (keyboard[Key.S].isPressed ? 1f : 0f));

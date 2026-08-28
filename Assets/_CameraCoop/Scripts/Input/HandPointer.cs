@@ -24,6 +24,39 @@ namespace CameraCoop
         // 손별 "핀치가 캔버스에서 활성" 상태. Erase 모드에서도 true가 된다 (드래그 지우기 유지).
         private readonly Dictionary<string, bool> isDrawing = new Dictionary<string, bool>(2);
 
+        private bool strokesEnabled = true;
+
+        // 기본 true. false 설정 순간 진행 중 스트로크 전부 End 발행 — 도구 클릭은 계속 허용 (docs/12 §2).
+        // GameSession이 라운드 전이마다 "로컬 플레이어 == 출제자"로 갱신한다.
+        public bool StrokesEnabled
+        {
+            get { return strokesEnabled; }
+            set
+            {
+                if (strokesEnabled == value)
+                {
+                    return;
+                }
+                strokesEnabled = value;
+                if (!strokesEnabled)
+                {
+                    // 라운드 종료 시 그리다 만 선이 고아가 되지 않게 진행 중 스트로크를 전부 회수 (docs/12 §5)
+                    var drawingHands = new List<string>(isDrawing.Count);
+                    foreach (KeyValuePair<string, bool> pair in isDrawing)
+                    {
+                        if (pair.Value)
+                        {
+                            drawingHands.Add(pair.Key);
+                        }
+                    }
+                    for (int i = 0; i < drawingHands.Count; i++)
+                    {
+                        EndStroke(drawingHands[i]);
+                    }
+                }
+            }
+        }
+
         private void Awake()
         {
             if (cursorController == null || aimCamera == null || canvasSurface == null || toolState == null)
@@ -97,7 +130,7 @@ namespace CameraCoop
                 }
             }
 
-            switch (PointerRouteLogic.Decide(hitKind, kind, IsDrawing(hand)))
+            switch (PointerRouteLogic.Decide(hitKind, kind, IsDrawing(hand), StrokesEnabled))
             {
                 case PointerRouteLogic.RouteAction.ClickTool:
                     OnToolClicked?.Invoke(button);

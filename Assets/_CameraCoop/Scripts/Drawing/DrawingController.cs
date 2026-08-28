@@ -77,8 +77,9 @@ namespace CameraCoop
         {
             // Keyboard 부재(장치 없음) 방어. legacy Input API는 이 프로젝트에서 예외를 던진다.
             Keyboard keyboard = Keyboard.current;
-            if (clearKey != Key.None && keyboard != null && keyboard[clearKey].wasPressedThisFrame)
+            if (clearKey != Key.None && keyboard != null && keyboard[clearKey].wasPressedThisFrame && !InputFocus.IsTyping)
             {
+                // 정답 타이핑 중 C키가 캔버스를 지우는 사고 방지 (docs/12 §2)
                 ClearAll();
             }
         }

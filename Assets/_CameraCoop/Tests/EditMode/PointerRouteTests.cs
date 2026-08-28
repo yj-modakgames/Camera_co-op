@@ -103,5 +103,50 @@ namespace CameraCoop.Tests
                 R(PointerRouteLogic.HitKind.None, false, PointerRouteLogic.RouteAction.None),
             });
         }
+
+        // Phase 3b Task 4 — strokesEnabled=false (StrokeGate 잠금 중) 분기표 (docs/12 §2)
+        [Test]
+        public void Decide_StrokesDisabled_Start_BlocksCanvas_ButToolStillClicks()
+        {
+            Assert.AreEqual(PointerRouteLogic.RouteAction.None,
+                PointerRouteLogic.Decide(PointerRouteLogic.HitKind.Canvas, StrokeLogic.PinchKind.Start, false, false),
+                "게이트 잠금 중엔 캔버스 신규 스트로크를 시작하지 않는다");
+            Assert.AreEqual(PointerRouteLogic.RouteAction.ClickTool,
+                PointerRouteLogic.Decide(PointerRouteLogic.HitKind.Tool, StrokeLogic.PinchKind.Start, false, false),
+                "게이트 잠금 중에도 도구 클릭은 허용한다");
+        }
+
+        [Test]
+        public void Decide_StrokesDisabled_ReclaimsInProgressStroke()
+        {
+            Assert.AreEqual(PointerRouteLogic.RouteAction.EndStroke,
+                PointerRouteLogic.Decide(PointerRouteLogic.HitKind.Canvas, StrokeLogic.PinchKind.Move, true, false),
+                "잠금 순간 진행 중이던 스트로크는 Move에서 End로 회수한다");
+            Assert.AreEqual(PointerRouteLogic.RouteAction.EndStroke,
+                PointerRouteLogic.Decide(PointerRouteLogic.HitKind.None, StrokeLogic.PinchKind.End, true, false),
+                "잠금 중이어도 End는 그대로 회수한다");
+        }
+
+        // 회귀 가드 — 기존 3인자 호출이 4인자 strokesEnabled:true와 전 조합에서 동일해야 한다
+        [Test]
+        public void Decide_ThreeArgOverload_MatchesFourArgTrue_ForAllCombinations()
+        {
+            var hits = new[] { PointerRouteLogic.HitKind.None, PointerRouteLogic.HitKind.Canvas, PointerRouteLogic.HitKind.Tool };
+            var kinds = new[] { StrokeLogic.PinchKind.Start, StrokeLogic.PinchKind.Move, StrokeLogic.PinchKind.End };
+            var drawingStates = new[] { false, true };
+            foreach (PointerRouteLogic.HitKind hit in hits)
+            {
+                foreach (StrokeLogic.PinchKind kind in kinds)
+                {
+                    foreach (bool isDrawing in drawingStates)
+                    {
+                        Assert.AreEqual(
+                            PointerRouteLogic.Decide(hit, kind, isDrawing, true),
+                            PointerRouteLogic.Decide(hit, kind, isDrawing),
+                            kind + " / " + hit + " / isDrawing=" + isDrawing);
+                    }
+                }
+            }
+        }
     }
 }
