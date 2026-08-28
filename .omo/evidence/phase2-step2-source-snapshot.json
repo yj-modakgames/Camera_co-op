@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-08-28T05:34:40.481Z",
+  "testJob": "52cbee4a1fb84f158f22cc30ffa56fa5",
+  "testResult": "375 passed / 4 failed / 0 skipped",
+  "files": {
+    "Assets/_CameraCoop/Scenes/RelayQuiz.unity": "a48512d0084650e36f11f226f06608a08c9d8aee19defd7fd6425a7d11a7038c",
+    "Assets/_CameraCoop/Scenes/RelayQuiz.unity.meta": "af2de1cb66d9c01dd76dfc18583295385019977add9b5dbdd33f9d2d3267edbb",
+    "Assets/_CameraCoop/Scripts/Input/HandButtonInteractable.cs": "beb8517e7ad282e2d223cffaca8f1dbbc619e19714ff2a2d9a0fd8ac42407b39",
+    "Assets/_CameraCoop/Scripts/Input/HandButtonInteractable.cs.meta": "b5fd60120d5ea47404a1da7d5a8bc80697add220ee5e5e6593bfd6f5f08117a0",
+    "Assets/_CameraCoop/Scripts/Input/HandInputRouter.cs": "cb1a1146ff838dc0b9f8790c0ce06e9e3f2d2ac803847004160e9d59e1e717a2",
+    "Assets/_CameraCoop/Scripts/Input/HandInputRouter.cs.meta": "5c9d805b90880da35035110d8357b1c6255dec2cd3d1f83659b6377528ef851b",
+    "Assets/_CameraCoop/Scripts/Input/HandInputTypes.cs": "d8dac2663a200939b9f5f7be871c34b9e649f98508b6745e30076f32d9275f1e",
+    "Assets/_CameraCoop/Scripts/Input/HandInputTypes.cs.meta": "3e674fa9a80e31374eafa228dcbbc5637b3c1465a840a03fc9e259779f9bca8d",
+    "Assets/_CameraCoop/Scripts/Input/HandInteractable.cs": "5817482725b7f3d2e06b93d981940c86a3908258639f1d7f824b3dc974abf9bc",
+    "Assets/_CameraCoop/Scripts/Input/HandInteractable.cs.meta": "686bed89eba7b889290ec26018f48f5fefbec5327223fcacbbcfe13932aeec85",
+    "Assets/_CameraCoop/Scripts/Input/HandUiTestPanel.cs": "95c62edfd6146ddc2c1bc38fdf028e64cf4266298724f3586236cd3c41d10d19",
+    "Assets/_CameraCoop/Scripts/Input/HandUiTestPanel.cs.meta": "055635eeb662cf822099ce7fc531eb5472d6b6c046f9c3bd3713485dd75f261c",
+    "Assets/_CameraCoop/Tests/EditMode/HandInteractionTests.cs": "a45ab43378cf4e0c83abcf3aae51d72a1290f5087e907efd4ae2539a260fd03f",
+    "Assets/_CameraCoop/Tests/EditMode/HandInteractionTests.cs.meta": "6059824ac1c7094157abcb15d8cb1af4b2cbf4aa15855f87cdddb123701ecb8f",
+    "Assets/_CameraCoop/Tests/Support.meta": "f91c58c73cd71fd14be1ef2aa73b9fa6cb19e6a0cab14bb2218e91a7d9f2c5ad",
+    "Assets/_CameraCoop/Tests/Support/CameraCoop.Tests.Support.asmdef": "c6837be38e597d9e20f01444542fe8caf3e6328e800dd1dc4b8d76b8f76dcc55",
+    "Assets/_CameraCoop/Tests/Support/CameraCoop.Tests.Support.asmdef.meta": "df8e65080706726372443a4f0bc484245dc5a87ecebe66f3009e3bb0ae94c75c",
+    "Assets/_CameraCoop/Tests/Support/HandInteractionProbe.cs": "4971ca880a12d719d62e7129f06d9e6dbcaeda4c870c677ad57b0216bc0cbab5",
+    "Assets/_CameraCoop/Tests/Support/HandInteractionProbe.cs.meta": "56513ddf19ab3c8ebbd816e5df99dd416a310e0996725cfaac35c88ce43af445",
+    "Assets/_CameraCoop/Scripts/Input/HandCursorController.cs": "8d316f7a7cfbdb21184ef8ec6ff78d6467aea2d77bee8410c3b019bb89d3914b",
+    "Assets/_CameraCoop/Scripts/Input/HandCursorController.cs.meta": "3220ce2f8a3ae4316b317ce7edc4f0a572bf9d643a954430b17166622c0b7512",
+    "Assets/_CameraCoop/Scripts/Input/HandPointer.cs": "bacb31a52ccd15bcad3317c48a172c1f1273d9d279497bcf17d27a80d85c4ab6",
+    "Assets/_CameraCoop/Scripts/Input/HandPointer.cs.meta": "f9c0b174f243b9841f95a5978c6fad84fe68373fea31d0630da607128fcec056",
+    "Assets/_CameraCoop/Tests/EditMode/ProtocolTests.cs": "7873db51a6996543827aeb09988c7313c826f8b0c6c429d88b0818c36a65ccca"
+  }
+}

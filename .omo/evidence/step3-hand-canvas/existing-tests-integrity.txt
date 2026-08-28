@@ -1,0 +1,1 @@
+PASS: entire pre-existing HandInteractionTests suffix is byte-for-byte unchanged from red source snapshot

@@ -1,0 +1,1 @@
+PASS: legacy Route/Emit/EndStroke/IsDrawing implementation suffix exactly matches before source

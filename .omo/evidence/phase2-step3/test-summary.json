@@ -1,0 +1,188 @@
+{
+  "job": "5c3f25dc6ea8400f92fddb8baacd4c59",
+  "result": "Failed",
+  "total": 484,
+  "passed": 480,
+  "failed": 4,
+  "newTests": 48,
+  "newFailures": 0,
+  "start": "2026-08-28T07:07:30Z",
+  "end": "2026-08-28T07:07:35Z",
+  "groups": {
+    "CameraCoop.Tests.CameraControlTests": {
+      "total": 23,
+      "passed": 23,
+      "failed": 0
+    },
+    "CameraCoop.Tests.CanvasSurfaceTests": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    "CameraCoop.Tests.DrawingTests": {
+      "total": 51,
+      "passed": 51,
+      "failed": 0
+    },
+    "CameraCoop.Tests.EraseLogicTests": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GameChannelTests": {
+      "total": 18,
+      "passed": 18,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GameClientStateTests": {
+      "total": 16,
+      "passed": 16,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GameProtocolTests": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GameSessionTests": {
+      "total": 22,
+      "passed": 22,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GuessGameLogicTests": {
+      "total": 25,
+      "passed": 25,
+      "failed": 0
+    },
+    "CameraCoop.Tests.GuessJudgeTests": {
+      "total": 12,
+      "passed": 12,
+      "failed": 0
+    },
+    "CameraCoop.Tests.HandButtonTests": {
+      "total": 16,
+      "passed": 16,
+      "failed": 0
+    },
+    "CameraCoop.Tests.HandCanvasRoutingTests": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "CameraCoop.Tests.HandInputRouterTests": {
+      "total": 46,
+      "passed": 42,
+      "failed": 4
+    },
+    "CameraCoop.Tests.HandSampleTests": {
+      "total": 30,
+      "passed": 30,
+      "failed": 0
+    },
+    "CameraCoop.Tests.InputModeTests": {
+      "total": 44,
+      "passed": 44,
+      "failed": 0
+    },
+    "CameraCoop.Tests.NetplaySceneTests": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "CameraCoop.Tests.NetplayTests": {
+      "total": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    "CameraCoop.Tests.PlayerMoveTests": {
+      "total": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    "CameraCoop.Tests.PointerRouteTests": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "CameraCoop.Tests.ProtocolTests": {
+      "total": 36,
+      "passed": 36,
+      "failed": 0
+    },
+    "CameraCoop.Tests.ProtocolV2Tests": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    "CameraCoop.Tests.ToolStateTests": {
+      "total": 13,
+      "passed": 13,
+      "failed": 0
+    },
+    "CameraCoop.Tests.TrackerLauncherTests": {
+      "total": 18,
+      "passed": 18,
+      "failed": 0
+    },
+    "CameraCoop.Tests.WordBankTests": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  },
+  "failures": [
+    "CameraCoop.Tests.HandInputRouterTests.GraphicRaycast_DisabledAdapterStillBlocks",
+    "CameraCoop.Tests.HandInputRouterTests.GraphicRaycast_HigherOverlaySortOrderWinsRegardlessOfArrayOrder",
+    "CameraCoop.Tests.HandInputRouterTests.GraphicRaycast_NonInteractableButtonStillBlocks",
+    "CameraCoop.Tests.HandInputRouterTests.GraphicRaycast_TopNonTargetGraphicBlocksUnderlyingTarget"
+  ],
+  "sourceSha256": {
+    "Assets/_CameraCoop/Scripts/Drawing/CanvasDrawingData.cs": "078e31933101196f4f10f473ef2f24a574f9f01dd42550e26517948dfe6937e9",
+    "Assets/_CameraCoop/Scripts/Drawing/CanvasDrawingPresenter.cs": "4c171c0a03e082ed07eefd7627831afc3aa4f2d6d2d1daf1834ed56e42322997",
+    "Assets/_CameraCoop/Scripts/Drawing/CanvasSurface.cs": "1f00a39262886f3c3455d4b9857344c576cd78a7312ca8045431080f6fa42fb4",
+    "Assets/_CameraCoop/Scripts/Drawing/DrawingController.cs": "ae2771f29e57a4202dc60eda091d8dfdaadd445d41752f4f052f0b56d9b9c661",
+    "Assets/_CameraCoop/Scripts/Drawing/EraseLogic.cs": "4168c56f9aae2cfad1e9535313aa2fb0411c06e048b1bc7e8f96df9eb90321d3",
+    "Assets/_CameraCoop/Scripts/Drawing/StrokeLogic.cs": "60049f3c66ad4ff6aca33626adb976a7b059e69c7db082f06063ea0658afc46f",
+    "Assets/_CameraCoop/Scripts/Drawing/ToolButton.cs": "a585329c8859bf9779b9ba27264b27385f5ce3ef5522436a76175cabf784effb",
+    "Assets/_CameraCoop/Scripts/Drawing/ToolState.cs": "c74809918fa5c0ef3e6b899d5e2faffc132f8f05497b2eed107569556bfaf0a3",
+    "Assets/_CameraCoop/Scripts/Input/CameraControlPanel.cs": "1a56adbca8b7992aeb2ffd2cce48fa6f942638b58b756cda5e6152345b004f1a",
+    "Assets/_CameraCoop/Scripts/Input/HandButtonInteractable.cs": "beb8517e7ad282e2d223cffaca8f1dbbc619e19714ff2a2d9a0fd8ac42407b39",
+    "Assets/_CameraCoop/Scripts/Input/HandCanvasInteractable.cs": "234b14df8249599f99f4d7bc384ac65c462065c6296484c7a9620743789c1de0",
+    "Assets/_CameraCoop/Scripts/Input/HandCursorController.cs": "8d316f7a7cfbdb21184ef8ec6ff78d6467aea2d77bee8410c3b019bb89d3914b",
+    "Assets/_CameraCoop/Scripts/Input/HandDrawingWorkspace.cs": "8cafb9558153f2db182ac595a26535dd17a70bd5c2f49514dd34a27e98d671d6",
+    "Assets/_CameraCoop/Scripts/Input/HandInputRouter.cs": "8e6ce5ebcedbc9e9aebe0d0fa4db5be42e1e6ac30bf3d34b520e456a041a8ef6",
+    "Assets/_CameraCoop/Scripts/Input/HandInputTypes.cs": "d8dac2663a200939b9f5f7be871c34b9e649f98508b6745e30076f32d9275f1e",
+    "Assets/_CameraCoop/Scripts/Input/HandInteractable.cs": "5817482725b7f3d2e06b93d981940c86a3908258639f1d7f824b3dc974abf9bc",
+    "Assets/_CameraCoop/Scripts/Input/HandPointer.cs": "424ee1717f1b7ac3329ecd72559c796f5c30d64e781177ba961c00de2ba10fc7",
+    "Assets/_CameraCoop/Scripts/Input/HandSliderInteractable.cs": "481b22ff9b2f88f960387394ca75e28eb69179113f946a3feba4437be84d3b44",
+    "Assets/_CameraCoop/Scripts/Input/HandToolPalette.cs": "e11405267446149845141eda5b245abd2a1197717cc9b77720daee3934d85891",
+    "Assets/_CameraCoop/Scripts/Input/HandUiTestPanel.cs": "95c62edfd6146ddc2c1bc38fdf028e64cf4266298724f3586236cd3c41d10d19",
+    "Assets/_CameraCoop/Scripts/Input/InputFocus.cs": "a825a539846b6f1824c524d335f1df0ce6c4defecc88c085ae1531a0c7f4ed90",
+    "Assets/_CameraCoop/Scripts/Input/InputModeManager.cs": "2e79eb7a341ad971965dcf67bc492df7dbeb8a0285e972634df47a5ba90ef6cb",
+    "Assets/_CameraCoop/Scripts/Input/PlayerController.cs": "81e90d29d607aad9c31b9bf48181dcf64b1f54fdd9510456e6eca233e7410344",
+    "Assets/_CameraCoop/Scripts/Input/PlayerMoveLogic.cs": "f47fa6e80f004dced8e645e7013a3008c982d1d50f82284c9f5a85d77c362b2b",
+    "Assets/_CameraCoop/Scripts/Input/PointerRouteLogic.cs": "9975f3fb8290201622648dd3014321dcbc9cba76297a3fb1069df07d471043c6",
+    "Assets/_CameraCoop/Scripts/Input/TrackerLauncher.cs": "ba91518f35d132972b7f6695fbfce3d0005d66ebc22aaf65bcccf037530365d8",
+    "Assets/_CameraCoop/Tests/EditMode/CameraControlTests.cs": "27737150d7447b39e49bdee19f57153e586a358c1b4de38c9f6e6439210d700e",
+    "Assets/_CameraCoop/Tests/EditMode/CanvasSurfaceTests.cs": "783fdabda43abad5a81d01a44a310248207e7f08e7d78b7c6301be5cc870eb40",
+    "Assets/_CameraCoop/Tests/EditMode/DrawingTests.cs": "4ca11ba0029e9722486f788e760005ff5ea2737c4331c8e0e7d08e1f30fc63b8",
+    "Assets/_CameraCoop/Tests/EditMode/EraseLogicTests.cs": "d016f7391673a490f7c66517ba7976813f1db80feb7cdcc92c506c48736ebb6d",
+    "Assets/_CameraCoop/Tests/EditMode/GameChannelTests.cs": "2c64d46e242eae81dd9175263f8dc7d7021fb83ae704716a526e1617e8d00a11",
+    "Assets/_CameraCoop/Tests/EditMode/GameClientStateTests.cs": "7205ed02cf066069578f71fd99d50932f545c95ee19856c30d418ed05d444d64",
+    "Assets/_CameraCoop/Tests/EditMode/GameProtocolTests.cs": "a8ace7b2a1d94ca66515c99d222411fc248af1913e4cd070855faa1af2df4928",
+    "Assets/_CameraCoop/Tests/EditMode/GameSessionTests.cs": "26642487e0838a50e2a1fc9564436d9f857b2deb62d81a54466c64a6eb93a47c",
+    "Assets/_CameraCoop/Tests/EditMode/GuessGameLogicTests.cs": "b8636b48c4d6bcf4ff99127ecc6e336851c250ade14b186b38313f0271e3cd84",
+    "Assets/_CameraCoop/Tests/EditMode/GuessJudgeTests.cs": "1fc35b397d001d96940e6bef96d7f8bdac482cf0c43144d0b741855c0483f7ed",
+    "Assets/_CameraCoop/Tests/EditMode/HandInteractionTests.cs": "872c41c877d43c95b090a687aedc6013b7a2af9326ce68d5383022b96d61c42c",
+    "Assets/_CameraCoop/Tests/EditMode/InputModeTests.cs": "a5f64fcf53627fa54b4abe864bbd1b66b7f714306a226185a4e9ecc3fe11b2eb",
+    "Assets/_CameraCoop/Tests/EditMode/NetplaySceneTests.cs": "dbeb4c24ec736ee30b5439c29bc07f36aa91eb107f2d477a01ab29a5f6a0dd2e",
+    "Assets/_CameraCoop/Tests/EditMode/NetplayTests.cs": "08ad0d4e2013f9c64f36799afc5be7e156c40ab5a2be1e7a83480f043c63dcde",
+    "Assets/_CameraCoop/Tests/EditMode/PlayerMoveTests.cs": "754a86747826deb99da062da00bb852b192cb9faa7400e5f69543a57f788ecf4",
+    "Assets/_CameraCoop/Tests/EditMode/PointerRouteTests.cs": "6a8ecbd57346ba90a3fc14d7fcf982b179416c1332ee7659bee28dd4c3f9185b",
+    "Assets/_CameraCoop/Tests/EditMode/ProtocolTests.cs": "7873db51a6996543827aeb09988c7313c826f8b0c6c429d88b0818c36a65ccca",
+    "Assets/_CameraCoop/Tests/EditMode/ProtocolV2Tests.cs": "11a816249d094ba16f0c53cd2c53eb36c7823de6fd34530416158dd8887165c5",
+    "Assets/_CameraCoop/Tests/EditMode/ToolStateTests.cs": "c641fe31940758c6f633b18aec480ce3763bad16d78ccb90332c124ac5775d53",
+    "Assets/_CameraCoop/Tests/EditMode/TrackerLauncherTests.cs": "80ecae15e0daec8ae6b1d6c73d31d5801cd056291daddd4afe8892b3dc91db66",
+    "Assets/_CameraCoop/Tests/EditMode/WordBankTests.cs": "9f03554d891bbeeaf8112323baa38844a8a7210391b60371bc73b4f146fa1109"
+  }
+}

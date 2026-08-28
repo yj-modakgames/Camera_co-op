@@ -1,0 +1,62 @@
+[
+  {
+    "name": "LegacyPointer_RejectsLocalCanvasApi",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LegacyPointer_RejectsLocalCanvasApi",
+    "result": "Passed",
+    "duration": "0.004775"
+  },
+  {
+    "name": "LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands",
+    "result": "Passed",
+    "duration": "0.002542"
+  },
+  {
+    "name": "LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently",
+    "result": "Passed",
+    "duration": "0.001142"
+  },
+  {
+    "name": "LocalPointer_FreezesDrawEraseModeForCapturedHand",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_FreezesDrawEraseModeForCapturedHand",
+    "result": "Passed",
+    "duration": "0.000697"
+  },
+  {
+    "name": "LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart",
+    "result": "Passed",
+    "duration": "0.001294"
+  },
+  {
+    "name": "LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates",
+    "result": "Passed",
+    "duration": "0.001334"
+  },
+  {
+    "name": "LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands",
+    "result": "Passed",
+    "duration": "0.001421"
+  },
+  {
+    "name": "LocalRouter_DrawingGateBlocksPhysicsCanvas",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_DrawingGateBlocksPhysicsCanvas",
+    "result": "Passed",
+    "duration": "0.002750"
+  },
+  {
+    "name": "LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples",
+    "result": "Passed",
+    "duration": "0.001013"
+  },
+  {
+    "name": "LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit",
+    "fullname": "CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit",
+    "result": "Passed",
+    "duration": "0.001596"
+  }
+]

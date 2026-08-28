@@ -1,0 +1,20 @@
+[
+  {
+    "path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Drawing\\CanvasDrawingData.cs",
+    "actual": "078E31933101196F4F10F473EF2F24A574F9F01DD42550E26517948DFE6937E9",
+    "expected": "078E31933101196F4F10F473EF2F24A574F9F01DD42550E26517948DFE6937E9",
+    "match": true
+  },
+  {
+    "path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Drawing\\CanvasDrawingPresenter.cs",
+    "actual": "4C171C0A03E082ED07EEFD7627831AFC3AA4F2D6D2D1DAF1834ED56E42322997",
+    "expected": "4C171C0A03E082ED07EEFD7627831AFC3AA4F2D6D2D1DAF1834ED56E42322997",
+    "match": true
+  },
+  {
+    "path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Drawing\\DrawingController.cs",
+    "actual": "AE2771F29E57A4202DC60EDA091D8DFDAADD445D41752F4F052F0B56D9B9C661",
+    "expected": "AE2771F29E57A4202DC60EDA091D8DFDAADD445D41752F4F052F0B56D9B9C661",
+    "match": true
+  }
+]

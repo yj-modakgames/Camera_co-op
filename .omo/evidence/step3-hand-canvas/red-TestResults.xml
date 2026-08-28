@@ -1,0 +1,840 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="68" result="Failed(Child)" total="68" passed="26" failed="42" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.3883019">
+  <test-suite type="TestSuite" id="1000" name="Camera_co-op" fullname="Camera_co-op" runstate="Runnable" testcasecount="478" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.388302" total="68" passed="26" failed="42" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="1533" name="CameraCoop.Tests.EditMode.dll" fullname="C:/git/Camera_co-op/Library/ScriptAssemblies/CameraCoop.Tests.EditMode.dll" runstate="Runnable" testcasecount="478" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.290092" total="68" passed="26" failed="42" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="73832" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1534" name="CameraCoop" fullname="CameraCoop" runstate="Runnable" testcasecount="478" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.274073" total="68" passed="26" failed="42" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="1535" name="Tests" fullname="CameraCoop.Tests" runstate="Runnable" testcasecount="478" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.269135" total="68" passed="26" failed="42" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestFixture" id="1036" name="DrawingTests" fullname="CameraCoop.Tests.DrawingTests" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" testcasecount="45" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.128094" total="45" passed="16" failed="29" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-case id="1057" name="ClearAndErase_KeepArchiveIndependentAndRenderCountSynchronized" fullname="CameraCoop.Tests.DrawingTests.ClearAndErase_KeepArchiveIndependentAndRenderCountSynchronized" methodname="ClearAndErase_KeepArchiveIndependentAndRenderCountSynchronized" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="439572862" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.013339" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.ClearAndErase_KeepArchiveIndependentAndRenderCountSynchronized () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:214
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1045" name="Decide_EndWithActive_Ends" fullname="CameraCoop.Tests.DrawingTests.Decide_EndWithActive_Ends" methodname="Decide_EndWithActive_Ends" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="246166307" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.005182" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1046" name="Decide_EndWithoutActive_None" fullname="CameraCoop.Tests.DrawingTests.Decide_EndWithoutActive_None" methodname="Decide_EndWithoutActive_None" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1395986601" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000146" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1043" name="Decide_MoveWithActive_Appends" fullname="CameraCoop.Tests.DrawingTests.Decide_MoveWithActive_Appends" methodname="Decide_MoveWithActive_Appends" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="952582099" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000119" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1044" name="Decide_MoveWithoutActive_None" fullname="CameraCoop.Tests.DrawingTests.Decide_MoveWithoutActive_None" methodname="Decide_MoveWithoutActive_None" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="57820340" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000116" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1042" name="Decide_StartWithActive_EndsThenStartsNew" fullname="CameraCoop.Tests.DrawingTests.Decide_StartWithActive_EndsThenStartsNew" methodname="Decide_StartWithActive_EndsThenStartsNew" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1267094547" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000116" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1041" name="Decide_StartWithoutActive_StartsNew" fullname="CameraCoop.Tests.DrawingTests.Decide_StartWithoutActive_StartsNew" methodname="Decide_StartWithoutActive_StartsNew" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1121481841" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000116" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1081" name="Disable_FinalizesActiveHandsWithoutDestroyingCompletedWork" fullname="CameraCoop.Tests.DrawingTests.Disable_FinalizesActiveHandsWithoutDestroyingCompletedWork" methodname="Disable_FinalizesActiveHandsWithoutDestroyingCompletedWork" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="980784528" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000463" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Disable_FinalizesActiveHandsWithoutDestroyingCompletedWork () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:392
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1054" name="Export_ContainsOnlyAcceptedSamplesAndSplitStyles" fullname="CameraCoop.Tests.DrawingTests.Export_ContainsOnlyAcceptedSamplesAndSplitStyles" methodname="Export_ContainsOnlyAcceptedSamplesAndSplitStyles" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1767922393" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000476" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Export_ContainsOnlyAcceptedSamplesAndSplitStyles () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:152
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1055" name="Export_DiscardsOnePointWithoutReusingItsIdOrOrder" fullname="CameraCoop.Tests.DrawingTests.Export_DiscardsOnePointWithoutReusingItsIdOrOrder" methodname="Export_DiscardsOnePointWithoutReusingItsIdOrOrder" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1279946682" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000341" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Export_DiscardsOnePointWithoutReusingItsIdOrOrder () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:179
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1053" name="Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray" fullname="CameraCoop.Tests.DrawingTests.Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray" methodname="Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="2012967114" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000537" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:127
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1082" name="Legacy_WorldRenderingAndLocalEventsRemainIndependentOfArchive" fullname="CameraCoop.Tests.DrawingTests.Legacy_WorldRenderingAndLocalEventsRemainIndependentOfArchive" methodname="Legacy_WorldRenderingAndLocalEventsRemainIndependentOfArchive" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="611897237" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.010202" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  Expected: 0
+  But was:  1
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests.Legacy_WorldRenderingAndLocalEventsRemainIndependentOfArchive () [0x00132] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:415
+]]></stack-trace>
+              </failure>
+              <output><![CDATA[Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+]]></output>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1078" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" testcasecount="19" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.070410" total="19" passed="0" failed="19" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1059" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;version&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;version&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1205261099" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001296" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1060" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullStrokes&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullStrokes&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="6566635" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000276" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1061" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullStroke&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullStroke&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1138360634" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000266" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1062" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullPoints&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullPoints&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="2011091265" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000234" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1063" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;shortPoints&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;shortPoints&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="706422248" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000192" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1064" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;oddPoints&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;oddPoints&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1600212899" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000187" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1065" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nanPoint&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nanPoint&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1934076143" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000226" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1066" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;infinitePoint&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;infinitePoint&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1862015617" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000248" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1067" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;outOfBounds&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;outOfBounds&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1899499111" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000248" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1068" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;zeroWidth&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;zeroWidth&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="2023575897" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000247" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1069" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nanWidth&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nanWidth&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="785543489" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000332" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1070" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;infiniteWidth&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;infiniteWidth&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1229618820" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000268" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1071" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;zeroId&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;zeroId&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1468699162" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000220" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1072" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;negativeOrder&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;negativeOrder&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1451441586" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000269" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1073" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;duplicateId&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;duplicateId&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="509695254" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000287" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1074" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;duplicateOrder&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;duplicateOrder&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="301049209" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000269" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1075" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;negativeBrush&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;negativeBrush&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="2123993091" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000228" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1076" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;largeBrush&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;largeBrush&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1831603031" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000184" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1077" name="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullData&quot;)" fullname="CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(&quot;nullData&quot;)" methodname="Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="95617318" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000307" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <failure>
+                  <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                  <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched (System.String invalid) [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:297
+]]></stack-trace>
+                </failure>
+              </test-case>
+            </test-suite>
+            <test-case id="1058" name="Load_SortsCopiesAndScalesWidthByTransformedShortAxis" fullname="CameraCoop.Tests.DrawingTests.Load_SortsCopiesAndScalesWidthByTransformedShortAxis" methodname="Load_SortsCopiesAndScalesWidthByTransformedShortAxis" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="2028431240" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000693" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Load_SortsCopiesAndScalesWidthByTransformedShortAxis () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:243
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1080" name="Presenter_ShowHideClearAreIndependentAndDestroyOnlyOwnedObjects" fullname="CameraCoop.Tests.DrawingTests.Presenter_ShowHideClearAreIndependentAndDestroyOnlyOwnedObjects" methodname="Presenter_ShowHideClearAreIndependentAndDestroyOnlyOwnedObjects" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="855006203" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000824" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Presenter_ShowHideClearAreIndependentAndDestroyOnlyOwnedObjects () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:358
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1040" name="ShouldAppendPoint_AboveMinDistanceAppends" fullname="CameraCoop.Tests.DrawingTests.ShouldAppendPoint_AboveMinDistanceAppends" methodname="ShouldAppendPoint_AboveMinDistanceAppends" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1663718462" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001029" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1039" name="ShouldAppendPoint_AtExactMinDistanceAppends" fullname="CameraCoop.Tests.DrawingTests.ShouldAppendPoint_AtExactMinDistanceAppends" methodname="ShouldAppendPoint_AtExactMinDistanceAppends" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1677045763" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000183" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1038" name="ShouldAppendPoint_BelowMinDistanceRejects" fullname="CameraCoop.Tests.DrawingTests.ShouldAppendPoint_BelowMinDistanceRejects" methodname="ShouldAppendPoint_BelowMinDistanceRejects" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1380102027" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000371" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1037" name="ShouldAppendPoint_FirstPointAlwaysAppends" fullname="CameraCoop.Tests.DrawingTests.ShouldAppendPoint_FirstPointAlwaysAppends" methodname="ShouldAppendPoint_FirstPointAlwaysAppends" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1846034342" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000154" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1051" name="ShouldDiscardOnEnd_OnePoint_True" fullname="CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_OnePoint_True" methodname="ShouldDiscardOnEnd_OnePoint_True" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1373150258" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000098" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1052" name="ShouldDiscardOnEnd_TwoPoints_False" fullname="CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_TwoPoints_False" methodname="ShouldDiscardOnEnd_TwoPoints_False" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1710748952" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000091" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1050" name="ShouldDiscardOnEnd_ZeroPoints_True" fullname="CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_ZeroPoints_True" methodname="ShouldDiscardOnEnd_ZeroPoints_True" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="168072120" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000201" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1048" name="ShouldSplitStroke_AtExactThreshold_False" fullname="CameraCoop.Tests.DrawingTests.ShouldSplitStroke_AtExactThreshold_False" methodname="ShouldSplitStroke_AtExactThreshold_False" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1308346645" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000175" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1049" name="ShouldSplitStroke_BeyondThreshold_True" fullname="CameraCoop.Tests.DrawingTests.ShouldSplitStroke_BeyondThreshold_True" methodname="ShouldSplitStroke_BeyondThreshold_True" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1246480257" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000144" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1047" name="ShouldSplitStroke_WithinThreshold_False" fullname="CameraCoop.Tests.DrawingTests.ShouldSplitStroke_WithinThreshold_False" methodname="ShouldSplitStroke_WithinThreshold_False" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="1757283383" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000147" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1079" name="TryCopy_ValidatesAndDeepCopiesWithoutUnityReferences" fullname="CameraCoop.Tests.DrawingTests.TryCopy_ValidatesAndDeepCopiesWithoutUnityReferences" methodname="TryCopy_ValidatesAndDeepCopiesWithoutUnityReferences" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="650164460" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000621" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  CanvasStrokeData is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests.Stroke (System.Int32 id, System.Int32 order, System.Single x) [0x0001b] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:446
+at CameraCoop.Tests.DrawingTests.TryCopy_ValidatesAndDeepCopiesWithoutUnityReferences () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:339
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1056" name="Undo_FinalizesBothHandsThenRemovesLatestStartedStroke" fullname="CameraCoop.Tests.DrawingTests.Undo_FinalizesBothHandsThenRemovesLatestStartedStroke" methodname="Undo_FinalizesBothHandsThenRemovesLatestStartedStroke" classname="CameraCoop.Tests.DrawingTests" runstate="Runnable" seed="309911871" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000427" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  HandPointer.inputSource is required.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.DrawingTests+DrawingFixture..ctor (System.Boolean local) [0x00025] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:482
+at CameraCoop.Tests.DrawingTests.Undo_FinalizesBothHandsThenRemovesLatestStartedStroke () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\DrawingTests.cs:195
+]]></stack-trace>
+              </failure>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1197" name="HandCanvasRoutingTests" fullname="CameraCoop.Tests.HandCanvasRoutingTests" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" testcasecount="10" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.018371" total="10" passed="0" failed="10" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-case id="1207" name="LegacyPointer_RejectsLocalCanvasApi" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LegacyPointer_RejectsLocalCanvasApi" methodname="LegacyPointer_RejectsLocalCanvasApi" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="1521299606" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.006491" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1203" name="LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands" methodname="LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="2107556706" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000761" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1198" name="LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently" methodname="LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="686246917" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000626" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1202" name="LocalPointer_FreezesDrawEraseModeForCapturedHand" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_FreezesDrawEraseModeForCapturedHand" methodname="LocalPointer_FreezesDrawEraseModeForCapturedHand" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="1787827211" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000580" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1200" name="LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart" methodname="LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="2142902282" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000561" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1199" name="LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates" methodname="LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="877969490" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000547" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1201" name="LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands" methodname="LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="934483166" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000541" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1205" name="LocalRouter_DrawingGateBlocksPhysicsCanvas" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_DrawingGateBlocksPhysicsCanvas" methodname="LocalRouter_DrawingGateBlocksPhysicsCanvas" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="1067874071" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000538" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1206" name="LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples" methodname="LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="1022845245" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000515" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1204" name="LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit" fullname="CameraCoop.Tests.HandCanvasRoutingTests.LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit" methodname="LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit" classname="CameraCoop.Tests.HandCanvasRoutingTests" runstate="Runnable" seed="1406565925" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000456" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[SetUp :   Step 3 requires an explicit pointer input source.
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.HandCanvasRoutingTests.SetUp () [0x00112] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\HandInteractionTests.cs:49
+]]></stack-trace>
+              </failure>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1490" name="ToolStateTests" fullname="CameraCoop.Tests.ToolStateTests" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" testcasecount="13" result="Failed" site="Child" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.023244" total="13" passed="10" failed="3" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-case id="1493" name="Apply_Brush_ScalesWidthAndAlpha" fullname="CameraCoop.Tests.ToolStateTests.Apply_Brush_ScalesWidthAndAlpha" methodname="Apply_Brush_ScalesWidthAndAlpha" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="147182664" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.003467" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1495" name="Apply_Color_ChangesRgb_KeepsBrushAlpha" fullname="CameraCoop.Tests.ToolStateTests.Apply_Color_ChangesRgb_KeepsBrushAlpha" methodname="Apply_Color_ChangesRgb_KeepsBrushAlpha" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="492161206" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000716" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1494" name="Apply_Eraser_ThenColor_ReturnsToDrawMode" fullname="CameraCoop.Tests.ToolStateTests.Apply_Eraser_ThenColor_ReturnsToDrawMode" methodname="Apply_Eraser_ThenColor_ReturnsToDrawMode" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1140016561" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000470" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1498" name="Apply_NullButton_DoesNotThrow" fullname="CameraCoop.Tests.ToolStateTests.Apply_NullButton_DoesNotThrow" methodname="Apply_NullButton_DoesNotThrow" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1515969740" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000776" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1496" name="Apply_OutOfRangeIndex_IsIgnored" fullname="CameraCoop.Tests.ToolStateTests.Apply_OutOfRangeIndex_IsIgnored" methodname="Apply_OutOfRangeIndex_IsIgnored" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1309975863" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001036" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[[ToolState] widths 인덱스 99가 범위(0..2) 밖 — 무시합니다. ToolButton 배선을 확인하세요 (docs/11 §4)
+]]></output>
+            </test-case>
+            <test-case id="1500" name="Apply_SelectionMovesColorWidthBrushAndEraserWithoutAccumulatingOffsets" fullname="CameraCoop.Tests.ToolStateTests.Apply_SelectionMovesColorWidthBrushAndEraserWithoutAccumulatingOffsets" methodname="Apply_SelectionMovesColorWidthBrushAndEraserWithoutAccumulatingOffsets" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="757759089" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.003596" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1492" name="Apply_Width_ChangesWidthOnly" fullname="CameraCoop.Tests.ToolStateTests.Apply_Width_ChangesWidthOnly" methodname="Apply_Width_ChangesWidthOnly" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1468328857" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000575" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1491" name="Defaults_AreDrawMode_WithMiddleWidth" fullname="CameraCoop.Tests.ToolStateTests.Defaults_AreDrawMode_WithMiddleWidth" methodname="Defaults_AreDrawMode_WithMiddleWidth" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="142956200" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.000324" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1497" name="OnChanged_FiresOnlyWhenSomethingActuallyChanges" fullname="CameraCoop.Tests.ToolStateTests.OnChanged_FiresOnlyWhenSomethingActuallyChanges" methodname="OnChanged_FiresOnlyWhenSomethingActuallyChanges" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="323228688" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001034" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1499" name="OnEnable_ToolClickAppliesAndOnDisableUnsubscribes" fullname="CameraCoop.Tests.ToolStateTests.OnEnable_ToolClickAppliesAndOnDisableUnsubscribes" methodname="OnEnable_ToolClickAppliesAndOnDisableUnsubscribes" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="564928657" result="Passed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001016" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1503" name="Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers" fullname="CameraCoop.Tests.ToolStateTests.Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers" methodname="Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1151775855" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:29Z" duration="0.001031" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  CameraCoop.HandToolPalette 타입이 필요하다
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.ToolStateTests.RequiredRuntimeType (System.String fullName) [0x00017] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:97
+at CameraCoop.Tests.ToolStateTests.Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers () [0x00007] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:361
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1501" name="PaletteReadOnlyApi_ReportsSelectionsAndBrushMaterialLookup" fullname="CameraCoop.Tests.ToolStateTests.PaletteReadOnlyApi_ReportsSelectionsAndBrushMaterialLookup" methodname="PaletteReadOnlyApi_ReportsSelectionsAndBrushMaterialLookup" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="1955130121" result="Failed" start-time="2026-08-28 06:42:29Z" end-time="2026-08-28 06:42:30Z" duration="0.000850" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  ToolState.CurrentColorIndex 읽기 전용 API가 필요하다
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.ToolStateTests.RequiredProperty (System.Type type, System.String name) [0x0000b] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:104
+at CameraCoop.Tests.ToolStateTests.PaletteReadOnlyApi_ReportsSelectionsAndBrushMaterialLookup () [0x00013] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:292
+]]></stack-trace>
+              </failure>
+            </test-case>
+            <test-case id="1502" name="Slider_DownAndHoldClampWidthAndExternalToolChangeSynchronizesNativeValue" fullname="CameraCoop.Tests.ToolStateTests.Slider_DownAndHoldClampWidthAndExternalToolChangeSynchronizesNativeValue" methodname="Slider_DownAndHoldClampWidthAndExternalToolChangeSynchronizesNativeValue" classname="CameraCoop.Tests.ToolStateTests" runstate="Runnable" seed="242805779" result="Failed" start-time="2026-08-28 06:42:30Z" end-time="2026-08-28 06:42:30Z" duration="0.000997" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  CameraCoop.HandSliderInteractable 타입이 필요하다
+  Expected: not null
+  But was:  null
+]]></message>
+                <stack-trace><![CDATA[at CameraCoop.Tests.ToolStateTests.RequiredRuntimeType (System.String fullName) [0x00017] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:97
+at CameraCoop.Tests.ToolStateTests.Slider_DownAndHoldClampWidthAndExternalToolChangeSynchronizesNativeValue () [0x00001] in C:\git\Camera_co-op\Assets\_CameraCoop\Tests\EditMode\ToolStateTests.cs:314
+]]></stack-trace>
+              </failure>
+              <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yunji/AppData/LocalLow/DefaultCompany/Camera_co-op\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

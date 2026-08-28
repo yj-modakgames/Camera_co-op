@@ -1,0 +1,39 @@
+{
+  "capturedAt": "2026-08-28T06:29:48.254Z",
+  "width": 2028,
+  "height": 1607,
+  "surface": "Unity native PrintWindow; Full HD Game view; EditMode; Off state",
+  "capture": ".omo/evidence/phase2-camera-controls-static.png",
+  "source": [
+    {
+      "path": "Assets/_CameraCoop/Scenes/RelayQuiz.unity",
+      "modifiedAt": "2026-08-28T06:20:03.531Z",
+      "sha256": "b091a429afc8b74d7abc7d840ba13da9a1b0d5b81b1006ef76bf21f13a1d1408"
+    },
+    {
+      "path": "Assets/_CameraCoop/Scripts/Input/CameraControlPanel.cs",
+      "modifiedAt": "2026-08-28T06:17:21.724Z",
+      "sha256": "1a56adbca8b7992aeb2ffd2cce48fa6f942638b58b756cda5e6152345b004f1a"
+    },
+    {
+      "path": "Assets/_CameraCoop/Scripts/Input/InputModeManager.cs",
+      "modifiedAt": "2026-08-28T06:11:19.423Z",
+      "sha256": "2e79eb7a341ad971965dcf67bc492df7dbeb8a0285e972634df47a5ba90ef6cb"
+    },
+    {
+      "path": "Assets/_CameraCoop/Scripts/Input/TrackerLauncher.cs",
+      "modifiedAt": "2026-08-28T06:11:51.775Z",
+      "sha256": "ba91518f35d132972b7f6695fbfce3d0005d66ebc22aaf65bcccf037530365d8"
+    }
+  ],
+  "remaining": [
+    "other resolutions",
+    "runtime interaction and status transitions",
+    "webcam on/off and Play exit cleanup"
+  ],
+  "staticVerdict": "PASS",
+  "reviews": [
+    "phase2-camera-controls-static-integrity.md",
+    "phase2-camera-controls-static-cjk.md"
+  ]
+}

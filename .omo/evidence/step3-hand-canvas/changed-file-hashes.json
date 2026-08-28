@@ -1,0 +1,18 @@
+[
+  {
+    "Path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Input\\HandPointer.cs",
+    "Hash": "424EE1717F1B7AC3329ECD72559C796F5C30D64E781177BA961C00DE2BA10FC7"
+  },
+  {
+    "Path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Input\\HandInputRouter.cs",
+    "Hash": "8E6CE5EBCEDBC9E9AEBE0D0FA4DB5BE42E1E6AC30BF3D34B520E456A041A8EF6"
+  },
+  {
+    "Path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Scripts\\Input\\HandCanvasInteractable.cs",
+    "Hash": "73992537899AA12B7BD46A0CAC3342D484CF0DF90C696440CBCACC3F6341964A"
+  },
+  {
+    "Path": "C:\\git\\Camera_co-op\\Assets\\_CameraCoop\\Tests\\EditMode\\HandInteractionTests.cs",
+    "Hash": "872C41C877D43C95B090A687AEDC6013B7A2AF9326CE68D5383022B96D61C42C"
+  }
+]

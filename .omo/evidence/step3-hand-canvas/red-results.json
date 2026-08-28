@@ -1,0 +1,52 @@
+[
+  {
+    "name": "LegacyPointer_RejectsLocalCanvasApi",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalCanvas_ReleaseIsNotClickAndDisableEndsBothHands",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalPointer_EmitsInkPlaneCoordinatesAndEndsIdempotently",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalPointer_FreezesDrawEraseModeForCapturedHand",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalPointer_PermissionLossEndsBothHandsAndHeldMoveCannotRestart",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalPointer_RejectsUnregisteredSurfaceAndInvalidCoordinates",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalPointer_StrokesDisabledBlocksStartAndCancelsBothHands",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalRouter_DrawingGateBlocksPhysicsCanvas",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  },
+  {
+    "name": "LocalRouter_OnlyRegisteredActualSurfaceMayReceivePhysicsHit",
+    "result": "Failed",
+    "failure": "SetUp :   Step 3 requires an explicit pointer input source.\n  Expected: not null\n  But was:  null\n"
+  }
+]

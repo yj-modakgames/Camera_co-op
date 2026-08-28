@@ -1,0 +1,13 @@
+{
+  "path": ".omo/evidence/phase2-step3/step3-ui-1920.png",
+  "width": 1920,
+  "height": 1080,
+  "bitDepth": 8,
+  "colorType": 2,
+  "signature": "89504e470d0a1a0a",
+  "bytes": 795152,
+  "sha256": "671a33196e83cb14a0dd3dc6166d224bc9f756347b548280ba0b7e41f7584cf8",
+  "capturedAt": "2026-08-28T07:11:42.267Z",
+  "sceneSha256": "873afc9dcf1a377aeb6d7331ea9a01a5cdd886618458d56dee6aa015e63ec6a1",
+  "scope": "1/1 static EditMode camera-off blank workspace at1920x1080. User alone tests Play and other sizes. No pixel-perfect reference target."
+}

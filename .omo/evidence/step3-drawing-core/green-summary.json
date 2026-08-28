@@ -1,0 +1,216 @@
+{
+  "jobId": "e6c930dc2ef54c0da0fe6a0ea176d765",
+  "total": 73,
+  "passed": 72,
+  "failed": 1,
+  "drawingTotal": 50,
+  "drawingPassed": 50,
+  "failures": [
+    {
+      "message": "  Expected: True\n  But was:  False\n",
+      "name": "CameraCoop.Tests.ToolStateTests.Palette_HandClickAppliesOnceAndExternalToolChangesRefreshSelectedMarkers"
+    }
+  ],
+  "drawingCases": [
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ClearAndErase_KeepArchiveIndependentAndRenderCountSynchronized"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_EndWithActive_Ends"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_EndWithoutActive_None"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_MoveWithActive_Appends"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_MoveWithoutActive_None"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_StartWithActive_EndsThenStartsNew"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Decide_StartWithoutActive_StartsNew"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Disable_FinalizesActiveHandsWithoutDestroyingCompletedWork"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Export_ContainsOnlyAcceptedSamplesAndSplitStyles"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Export_DiscardsOnePointWithoutReusingItsIdOrOrder"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Legacy_WorldRenderingAndLocalEventsRemainIndependentOfArchive"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"version\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nullStrokes\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nullStroke\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nullPoints\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"shortPoints\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"oddPoints\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nanPoint\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"infinitePoint\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"outOfBounds\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"zeroWidth\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nanWidth\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"infiniteWidth\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"zeroId\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"negativeOrder\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"duplicateId\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"duplicateOrder\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"negativeBrush\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"largeBrush\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_InvalidArchiveLeavesActiveWorkAndRenderUntouched(\"nullData\")"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Load_SortsCopiesAndScalesWidthByTransformedShortAxis"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Presenter_ShowHideClearAreIndependentAndDestroyOnlyOwnedObjects"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldAppendPoint_AboveMinDistanceAppends"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldAppendPoint_AtExactMinDistanceAppends"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldAppendPoint_BelowMinDistanceRejects"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldAppendPoint_FirstPointAlwaysAppends"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_OnePoint_True"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_TwoPoints_False"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldDiscardOnEnd_ZeroPoints_True"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldSplitStroke_AtExactThreshold_False"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldSplitStroke_BeyondThreshold_True"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.ShouldSplitStroke_WithinThreshold_False"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.TryCopy_ValidatesAndDeepCopiesWithoutUnityReferences"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Undo_FinalizesBothHandsThenRemovesLatestStartedStroke"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Workspace_CommandEndsBothCapturesBeforeChangingWork(\"undoButton\",1)"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Workspace_CommandEndsBothCapturesBeforeChangingWork(\"clearButton\",0)"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Workspace_CommandEndsBothCapturesBeforeChangingWork(\"saveButton\",2)"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Workspace_DisableUnsubscribesCommandsAndHidesOnlyPreview"
+    },
+    {
+      "result": "Passed",
+      "name": "CameraCoop.Tests.DrawingTests.Workspace_SaveHideClearRestorePreservesIndependentDrawing"
+    }
+  ]
+}

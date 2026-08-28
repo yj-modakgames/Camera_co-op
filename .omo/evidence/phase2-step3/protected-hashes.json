@@ -1,0 +1,8 @@
+{
+  "Packages/manifest.json": "634122b204fc443b546fb4c44d541913106f4b6a620a81a589eec2d09e9bfefb",
+  "Packages/packages-lock.json": "dea53b0d55824e8a4126eb5fe1893af31b050c8a419fea70bf8a87972e5bac66",
+  "docs/12_phase3b_guess_game.md": "995c4e00b0e4757cfec4bad60ed92853beaaf1b75cb4ab2cbfd71030bef7eb35",
+  "Assets/_CameraCoop/Scenes/Netplay3D.unity": "718d0f0ae674d3c7ce53243c151025c80e7efd925f6e5884892545fcc3eb74e3",
+  "Assets/_CameraCoop/Scenes/NetplayTest.unity": "673cd3adb9e213956c3c42bf41f78baaf4b421ccdfc9be4530481ad479c8f294",
+  "PythonTracker/hand_tracker.py": "68ac8c6510b11bbb4e19579e8028dfc9fcabfb8a9fba203bff821f8e70d68fbb"
+}

@@ -1,0 +1,15 @@
+{
+  "recordedAt": "2026-08-28T07:22:20.301Z",
+  "commits": [
+    "660d1adbff3774260f5f2c0c197e8f7cad5ee842 feat: 손 UI와 캔버스 드로잉 작업 화면 구현 (Phase 2 Step 2·3)",
+    "0e9fcd9e8a35a0a0dd9721e14343c0b9c0eb798a feat: 로컬 플레이어와 입력 모드 컨트롤 구현 (Phase 2 Step 1)"
+  ],
+  "remainingStatus": "M Packages/manifest.json\n M Packages/packages-lock.json\n M docs/12_phase3b_guess_game.md\n?? .omo/",
+  "unpushedRelativeToUpstream": "2\t0",
+  "verifiedSourceFiles": 47,
+  "testJob": "5c3f25dc6ea8400f92fddb8baacd4c59",
+  "sceneSha256": "873afc9dcf1a377aeb6d7331ea9a01a5cdd886618458d56dee6aa015e63ec6a1",
+  "protectedMatches": true,
+  "manualPlay": "pending; user alone runs Play",
+  "visualGate": "pending; latest EditMode capture omits text"
+}
