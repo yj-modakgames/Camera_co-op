@@ -96,6 +96,340 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void CanvasMouse_RejectsUninitializedPanelWithoutLaunching()
+        {
+            Invoke(panel, "OnDisable");
+
+            Click();
+            Assert.AreEqual(0, ProbeCount("startCalls"));
+        }
+
+        [Test]
+        public void CanvasMouse_StartsOwnedTrackerFromOffState()
+        {
+            Click();
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual("Starting", State());
+        }
+
+        [Test]
+        public void CanvasMouse_RejectsReentryWhileStarting()
+        {
+            Click();
+
+            Click();
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual(0, ProbeCount("stopCalls"));
+        }
+
+        [Test]
+        public void CanvasMouse_StopsOwnedTrackerAfterReceiving()
+        {
+            Click();
+            FreshPacket(1);
+            Refresh(1f);
+
+            Assert.AreEqual("Receiving", State());
+            modes.ProcessInput(true, CursorLockMode.Locked);
+            Assert.IsTrue(modes.CanUseCameraMouse);
+            Click(1f);
+            Assert.AreEqual(1, ProbeCount("stopCalls"));
+            Assert.AreEqual("Off", State());
+        }
+
+        [Test]
+        public void CanvasMouse_SameTargetPressRelease_StartsTrackerOnce()
+        {
+            Pointer(inside, true, false);
+            Pointer(inside, false, true);
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual("Starting", State());
+        }
+
+        [Test]
+        public void CanvasMouse_PressOutsideThenReleaseOnButton_DoesNotStartTracker()
+        {
+            Pointer(new Vector2(-500f, -500f), true, false);
+            Pointer(inside, false, true);
+
+            Assert.AreEqual(0, ProbeCount("startCalls"));
+            Assert.AreEqual("Off", State());
+        }
+
+        [Test]
+        public void AutomaticStartup_DefaultRemainsManual()
+        {
+            Invoke(panel, "TryAutomaticStartup", 0f);
+
+            Assert.AreEqual(0, ProbeCount("startCalls"));
+            Assert.AreEqual("Off", State());
+        }
+
+        [Test]
+        public void AutomaticStartup_EditModeLifecycleNeverLaunches()
+        {
+            SetField(panel, "autoStartCamera", true);
+            Invoke(panel, "OnEnable");
+            Invoke(panel, "Start");
+
+            Assert.IsFalse(Application.isPlaying);
+            Assert.AreEqual(0, ProbeCount("startCalls"));
+        }
+
+        [Test]
+        public void AutomaticStartup_OptInAttemptsOnceAndWaitsForPacket()
+        {
+            SetField(panel, "autoStartCamera", true);
+            Invoke(panel, "TryAutomaticStartup", 0f);
+            Invoke(panel, "TryAutomaticStartup", 1f);
+            Refresh(2f);
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual("Starting", State());
+            Assert.IsFalse(modes.CanUseHandUi);
+        }
+
+        [Test]
+        public void AutomaticStartup_ExistingOwnedProcessIsNotReplaced()
+        {
+            Assert.IsTrue(launcher.StartTracker());
+            Invoke(panel, "OnEnable");
+            SetField(panel, "autoStartCamera", true);
+
+            Invoke(panel, "TryAutomaticStartup", 0f);
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual(0, ProbeCount("stopCalls"));
+            Assert.AreEqual("Starting", State());
+        }
+
+        [Test]
+        public void AutomaticStartup_ExternalPacketConsumesAttemptWithoutLaunch()
+        {
+            FreshPacket(1);
+            SetField(panel, "autoStartCamera", true);
+            Invoke(panel, "TryAutomaticStartup", 0f);
+            Assert.AreEqual("External", State());
+
+            SetField(receiver, "lastPacketReceivedAt", Time.realtimeSinceStartup - 1f);
+            Refresh(1f);
+            Invoke(panel, "TryAutomaticStartup", 2f);
+
+            Assert.AreEqual(0, ProbeCount("startCalls"));
+            Assert.AreEqual(0, ProbeCount("stopCalls"));
+            Assert.AreEqual("Failed", State());
+        }
+
+        [Test]
+        public void AutomaticStartup_ExplicitStopStaysOffAfterReenable()
+        {
+            SetField(panel, "autoStartCamera", true);
+            Invoke(panel, "TryAutomaticStartup", 0f);
+            FreshPacket(1);
+            Refresh(1f);
+            Click(2f);
+            Invoke(panel, "OnDisable");
+            Invoke(panel, "OnEnable");
+            Invoke(panel, "TryAutomaticStartup", 3f);
+
+            Assert.AreEqual("Off", State());
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual(1, ProbeCount("stopCalls"));
+        }
+
+        [Test]
+        public void AutomaticStartup_FailureSurvivesReenableAndOnlyClickRetries()
+        {
+            SetField(launcher, "failStart", true);
+            SetField(panel, "autoStartCamera", true);
+            Invoke(panel, "TryAutomaticStartup", 0f);
+            string failure = statusLabel.text;
+            Invoke(panel, "OnDisable");
+            Invoke(panel, "OnEnable");
+            Invoke(panel, "TryAutomaticStartup", 1f);
+            Refresh(2f);
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual("Failed", State());
+            Assert.AreEqual(failure, statusLabel.text);
+            SetField(launcher, "failStart", false);
+            Click(3f);
+            Assert.AreEqual(2, ProbeCount("startCalls"));
+            Assert.AreEqual("Starting", State());
+        }
+
+        [Test]
+        public void ConnectionTimeout_ExplainsPermissionsAndPlatformSetup()
+        {
+            Click();
+            Refresh(16f);
+
+            StringAssert.Contains("권한", statusLabel.text);
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            StringAssert.Contains("setup_tracker.bat", statusLabel.text);
+#else
+            StringAssert.Contains("setup_tracker.sh", statusLabel.text);
+#endif
+        }
+
+        [Test]
+        public void OwnedProcessExit_ShowsCapturedDiagnosticAndCleansOnce()
+        {
+            Click();
+            CaptureDiagnostic("ImportError: camera backend unavailable");
+            SetField(launcher, "running", false);
+
+            Refresh(1f);
+            string failure = statusLabel.text;
+            Refresh(2f);
+
+            StringAssert.Contains("camera backend unavailable", launcher.LastError);
+            Assert.LessOrEqual(failure.Split('\n').Length, 2);
+            foreach (string line in failure.Split('\n')) Assert.LessOrEqual(line.Length, 32);
+            Assert.AreEqual(failure, statusLabel.text);
+            Assert.AreEqual(1, ProbeCount("stopCalls"));
+        }
+
+        [Test]
+        public void DiagnosticCapture_IsBoundedAndIgnoresUnownedSender()
+        {
+            Click();
+            using (var owned = new System.Diagnostics.Process())
+            using (var unrelated = new System.Diagnostics.Process())
+            {
+                SetLauncherField("stderrProcess", owned);
+                InvokeLauncher("CaptureStandardError", owned, new string('x', 5000) + " recent detail");
+                InvokeLauncher("CaptureStandardError", unrelated, "unrelated process diagnostic");
+                InvokeLauncher("CaptureStandardError", owned, null);
+                SetField(launcher, "running", false);
+                Refresh(1f);
+            }
+
+            StringAssert.Contains("recent detail", launcher.LastError);
+            StringAssert.DoesNotContain("unrelated process diagnostic", launcher.LastError);
+            Assert.Less(launcher.LastError.Length, 2600);
+        }
+
+        [Test]
+        public void DiagnosticSanitizer_CapPreservesLeadingAndLatestText()
+        {
+            string detail = "camera busy " + new string('x', 5000) + " recent detail";
+
+            string sanitized = TrackerLauncher.SanitizeDiagnostic(detail);
+
+            StringAssert.Contains("camera busy", sanitized);
+            StringAssert.Contains("recent detail", sanitized);
+            Assert.LessOrEqual(sanitized.Length, TrackerLauncher.DiagnosticLimit);
+        }
+
+        [Test]
+        public void DiagnosticCapture_NewAttemptClearsPreviousProcessDetail()
+        {
+            Click();
+            CaptureDiagnostic("old process diagnostic");
+            SetField(launcher, "running", false);
+            Refresh(1f);
+            Click(2f);
+            SetField(launcher, "running", false);
+            Refresh(3f);
+
+            StringAssert.DoesNotContain("old process diagnostic", launcher.LastError);
+            Assert.AreEqual(2, ProbeCount("startCalls"));
+        }
+
+        [Test]
+        public void ConnectionTimeout_IncludesCapturedDetailBeforeStopClearsIt()
+        {
+            Click();
+            CaptureDiagnostic("Camera is already in use");
+            Refresh(16f);
+
+            StringAssert.Contains("Camera is already in use", launcher.LastError);
+            Assert.AreEqual(2, statusLabel.text.Split('\n').Length);
+            Assert.AreEqual(1, ProbeCount("stopCalls"));
+        }
+
+        [Test]
+        public void ProcessExit_LateDiagnosticUpdatesFailureAndLogsOnlyOnce()
+        {
+            Click();
+            using (var owned = new System.Diagnostics.Process())
+            {
+                SetLauncherField("stderrProcess", owned);
+                SetLauncherField("stderrComplete", false);
+                SetField(launcher, "running", false);
+                Refresh(1f);
+                Assert.AreEqual("Failed", State());
+                Assert.AreEqual(0, ProbeCount("stopCalls"));
+
+                InvokeLauncher("CaptureStandardError", owned, "Camera access denied");
+                InvokeLauncher("CaptureStandardError", owned, null);
+                LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Camera access denied"));
+                Refresh(2f);
+                Refresh(3f);
+
+                StringAssert.Contains("Camera access denied", statusLabel.text);
+                Assert.AreEqual(1, ProbeCount("stopCalls"));
+                LogAssert.NoUnexpectedReceived();
+            }
+        }
+
+        [Test]
+        public void ProcessExit_DrainDeadlineDoesNotRequireSleepOrKeepOwnership()
+        {
+            Click();
+            using (var owned = new System.Diagnostics.Process())
+            {
+                SetLauncherField("stderrProcess", owned);
+                SetLauncherField("stderrComplete", false);
+                SetField(launcher, "running", false);
+                Refresh(1f);
+                Assert.AreEqual(0, ProbeCount("stopCalls"));
+                SetLauncherField("exitedAt", double.MinValue);
+                double configuredExit = (double)typeof(TrackerLauncher)
+                    .GetField("exitedAt", InstanceFlags).GetValue(launcher);
+                Assert.GreaterOrEqual(
+                    Time.realtimeSinceStartupAsDouble - configuredExit,
+                    0.5d,
+                    "The fixture must configure an expired double precision deadline.");
+                Assert.IsTrue(
+                    (bool)typeof(TrackerLauncher).GetField("ownsProcess", InstanceFlags).GetValue(launcher),
+                    "The launcher must still own the exited process before deadline cleanup.");
+                Assert.IsFalse(launcher.IsRunning, "The probe must report the owned process as exited.");
+                Assert.IsTrue(
+                    (bool)typeof(CameraControlPanel).GetField("initialized", InstanceFlags).GetValue(panel),
+                    "The camera panel must remain initialized for deadline cleanup.");
+
+                launcher.RefreshStatus();
+                Assert.AreEqual(1, ProbeCount("stopCalls"), "Direct launcher refresh must clean an expired exit.");
+
+                Refresh(2f);
+
+                Assert.AreEqual(1, ProbeCount("stopCalls"));
+                Assert.IsNull(typeof(TrackerLauncher).GetField("stderrProcess", InstanceFlags).GetValue(launcher));
+                Assert.AreEqual("Failed", State());
+            }
+        }
+
+        [Test]
+        public void ProcessDiagnostic_RedactsCredentialsBeforeStatusAndLog()
+        {
+            Click();
+            CaptureDiagnostic("ImportError\ntoken=private-test-value\nAuthorization: Bearer private-token");
+            SetField(launcher, "running", false);
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex(@"\[redacted\]"));
+
+            Refresh(1f);
+
+            StringAssert.DoesNotContain("private-test-value", launcher.LastError);
+            StringAssert.DoesNotContain("private-token", launcher.LastError);
+            StringAssert.Contains("[redacted]", launcher.LastError);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
         public void MouseOutsideCameraButton_CannotStartOrDispatchAnotherButton()
         {
             Button other = CreateRoot("game button", typeof(RectTransform), typeof(Image), typeof(Button)).GetComponent<Button>();
@@ -284,11 +618,30 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void BlockedContext_RejectsCameraMouseClicks()
+        public void BlockedContext_RejectsCameraMouseClicksWhileReceiving()
         {
+            Click();
+            FreshPacket(1);
+            Refresh(1f);
+            Assert.AreEqual("Receiving", State());
+
             modes.SetContext(InputContext.Blocked);
             Click();
-            Assert.AreEqual(0, ProbeCount("startCalls"));
+
+            Assert.AreEqual(0, ProbeCount("stopCalls"), "수신 중 Blocked에서는 캠 컨트롤을 닫는다.");
+            Assert.AreEqual("Receiving", State());
+        }
+
+        // 차폐 중 캠이 끊기면 재시도 말고는 복구 경로가 없다 (docs/06 §9, docs/09 §7).
+        [Test]
+        public void BlockedContext_StillAllowsCameraRetryWhileNotReceiving()
+        {
+            modes.SetContext(InputContext.Blocked);
+
+            Click();
+
+            Assert.AreEqual(1, ProbeCount("startCalls"));
+            Assert.AreEqual("Starting", State());
         }
 
         [Test]
@@ -321,6 +674,30 @@ namespace CameraCoop.Tests
         {
             Pointer(inside, true, false, now);
             Pointer(inside, false, true, now);
+        }
+
+        private void CaptureDiagnostic(string detail)
+        {
+            using (var owned = new System.Diagnostics.Process())
+            {
+                SetLauncherField("stderrProcess", owned);
+                InvokeLauncher("CaptureStandardError", owned, detail);
+                InvokeLauncher("CaptureStandardError", owned, null);
+            }
+        }
+
+        private void SetLauncherField(string name, object value)
+        {
+            FieldInfo field = typeof(TrackerLauncher).GetField(name, InstanceFlags);
+            Assert.IsNotNull(field, name);
+            field.SetValue(launcher, value);
+        }
+
+        private void InvokeLauncher(string name, params object[] arguments)
+        {
+            MethodInfo method = typeof(TrackerLauncher).GetMethod(name, InstanceFlags);
+            Assert.IsNotNull(method, name);
+            method.Invoke(launcher, arguments);
         }
 
         private void Pointer(Vector2 position, bool pressed, bool released, float now = 0f)
@@ -373,5 +750,6 @@ namespace CameraCoop.Tests
             Assert.IsNotNull(method, name);
             method.Invoke(target, arguments);
         }
+
     }
 }

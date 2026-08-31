@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.UI;
@@ -73,6 +74,9 @@ namespace CameraCoop
         [SerializeField] private HandButtonInteractable restartButton;
         [SerializeField] private HandButtonInteractable resumeButton;
 
+        [Header("Online World Actions")]
+        [SerializeField] private bool useWorldLobbyActions;
+
         [Header("Answer")]
         [SerializeField] private InputField answerField;
         [SerializeField] private HandButtonInteractable answerFocusButton;
@@ -96,6 +100,22 @@ namespace CameraCoop
         private bool initialized;
         private bool subscribed;
         private bool answerActive;
+        private bool onlineResumeDown;
+        private int onlineResumeGeneration;
+        private bool hasOnlineView;
+        private int onlineRosterCount;
+        private bool onlineModeStarted;
+        private int onlineStartSignal;
+        private RelayQuizState onlineState;
+        private bool onlineSetupNoticeActive;
+        private float onlineSetupNoticeUntil;
+        private string onlineSetupNotice = string.Empty;
+        private OnlineRelayQuizView cachedOnlineView;
+        private RelayQuizPauseStage cachedOnlinePauseStage;
+        private bool cachedOnlineHidden;
+        private bool cachedOnlineCanReady;
+
+        private const float OnlineSetupNoticeDuration = 2.5f;
 
         public bool IsReady { get { return initialized; } }
         public bool IsComposing { get { return compositionLength > 0; } }
@@ -108,6 +128,7 @@ namespace CameraCoop
 
         private void Awake()
         {
+            DisableRevealRichText();
             initialized = Validate();
             if (!initialized)
             {
@@ -123,8 +144,9 @@ namespace CameraCoop
                 && drawingHudRoots != null && drawingHudRoots.Length > 0 && !HasNullRoot()
                 && observeRoot != null && guessRoot != null && revealRoot != null && galleryRoot != null
                 && pauseShieldRoot != null && timerRoot != null
-                && players2Button != null && players3Button != null && players4Button != null
-                && startButton != null && readyButton != null && completeDrawingButton != null
+                && (useWorldLobbyActions || players2Button != null && players3Button != null
+                    && players4Button != null && startButton != null && readyButton != null)
+                && completeDrawingButton != null
                 && undoButton != null && clearButton != null && submitButton != null
                 && galleryButton != null && restartButton != null && resumeButton != null
                 && answerField != null && answerFocusButton != null
@@ -161,6 +183,7 @@ namespace CameraCoop
 
         private void Bind(HandButtonInteractable button, RelayQuizAction action)
         {
+            if (button == null) return;
             System.Action<HandClickContext> handler = context => Enqueue(action, context);
             bindings.Add(new KeyValuePair<HandButtonInteractable, System.Action<HandClickContext>>(button, handler));
         }
@@ -196,6 +219,11 @@ namespace CameraCoop
             SetTyping(false);
         }
 
+        private void Update()
+        {
+            UpdateOnlineSetupNotice(Time.unscaledTime);
+        }
+
         // down 시점 세대를 그대로 옮긴다. 검증은 controller가 현재 세대와 대조해서 한다.
         private void Enqueue(RelayQuizAction action, HandClickContext context)
         {
@@ -223,6 +251,9 @@ namespace CameraCoop
         public void ApplyState(RelayQuizLogic logic, RelayQuizPauseStage pauseStage)
         {
             if (!initialized || logic == null) return;
+            CancelOnlineSetupNotice();
+            ClearCachedOnlineView();
+            DisableRevealRichText();
             bool paused = pauseStage != RelayQuizPauseStage.None;
             RelayQuizState state = logic.State;
 
@@ -271,6 +302,158 @@ namespace CameraCoop
             {
                 if (drawingHudRoots[i] != null) drawingHudRoots[i].SetActive(active);
             }
+        }
+
+        public void ApplyOnlineView(OnlineRelayQuizView view, RelayQuizPauseStage pauseStage, bool hidden, bool canReady)
+        {
+            if (!initialized || view == null) return;
+            CacheOnlineView(view, pauseStage, hidden, canReady);
+            DisableRevealRichText();
+            bool shield = hidden || view.paused;
+            bool available = !shield && !view.aborted;
+            bool acting = available && view.active && !view.transferPending;
+            bool waiting = available && (view.transferPending || !view.active
+                && view.state != RelayQuizState.Setup && view.state != RelayQuizState.Reveal && view.state != RelayQuizState.Gallery);
+            UpdateOnlineSetupNotice(view, available);
+            bool showingNotice = available && onlineSetupNoticeActive;
+            setupRoot.SetActive(showingNotice);
+            handoverRoot.SetActive(!showingNotice && (waiting || acting && view.state == RelayQuizState.Handover));
+            wordRevealRoot.SetActive(!showingNotice && acting && view.state == RelayQuizState.WordReveal);
+            SetDrawingHud(!showingNotice && acting && view.state == RelayQuizState.Drawing);
+            observeRoot.SetActive(false);
+            guessRoot.SetActive(!showingNotice && acting && view.state == RelayQuizState.Guessing);
+            revealRoot.SetActive(!showingNotice && available && view.state == RelayQuizState.Reveal);
+            galleryRoot.SetActive(!showingNotice && available && view.state == RelayQuizState.Gallery);
+            pauseShieldRoot.SetActive(shield);
+            timerRoot.SetActive(!showingNotice && available && view.hasTimer && !view.transferPending);
+            SetActionActive(players2Button, false);
+            SetActionActive(players3Button, false);
+            SetActionActive(players4Button, false);
+            SetActionActive(startButton, false);
+            if (readyButton != null) readyButton.SetInteractable(acting && view.state == RelayQuizState.Handover);
+            completeDrawingButton.SetInteractable(acting && view.state == RelayQuizState.Drawing);
+            undoButton.SetInteractable(acting && view.state == RelayQuizState.Drawing);
+            clearButton.SetInteractable(acting && view.state == RelayQuizState.Drawing);
+            galleryButton.SetInteractable(available && view.isHost && !view.transferPending);
+            restartButton.SetInteractable(available && view.isHost && !view.transferPending);
+            resumeButton.SetInteractable(pauseStage == RelayQuizPauseStage.ResumeReady);
+            answerActive = acting && view.state == RelayQuizState.Guessing;
+            if (!answerActive) ReleaseAnswerFocus();
+            string rosterInfo = "Steam 4인 · " + view.rosterCount + "/" + OnlineRelayQuizProtocol.PlayerCount + "명 연결"
+                + "\n" + (view.allReady ? "4명 모두 준비 완료"
+                    : (view.localReady ? "내 ReadyPad 준비 완료" : "내 ReadyPad 준비 대기")
+                        + " · " + (view.remoteReady ? "나머지 3명 준비 완료" : "나머지 플레이어 준비 대기"))
+                + (canReady ? "\n각자 자기 ReadyPad에 손을 올려 준비하세요" : "\n카메라 연결을 기다리는 중");
+            setupInfoLabel.text = onlineSetupNoticeActive ? onlineSetupNotice : rosterInfo;
+            handoverLabel.text = view.transferPending ? "최종 데이터를 전송하는 중입니다"
+                : view.active ? "내 차례입니다\n준비되면 " + (useWorldLobbyActions ? "내 ReadyPad에서 준비하세요" : "손으로 준비를 눌러주세요")
+                    : "다른 플레이어 차례입니다 · 잠시 기다려주세요";
+            wordLabel.text = available ? view.word : string.Empty;
+            revealLabel.text = available && view.state == RelayQuizState.Reveal
+                ? "제시어: " + view.word + "\n제출한 답: " + (string.IsNullOrEmpty(view.answer) ? "(빈 답)" : view.answer)
+                    + "\n" + (view.correct ? "정답입니다" : "오답입니다") : string.Empty;
+            pauseLabel.text = hidden ? "창을 다시 활성화해주세요"
+                : !view.active ? "다른 플레이어가 일시정지했습니다"
+                : pauseStage == RelayQuizPauseStage.ResumeReady ? "일시정지 · 손 또는 mouse로 계속을 눌러주세요"
+                : "일시정지 · 창을 활성화하고 손을 카메라에 보여주세요";
+            UpdateOnlineTimer(view, shield);
+        }
+
+        private void UpdateOnlineSetupNotice(OnlineRelayQuizView view, bool canShow)
+        {
+            string notice = string.Empty;
+            if (!hasOnlineView)
+            {
+                if (view.rosterCount > 0) notice = RosterNotice(true, view.rosterCount);
+            }
+            else
+            {
+                if (!onlineModeStarted && view.modeStarted || view.startSignal > onlineStartSignal
+                    || onlineState == RelayQuizState.Setup && view.state != RelayQuizState.Setup)
+                {
+                    notice = "게임 시작\n릴레이 퀴즈를 시작합니다";
+                }
+                else if (view.rosterCount != onlineRosterCount)
+                {
+                    notice = RosterNotice(view.rosterCount > onlineRosterCount, view.rosterCount);
+                }
+            }
+
+            hasOnlineView = true;
+            onlineRosterCount = view.rosterCount;
+            onlineModeStarted = view.modeStarted;
+            onlineStartSignal = view.startSignal;
+            onlineState = view.state;
+            if (!canShow)
+            {
+                CancelOnlineSetupNotice();
+                return;
+            }
+            if (string.IsNullOrEmpty(notice)) return;
+            onlineSetupNotice = notice;
+            onlineSetupNoticeUntil = Time.unscaledTime + OnlineSetupNoticeDuration;
+            onlineSetupNoticeActive = true;
+        }
+
+        private void UpdateOnlineSetupNotice(float now)
+        {
+            if (!onlineSetupNoticeActive || now < onlineSetupNoticeUntil) return;
+            CancelOnlineSetupNotice();
+            if (cachedOnlineView != null)
+                ApplyOnlineView(cachedOnlineView, cachedOnlinePauseStage, cachedOnlineHidden, cachedOnlineCanReady);
+            else SetRootActive(setupRoot, false);
+        }
+
+        private static string RosterNotice(bool joined, int rosterCount)
+        {
+            return "플레이어 " + (joined ? "입장" : "퇴장") + " · 현재 " + rosterCount + "명";
+        }
+
+        private void CancelOnlineSetupNotice()
+        {
+            onlineSetupNoticeActive = false;
+            onlineSetupNotice = string.Empty;
+            onlineSetupNoticeUntil = 0f;
+        }
+
+        private void CacheOnlineView(OnlineRelayQuizView view, RelayQuizPauseStage pauseStage, bool hidden, bool canReady)
+        {
+            cachedOnlineView = view;
+            cachedOnlinePauseStage = pauseStage;
+            cachedOnlineHidden = hidden;
+            cachedOnlineCanReady = canReady;
+        }
+
+        private void ClearCachedOnlineView()
+        {
+            cachedOnlineView = null;
+            cachedOnlinePauseStage = RelayQuizPauseStage.None;
+            cachedOnlineHidden = false;
+            cachedOnlineCanReady = false;
+        }
+
+        public void UpdateOnlineTimer(OnlineRelayQuizView view, bool hidden)
+        {
+            if (!initialized || view == null) return;
+            int seconds = hidden || view.paused || view.transferPending || !view.hasTimer
+                ? -1 : Mathf.Max(0, Mathf.CeilToInt(view.remaining));
+            if (seconds == shownSeconds) return;
+            shownSeconds = seconds;
+            timerLabel.text = seconds < 0 ? string.Empty : seconds + "초";
+        }
+
+        public bool ProcessOnlineResumePointer(Vector2 position, bool pressed, bool released, int generation, bool canResume)
+        {
+            if (!initialized || !canResume || !pauseShieldRoot.activeInHierarchy || resumeButton == null)
+            { onlineResumeDown = false; return false; }
+            Canvas canvas = resumeButton.GetComponentInParent<Canvas>();
+            Camera camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+            bool inside = RectTransformUtility.RectangleContainsScreenPoint(resumeButton.transform as RectTransform, position, camera);
+            if (!inside) onlineResumeDown = false;
+            if (pressed) { onlineResumeDown = inside; onlineResumeGeneration = generation; }
+            bool clicked = released && inside && onlineResumeDown && onlineResumeGeneration == generation;
+            if (released) onlineResumeDown = false;
+            return clicked;
         }
 
         private static string BuildRevealText(RelayQuizLogic logic)
@@ -330,6 +513,13 @@ namespace CameraCoop
             {
                 answerField.DeactivateInputField();
             }
+            EventSystem eventSystem = EventSystem.current;
+            GameObject selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
+            if (answerField != null && selected != null
+                && (selected == answerField.gameObject || selected.transform.IsChildOf(answerField.transform)))
+            {
+                eventSystem.SetSelectedGameObject(null);
+            }
             compositionLength = 0;
             SetTyping(false);
             Keyboard keyboard = Keyboard.current;
@@ -356,6 +546,8 @@ namespace CameraCoop
 
         public void HideAll()
         {
+            CancelOnlineSetupNotice();
+            ClearCachedOnlineView();
             SetRootActive(setupRoot, false);
             SetRootActive(handoverRoot, false);
             SetRootActive(wordRevealRoot, false);
@@ -376,6 +568,17 @@ namespace CameraCoop
         private static void SetRootActive(GameObject root, bool active)
         {
             if (root != null) root.SetActive(active);
+        }
+
+        private static void SetActionActive(HandButtonInteractable button, bool active)
+        {
+            if (button != null) button.gameObject.SetActive(active);
+        }
+
+        // Answers can come from another player, so never let Unity parse their markup.
+        private void DisableRevealRichText()
+        {
+            if (revealLabel != null) revealLabel.supportRichText = false;
         }
 
         private void RefreshKeyboardSubscription()

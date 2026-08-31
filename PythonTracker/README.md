@@ -83,6 +83,18 @@ PythonTracker/.venv/bin/python PythonTracker/hand_tracker.py
 PythonTracker\.venv\Scripts\python.exe PythonTracker\hand_tracker.py
 ```
 
+카메라는 OS webcam device index를 그대로 사용한다. Camo 등 phone virtual camera도 Windows에 연결되어 OpenCV device로 노출되면 같은 경로로 선택된다.
+
+```powershell
+# 열리고 첫 frame을 읽은 장치만 JSON으로 출력
+PythonTracker\.venv\Scripts\python.exe PythonTracker\hand_tracker.py --list-cameras
+# 특정 장치를 고정 선택하고 preview 제어
+PythonTracker\.venv\Scripts\python.exe PythonTracker\hand_tracker.py --camera 1 --preview
+PythonTracker\.venv\Scripts\python.exe PythonTracker\hand_tracker.py --camera 1 --no-preview
+```
+
+`--camera`가 열리지 않으면 즉시 오류로 종료하며 다른 장치로 자동 전환하지 않는다. `--list-cameras`는 bounded index(0~9)를 probe한다.
+
 - 프리뷰 창이 뜨면 `q` 키로 종료. 콘솔에서는 `Ctrl+C`로 종료 가능.
 - 웹캠이 없거나 모델 파일이 없으면 원인을 알려주는 메시지와 함께 즉시 종료한다. 카메라 권한 안내는 실행 중인 OS에 맞춰 나온다.
 - 설정값(카메라 인덱스, 필터 파라미터 등)은 전부 `config.py`에서 관리한다.

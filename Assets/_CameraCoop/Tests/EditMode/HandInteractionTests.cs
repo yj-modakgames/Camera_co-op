@@ -181,6 +181,18 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void LocalRouter_CoplanarUnregisteredCanvasCannotShadowRegisteredCanvas()
+        {
+            var stale = Root("coplanar stale canvas");
+            stale.transform.position = surface.transform.position + Vector3.back * .00001f;
+            stale.AddComponent<CanvasSurface>();
+            stale.AddComponent<BoxCollider>().size = new Vector3(1f, 1f, .01f);
+            Physics.SyncTransforms();
+
+            Assert.AreSame(canvas, Resolve());
+        }
+
+        [Test]
         public void LocalRouter_DrawingGateBlocksPhysicsCanvas()
         {
             Assert.AreSame(canvas, Resolve());
@@ -194,19 +206,74 @@ namespace CameraCoop.Tests
         [Test]
         public void LocalRouter_GapThenHeldReentryRequiresFreshOpenSamples()
         {
-            Send(1, 0f, false, canvas);
-            Send(2, 0.11f, false, canvas);
-            Send(3, 0.12f, true, canvas);
-            Send(4, 0.13f, true, null);
-            Send(5, 0.14f, true, canvas);
+            SendGesture(1, 0f, false, false, canvas);
+            SendGesture(2, 0.11f, false, false, canvas);
+            SendGesture(3, 0.12f, false, true, canvas);
+            SendGesture(4, 0.13f, false, true, null);
+            SendGesture(5, 0.14f, false, true, canvas);
             CollectionAssert.AreEqual(new[] { "start:Left", "end:Left" }, strokeEvents);
-            Send(6, 0.15f, false, canvas);
-            Send(7, 0.26f, false, canvas);
-            Send(8, 0.27f, true, canvas);
+            SendGesture(6, 0.15f, false, false, canvas);
+            SendGesture(7, 0.26f, false, false, canvas);
+            SendGesture(8, 0.27f, false, true, canvas);
             Assert.AreEqual("start:Left", strokeEvents[2]);
             router.CancelCanvasCaptures(HandCancelReason.DrawingCommand);
-            Send(9, 0.28f, true, canvas);
+            SendGesture(9, 0.28f, false, true, canvas);
             Assert.AreEqual(4, strokeEvents.Count);
+        }
+
+        [Test]
+        public void LocalRouter_FistDrawsCanvasAndOpenHandEndsThenRearmsFresh()
+        {
+            SendGesture(1, 0f, false, false, canvas);
+            SendGesture(2, 0.11f, false, false, canvas);
+            SendGesture(3, 0.12f, false, true, canvas);
+            SendGesture(4, 0.13f, false, true, canvas);
+            SendGesture(5, 0.14f, false, false, canvas);
+            SendGesture(6, 0.15f, false, true, canvas);
+
+            CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, strokeEvents,
+                "Held fist cannot restart until a fresh open-hand rearm interval completes.");
+
+            SendGesture(7, 0.25f, false, false, canvas);
+            SendGesture(8, 0.36f, false, false, canvas);
+            SendGesture(9, 0.37f, false, true, canvas);
+
+            Assert.AreEqual("start:Left", strokeEvents[3]);
+        }
+
+        [Test]
+        public void LocalRouter_PinchOnCanvasDoesNotStartFistStroke()
+        {
+            SendGesture(1, 0f, false, false, canvas);
+            SendGesture(2, 0.11f, false, false, canvas);
+            SendGesture(3, 0.12f, true, false, canvas);
+            SendGesture(4, 0.13f, false, false, canvas);
+
+            Assert.IsEmpty(strokeEvents);
+        }
+
+        [Test]
+        public void PersonalCanvasTransition_CancelsActiveStrokeOnceAndBothStatesStayWritable()
+        {
+            Type placementType = typeof(HandPointer).Assembly.GetType("CameraCoop.PersonalCanvasPlacement");
+            Assert.IsNotNull(placementType);
+            Component placement = surface.gameObject.AddComponent(placementType);
+            Transform avatarAnchor = Root("owner avatar anchor").transform;
+            Transform dockAnchor = Root("owner dock center").transform;
+            dockAnchor.position = surface.transform.position;
+            Set(placement, "handInputRouter", router);
+            Set(placement, "handPointer", pointer);
+            placementType.GetMethod("Configure").Invoke(placement, new object[] { "owner", avatarAnchor, dockAnchor, .5f });
+
+            Pointer("BeginCanvasStroke", "Left", surface, Vector2.one * .5f);
+            Assert.IsTrue((bool)placementType.GetMethod("TryCarry").Invoke(placement, new object[] { "owner" }));
+            Assert.IsFalse((bool)placementType.GetMethod("TryCarry").Invoke(placement, new object[] { "owner" }));
+            CollectionAssert.AreEqual(new[] { "start:Left", "end:Left" }, strokeEvents);
+
+            Pointer("BeginCanvasStroke", "Left", surface, Vector2.one * .5f);
+            avatarAnchor.position = dockAnchor.position;
+            Assert.IsTrue((bool)placementType.GetMethod("TryDock").Invoke(placement, new object[] { "owner" }));
+            CollectionAssert.AreEqual(new[] { "start:Left", "end:Left", "start:Left", "end:Left" }, strokeEvents);
         }
 
         [Test]
@@ -221,7 +288,20 @@ namespace CameraCoop.Tests
 
         private HandInteractable Resolve() => router.ResolveTarget(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), out _, out _);
         private void Send(ulong id, float now, bool pinched, HandInteractable target) => router.ProcessSample(Sample(id, pinched), now, target, surface.NormToWorld(Vector2.one * 0.5f));
+        private void SendGesture(ulong id, float now, bool pinched, bool fist, HandInteractable target) =>
+            router.ProcessSample(GestureSample(id, pinched, fist), now, target, surface.NormToWorld(Vector2.one * 0.5f));
         private static HandInputSample Sample(ulong id, bool pinched, string hand = "Left") => new HandInputSample(hand, new Vector2(50f, 50f), (uint)id, id, 0f, true, pinched, HandCancelReason.None);
+        private static HandInputSample GestureSample(ulong id, bool pinched, bool fist, string hand = "Left")
+        {
+            ConstructorInfo constructor = typeof(HandInputSample).GetConstructor(new[]
+            {
+                typeof(string), typeof(Vector2), typeof(uint), typeof(ulong), typeof(float), typeof(bool),
+                typeof(bool), typeof(HandCancelReason), typeof(bool)
+            });
+            Assert.IsNotNull(constructor, "HandInputSample needs a source-compatible fist argument appended to its constructor.");
+            return (HandInputSample)constructor.Invoke(new object[]
+                { hand, new Vector2(50f, 50f), (uint)id, id, 0f, true, pinched, HandCancelReason.None, fist });
+        }
         private void Pointer(string name, params object[] args)
         {
             MethodInfo method = typeof(HandPointer).GetMethod(name, BindingFlags.Instance | BindingFlags.Public);
@@ -246,6 +326,34 @@ namespace CameraCoop.Tests
 
 namespace CameraCoop.Tests
 {
+    // HandInputRouter owns ordering/blocking policy, while Unity owns Graphic rendering.
+    // EditMode can leave Graphic.depth at -1 until a Game view has rendered once, so this
+    // test raycaster emits the same overlay hit descriptors without depending on editor focus.
+    internal sealed class DeterministicOverlayRaycaster : GraphicRaycaster
+    {
+        public override void Raycast(PointerEventData eventData, List<RaycastResult> resultAppendList)
+        {
+            Graphic[] graphics = GetComponentsInChildren<Graphic>(false);
+            Canvas overlay = GetComponent<Canvas>();
+            for (int index = 0; index < graphics.Length; index++)
+            {
+                Graphic graphic = graphics[index];
+                if (graphic == null || !graphic.isActiveAndEnabled || !graphic.raycastTarget) continue;
+                resultAppendList.Add(new RaycastResult
+                {
+                    gameObject = graphic.gameObject,
+                    module = this,
+                    distance = 0f,
+                    index = resultAppendList.Count,
+                    depth = index,
+                    sortingLayer = overlay != null ? overlay.sortingLayerID : 0,
+                    sortingOrder = overlay != null ? overlay.sortingOrder : 0,
+                    screenPosition = eventData.position
+                });
+            }
+        }
+    }
+
     public class HandInputRouterTests
     {
         private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -570,7 +678,7 @@ namespace CameraCoop.Tests
             modes.SetContext(InputContext.Drawing);
             a.canvas = true;
             ArmBoth(a, b);
-            Send(3, 0.12f, true, a, "Left");
+            Send(3, 0.12f, false, a, "Left", true);
             Send(3, 0.12f, true, b, "Right");
             router.CancelCanvasCaptures(HandCancelReason.DrawingCommand);
             router.CancelCanvasCaptures(HandCancelReason.DrawingCommand);
@@ -852,15 +960,14 @@ namespace CameraCoop.Tests
             }
         }
 
-        [UnityTest]
-        public IEnumerator GraphicRaycast_HigherOverlaySortOrderWinsRegardlessOfArrayOrder()
+        [Test]
+        public void GraphicRaycast_HigherOverlaySortOrderWinsRegardlessOfArrayOrder()
         {
             GraphicRaycaster low = CreateOverlay(1, out RectTransform lowRoot);
             GraphicRaycaster high = CreateOverlay(9, out RectTransform highRoot);
             AddFullScreenImage(lowRoot, "low target").gameObject.AddComponent<HandInteractionProbe>();
             HandInteractionProbe expected = AddFullScreenImage(highRoot, "high target").gameObject.AddComponent<HandInteractionProbe>();
             SetField(router, "uiRaycasters", new[] { low, high });
-            yield return WaitForCanvasRender(low, high);
 
             HandInteractable actual = router.ResolveTarget(ScreenCenter(), out _, out bool blocked);
 
@@ -868,14 +975,13 @@ namespace CameraCoop.Tests
             Assert.AreSame(expected, actual);
         }
 
-        [UnityTest]
-        public IEnumerator GraphicRaycast_TopNonTargetGraphicBlocksUnderlyingTarget()
+        [Test]
+        public void GraphicRaycast_TopNonTargetGraphicBlocksUnderlyingTarget()
         {
             GraphicRaycaster raycaster = CreateOverlay(1, out RectTransform canvas);
             AddFullScreenImage(canvas, "underlying target").gameObject.AddComponent<HandInteractionProbe>();
             AddFullScreenImage(canvas, "blocking panel");
             SetField(router, "uiRaycasters", new[] { raycaster });
-            yield return WaitForCanvasRender(raycaster);
 
             HandInteractable actual = router.ResolveTarget(ScreenCenter(), out _, out bool blocked);
 
@@ -883,19 +989,19 @@ namespace CameraCoop.Tests
             Assert.IsNull(actual);
         }
 
-        [UnityTest]
-        public IEnumerator GraphicRaycast_DisabledAdapterStillBlocks()
+        [Test]
+        public void GraphicRaycast_DisabledAdapterStillBlocks()
         {
-            return VerifyUnavailableButtonBlocks(true);
+            VerifyUnavailableButtonBlocks(true);
         }
 
-        [UnityTest]
-        public IEnumerator GraphicRaycast_NonInteractableButtonStillBlocks()
+        [Test]
+        public void GraphicRaycast_NonInteractableButtonStillBlocks()
         {
-            return VerifyUnavailableButtonBlocks(false);
+            VerifyUnavailableButtonBlocks(false);
         }
 
-        private IEnumerator VerifyUnavailableButtonBlocks(bool disableAdapter)
+        private void VerifyUnavailableButtonBlocks(bool disableAdapter)
         {
             GraphicRaycaster raycaster = CreateOverlay(1, out RectTransform canvas);
             AddFullScreenImage(canvas, "underlying target").gameObject.AddComponent<HandInteractionProbe>();
@@ -905,55 +1011,11 @@ namespace CameraCoop.Tests
             if (disableAdapter) adapter.enabled = false;
             else button.interactable = false;
             SetField(router, "uiRaycasters", new[] { raycaster });
-            yield return WaitForCanvasRender(raycaster);
 
             HandInteractable actual = router.ResolveTarget(ScreenCenter(), out _, out bool blocked);
 
             Assert.IsTrue(blocked);
             Assert.IsNull(actual);
-        }
-
-        private static IEnumerator WaitForCanvasRender(params GraphicRaycaster[] raycasters)
-        {
-            EditorWindow previousFocus = EditorWindow.focusedWindow;
-            try
-            {
-                Assert.IsTrue(EditorApplication.ExecuteMenuItem("Window/General/Game"), "The Editor Game view must be available for real overlay rendering.");
-                for (int frame = 0; frame < 30; frame++)
-                {
-                    Canvas.ForceUpdateCanvases();
-                    bool rendered = true;
-                    foreach (GraphicRaycaster raycaster in raycasters)
-                    {
-                        IList<Graphic> graphics = GraphicRegistry.GetRaycastableGraphicsForCanvas(raycaster.GetComponent<Canvas>());
-                        rendered &= graphics.Count > 0;
-                        for (int i = 0; i < graphics.Count; i++)
-                        {
-                            rendered &= graphics[i].depth >= 0;
-                        }
-                    }
-                    if (rendered)
-                    {
-                        yield break;
-                    }
-                    EditorApplication.QueuePlayerLoopUpdate();
-                    UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
-                    yield return null;
-                }
-                foreach (GraphicRaycaster raycaster in raycasters)
-                {
-                    IList<Graphic> graphics = GraphicRegistry.GetRaycastableGraphicsForCanvas(raycaster.GetComponent<Canvas>());
-                    Assert.Greater(graphics.Count, 0, raycaster.name + " has no registered raycast graphics.");
-                    for (int i = 0; i < graphics.Count; i++)
-                    {
-                        Assert.GreaterOrEqual(graphics[i].depth, 0, graphics[i].name + " did not render within 30 Editor frames.");
-                    }
-                }
-            }
-            finally
-            {
-                if (previousFocus != null) previousFocus.Focus();
-            }
         }
 
         private void Arm(ulong id = 1, float start = 0f, string hand = "Left", HandInteractable target = null)
@@ -977,15 +1039,15 @@ namespace CameraCoop.Tests
             Send(2, 0.11f, false, right, "Right");
         }
 
-        private void Send(ulong id, float now, bool pinched, HandInteractable target, string hand = "Left")
+        private void Send(ulong id, float now, bool pinched, HandInteractable target, string hand = "Left", bool fisted = false)
         {
-            router.ProcessSample(Sample(id, pinched, hand), now, target, Vector3.zero);
+            router.ProcessSample(Sample(id, pinched, hand, fist: fisted), now, target, Vector3.zero);
         }
 
         private static HandInputSample Sample(ulong id, bool pinched, string hand = "Left", float age = 0f,
-            bool tracked = true, HandCancelReason reason = HandCancelReason.None, uint? sequence = null)
+            bool tracked = true, HandCancelReason reason = HandCancelReason.None, uint? sequence = null, bool fist = false)
         {
-            return new HandInputSample(hand, new Vector2(50f, 50f), sequence ?? (uint)id, id, age, tracked, pinched, reason);
+            return new HandInputSample(hand, new Vector2(50f, 50f), sequence ?? (uint)id, id, age, tracked, pinched, reason, fist);
         }
 
         private GraphicRaycaster AssignValidStartReferences(out AudioClip hoverClip, out AudioClip clickClip)
@@ -1036,7 +1098,7 @@ namespace CameraCoop.Tests
 
         private GraphicRaycaster CreateOverlay(int sortingOrder, out RectTransform root)
         {
-            GameObject canvasObject = CreateRoot("overlay " + sortingOrder, typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
+            GameObject canvasObject = CreateRoot("overlay " + sortingOrder, typeof(RectTransform), typeof(Canvas), typeof(DeterministicOverlayRaycaster));
             Canvas canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = sortingOrder;

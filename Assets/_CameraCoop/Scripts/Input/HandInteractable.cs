@@ -8,6 +8,7 @@ namespace CameraCoop
         public virtual bool IsCanvas => false;
         public virtual bool RequiresInside => true;
         public virtual bool Exclusive => !IsCanvas;
+        public virtual bool UsesWorldHitPosition => false;
         public virtual string DisplayName => gameObject.name;
         public virtual float ClickPitch => 1f;
         internal uint LifecycleRevision { get; private set; }

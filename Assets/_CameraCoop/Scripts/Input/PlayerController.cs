@@ -18,13 +18,18 @@ namespace CameraCoop
         [SerializeField, Min(0f)] private float moveSpeed = 3f;           // m/s
         [SerializeField, Min(0f)] private float lookSensitivity = 0.12f;  // deg / 마우스 픽셀
         [SerializeField] private float gravity = -20f;
+        [SerializeField, Min(0f)] private float jumpHeight = 1.5f;
         [SerializeField] private Vector2 minXZ = new Vector2(-5.5f, -8.75f); // 벽 실측값 - 여유 0.5m (docs/11 §4)
         [SerializeField] private Vector2 maxXZ = new Vector2(5.5f, 0.65f);
         [SerializeField, Range(0f, 89f)] private float maxPitch = 80f;
 
         private float pitch;
         private float verticalVelocity;
+        private bool jumpRequested;
         private bool localInputReady;
+        private bool useConfiguredMovementBounds;
+        private Vector2 configuredMinXZ;
+        private Vector2 configuredMaxXZ;
 
         private bool HasLocalReferences => playerCamera != null && characterController != null && inputModeManager != null;
         private bool CanMoveLocally => enabled && localInputReady && HasLocalReferences && inputModeManager.CanMove;
@@ -40,7 +45,6 @@ namespace CameraCoop
             if (!localInputReady)
             {
                 Debug.LogError("PlayerController ModalFirstPerson requires explicit playerCamera, characterController, and inputModeManager references. Local input is disabled.", this);
-                enabled = false;
                 return;
             }
             pitch = Mathf.DeltaAngle(0f, playerCamera.localEulerAngles.x);
@@ -76,6 +80,7 @@ namespace CameraCoop
 
         private void UpdateModalInput()
         {
+            EnsureLocalInputReady();
             if (!CanMoveLocally)
             {
                 verticalVelocity = 0f;
@@ -84,6 +89,10 @@ namespace CameraCoop
             ApplyLook();
 
             Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
+            {
+                RequestJump();
+            }
             Vector2 input = keyboard == null ? Vector2.zero : new Vector2(
                 (keyboard[Key.D].isPressed ? 1f : 0f) - (keyboard[Key.A].isPressed ? 1f : 0f),
                 (keyboard[Key.W].isPressed ? 1f : 0f) - (keyboard[Key.S].isPressed ? 1f : 0f));
@@ -95,9 +104,11 @@ namespace CameraCoop
         {
             if (controlProfile == PlayerControlProfile.ModalFirstPerson)
             {
+                EnsureLocalInputReady();
                 if (!CanMoveLocally)
                 {
                     verticalVelocity = 0f;
+                    jumpRequested = false;
                     return;
                 }
                 Vector3 movement = PlayerMoveLogic.Step(input, transform.eulerAngles.y, moveSpeed, deltaTime);
@@ -105,6 +116,11 @@ namespace CameraCoop
                 {
                     verticalVelocity = 0f;
                 }
+                if (jumpRequested && characterController.isGrounded)
+                {
+                    verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                }
+                jumpRequested = false;
                 verticalVelocity += gravity * deltaTime;
                 movement.y = verticalVelocity * deltaTime;
                 CollisionFlags collisions = characterController.Move(movement);
@@ -112,10 +128,44 @@ namespace CameraCoop
                 {
                     verticalVelocity = 0f;
                 }
+                if ((collisions & CollisionFlags.Above) != 0 && verticalVelocity > 0f)
+                {
+                    verticalVelocity = 0f;
+                }
+                if (useConfiguredMovementBounds)
+                {
+                    Vector3 clamped = PlayerMoveLogic.ClampToRoom(transform.position, configuredMinXZ, configuredMaxXZ);
+                    if ((clamped - transform.position).sqrMagnitude > 0f)
+                    {
+                        bool wasEnabled = characterController.enabled;
+                        characterController.enabled = false;
+                        transform.position = clamped;
+                        characterController.enabled = wasEnabled;
+                    }
+                }
                 return;
             }
             Vector3 next = transform.position + PlayerMoveLogic.Step(input, transform.eulerAngles.y, moveSpeed, deltaTime);
             transform.position = PlayerMoveLogic.ClampToRoom(next, minXZ, maxXZ);
+        }
+
+        public void RequestJump()
+        {
+            EnsureLocalInputReady();
+            if (!CanMoveLocally || !characterController.isGrounded)
+            {
+                return;
+            }
+            jumpRequested = true;
+        }
+
+        private void EnsureLocalInputReady()
+        {
+            if (controlProfile == PlayerControlProfile.ModalFirstPerson && !localInputReady && HasLocalReferences)
+            {
+                localInputReady = true;
+                pitch = Mathf.DeltaAngle(0f, playerCamera.localEulerAngles.x);
+            }
         }
 
         // 차폐 중 작업·갤러리 시점 정렬 (docs/06 §6). CharacterController 제약을 배치 구간에서만 끈다.
@@ -136,7 +186,21 @@ namespace CameraCoop
             characterController.enabled = wasEnabled;
             pitch = 0f;
             verticalVelocity = 0f;
+            jumpRequested = false;
             playerCamera.localRotation = Quaternion.identity;
+        }
+
+        public void ConfigureMovementBounds(Vector2 minimumXZ, Vector2 maximumXZ, bool enabled)
+        {
+            if (float.IsNaN(minimumXZ.x) || float.IsInfinity(minimumXZ.x)
+                || float.IsNaN(minimumXZ.y) || float.IsInfinity(minimumXZ.y)
+                || float.IsNaN(maximumXZ.x) || float.IsInfinity(maximumXZ.x)
+                || float.IsNaN(maximumXZ.y) || float.IsInfinity(maximumXZ.y)
+                || minimumXZ.x > maximumXZ.x || minimumXZ.y > maximumXZ.y)
+                throw new System.ArgumentException("Movement bounds require finite ordered XZ values.");
+            configuredMinXZ = minimumXZ;
+            configuredMaxXZ = maximumXZ;
+            useConfiguredMovementBounds = enabled;
         }
 
         private void ApplyLook()

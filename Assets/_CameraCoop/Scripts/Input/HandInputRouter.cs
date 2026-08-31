@@ -33,6 +33,7 @@ namespace CameraCoop
             public bool fresh;
             public bool armed;
             public bool wasPinched;
+            public bool wasFist;
             public float sourceTime;
             public float openStartedAt;
             public int openSamples;
@@ -49,6 +50,7 @@ namespace CameraCoop
         private readonly HandRuntime left = new HandRuntime();
         private readonly HandRuntime right = new HandRuntime();
         private readonly List<RaycastResult> raycastResults = new List<RaycastResult>();
+        private readonly RaycastHit[] canvasRaycastHits = new RaycastHit[32];
         private readonly Dictionary<HandInteractable, float> lastClicks = new Dictionary<HandInteractable, float>();
         private HandCursorController subscribedCursor;
         private InputModeManager subscribedModes;
@@ -240,6 +242,7 @@ namespace CameraCoop
                 hand.sample = sample;
                 hand.fresh = false;
                 hand.wasPinched = false;
+                hand.wasFist = false;
                 HandCancelReason reason = sample.cancelReason != HandCancelReason.None ? sample.cancelReason :
                     (IsFinite(sample.sampleAgeSeconds) && sample.sampleAgeSeconds > inputFreshnessSeconds ?
                         HandCancelReason.StaleSample : HandCancelReason.InvalidSample);
@@ -254,14 +257,17 @@ namespace CameraCoop
                 ResetRearm(hand);
             }
             bool wasPinched = hand.wasPinched;
-            bool canPress = !wasPinched && sample.isPinched && hand.armed;
+            bool wasFist = hand.wasFist;
+            bool canPinchPress = !wasPinched && sample.isPinched && hand.armed;
+            bool canFistPress = !wasFist && sample.isFist && hand.armed;
             hand.sample = sample;
             hand.hasSample = true;
             hand.fresh = true;
             hand.sourceTime = sourceTime;
             hand.wasPinched = sample.isPinched;
+            hand.wasFist = sample.isFist;
             hand.revision++;
-            if (sample.isPinched)
+            if (sample.isPinched || sample.isFist)
             {
                 ResetRearm(hand);
             }
@@ -292,22 +298,25 @@ namespace CameraCoop
 
             if (HasCapture(hand))
             {
-                Vector3 capturePosition = hand.capture.IsCanvas ? hitPosition : (Vector3)sample.screenPosition;
+                Vector3 capturePosition = PositionFor(hand.capture, sample, hitPosition);
                 hand.capturePosition = capturePosition;
-                if (sample.isPinched)
+                bool held = hand.capture.IsCanvas ? sample.isFist : sample.isPinched;
+                bool wasHeld = hand.capture.IsCanvas ? wasFist : wasPinched;
+                if (held)
                 {
                     hand.capture.Hold(sample, capturePosition);
                 }
-                else if (wasPinched)
+                else if (wasHeld)
                 {
                     ReleaseCapture(hand, capturePosition, now);
                 }
             }
-            else if (canPress && IsAvailable(target) && CanDeliver(target) && !OwnedByOtherHand(hand, target))
+            else if (IsAvailable(target) && CanDeliver(target) && !OwnedByOtherHand(hand, target) &&
+                (target.IsCanvas ? canFistPress : canPinchPress))
             {
                 hand.capture = target;
                 hand.captureRevision = target.LifecycleRevision;
-                hand.capturePosition = target.IsCanvas ? hitPosition : (Vector3)sample.screenPosition;
+                hand.capturePosition = PositionFor(target, sample, hitPosition);
                 hand.pressContext = new HandClickContext(sample.handedness, viewGeneration, sample.sampleId);
                 target.Press(sample, hand.capturePosition, hand.pressContext);
             }
@@ -560,7 +569,7 @@ namespace CameraCoop
             }
             if (raycastResults.Count == 0)
             {
-                return ResolveCanvas(screenPosition, out hitPosition);
+                return ResolveWorldTarget(screenPosition, out hitPosition);
             }
             raycastResults.Sort(CompareRaycasts);
             RaycastResult top = raycastResults[0];
@@ -570,17 +579,35 @@ namespace CameraCoop
             return IsAvailable(target) ? target : null;
         }
 
-        private HandInteractable ResolveCanvas(Vector2 screenPosition, out Vector3 hitPosition)
+        private HandInteractable ResolveWorldTarget(Vector2 screenPosition, out Vector3 hitPosition)
         {
             hitPosition = screenPosition;
-            if (inputModeManager == null || !inputModeManager.CanDraw || playerCamera == null ||
-                !IsAvailable(activeCanvas) || !IsRegisteredCanvas(activeCanvas)) return null;
-            if (!Physics.Raycast(playerCamera.ScreenPointToRay(screenPosition), out RaycastHit hit, maxDistance)) return null;
-            CanvasSurface surface = hit.collider.GetComponentInParent<CanvasSurface>();
-            HandCanvasInteractable target = hit.collider.GetComponentInParent<HandCanvasInteractable>();
-            if (target != activeCanvas || surface != activeCanvas.Surface) return null;
-            hitPosition = hit.point;
-            return target;
+            if (playerCamera == null) return null;
+
+            int hitCount = Physics.RaycastNonAlloc(playerCamera.ScreenPointToRay(screenPosition), canvasRaycastHits,
+                maxDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (hitCount == 0) return null;
+
+            float nearestDistance = float.PositiveInfinity;
+            for (int i = 0; i < hitCount; i++)
+            {
+                nearestDistance = Mathf.Min(nearestDistance, canvasRaycastHits[i].distance);
+            }
+
+            const float coplanarTolerance = 0.0001f;
+            for (int i = 0; i < hitCount; i++)
+            {
+                RaycastHit hit = canvasRaycastHits[i];
+                if (hit.distance > nearestDistance + coplanarTolerance) continue;
+
+                HandInteractable candidate = hit.collider.GetComponentInParent<HandInteractable>();
+                if (candidate == null || !candidate.UsesWorldHitPosition || !IsAvailable(candidate)) continue;
+                if (candidate is HandCanvasInteractable &&
+                    (inputModeManager == null || !inputModeManager.CanDraw || candidate != activeCanvas || !IsRegisteredCanvas(candidate))) continue;
+                hitPosition = hit.point;
+                return candidate;
+            }
+            return null;
         }
 
         private static int CompareRaycasts(RaycastResult leftHit, RaycastResult rightHit)
@@ -639,6 +666,11 @@ namespace CameraCoop
             {
                 hoverStatusLabel.text = leftHover ? left.hover.DisplayName : rightHover ? right.hover.DisplayName : string.Empty;
             }
+        }
+
+        private static Vector3 PositionFor(HandInteractable target, HandInputSample sample, Vector3 worldHit)
+        {
+            return target != null && target.UsesWorldHitPosition ? worldHit : (Vector3)sample.screenPosition;
         }
     }
 }

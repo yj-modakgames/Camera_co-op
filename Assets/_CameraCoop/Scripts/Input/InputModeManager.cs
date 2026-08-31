@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -33,20 +34,37 @@ namespace CameraCoop
         private bool wasTyping;
         private bool cameraControlAvailable;
         private bool cameraPreparing;
+        private bool drawingMovementAllowed;
+        private static readonly Type TmpInputFieldType = Type.GetType("TMPro.TMP_InputField, Unity.TextMeshPro");
 
         public InputContext CurrentContext => context;
         public InputMode CurrentMode => hasFocus && !IsCameraPreparing && context == InputContext.Explore ? requestedMode : InputMode.Interact;
-        public bool CanMove => hasFocus && context == InputContext.Explore && !InputFocus.IsTyping && CurrentMode == InputMode.Move;
+        public bool DrawingMovementAllowed => drawingMovementAllowed;
+        public bool CanMove => hasFocus && !IsCameraPreparing && !InputFocus.IsTyping
+            && (context == InputContext.Explore && CurrentMode == InputMode.Move
+                || context == InputContext.Drawing && drawingMovementAllowed);
         public bool CanLook => CanMove;
         public bool CanUseHandUi => hasFocus && !IsCameraPreparing && context != InputContext.Blocked && CurrentMode == InputMode.Interact;
         public bool CanDraw => hasFocus && !IsCameraPreparing && context == InputContext.Drawing && !InputFocus.IsTyping;
         public bool CanToggleMode => hasFocus && !IsCameraPreparing && context == InputContext.Explore && !InputFocus.IsTyping;
-        public bool CanUseCameraMouse => cameraControlAvailable && hasFocus && context != InputContext.Blocked && CurrentMode == InputMode.Interact;
+        // Blocked에서도 캠이 수신 중이 아니면 재시도만은 허용한다. 차폐 중 캠이 끊기면
+        // 이 경로 말고는 복구 수단이 없다 (docs/06 §9, docs/09 §7).
+        public bool CanUseCameraMouse => cameraControlAvailable && hasFocus && CurrentMode == InputMode.Interact
+            && !InputFocus.IsTyping && !HasSelectedTextInput()
+            && (context != InputContext.Blocked || IsCameraPreparing);
 
-        internal CursorLockMode DesiredCursorLockState => hasFocus && CurrentMode == InputMode.Move ? CursorLockMode.Locked : CursorLockMode.None;
-        internal bool DesiredCursorVisible => !hasFocus || cameraControlAvailable && CurrentMode == InputMode.Interact;
+        internal CursorLockMode DesiredCursorLockState => CanLook ? CursorLockMode.Locked : CursorLockMode.None;
+        internal bool DesiredCursorVisible => !hasFocus || !CanLook && cameraControlAvailable && CurrentMode == InputMode.Interact;
 
         private bool IsCameraPreparing => cameraControlAvailable && cameraPreparing;
+
+        private static bool HasSelectedTextInput()
+        {
+            EventSystem events = EventSystem.current;
+            GameObject selected = events != null ? events.currentSelectedGameObject : null;
+            return selected != null && (selected.GetComponentInParent<InputField>() != null
+                || TmpInputFieldType != null && selected.GetComponentInParent(TmpInputFieldType) != null);
+        }
 
         // Interact가 유지되어도 컨텍스트·포커스 변경을 구독자에게 알린다.
         public event Action<InputMode> OnModeChanged;
@@ -75,6 +93,13 @@ namespace CameraCoop
             }
             cameraControlAvailable = available;
             cameraPreparing = preparing;
+            NotifyModeChanged();
+        }
+
+        public void SetDrawingMovementAllowed(bool allowed)
+        {
+            if (drawingMovementAllowed == allowed) return;
+            drawingMovementAllowed = allowed;
             NotifyModeChanged();
         }
 
@@ -173,7 +198,9 @@ namespace CameraCoop
             }
             else
             {
-                modeLabel.text = context == InputContext.Drawing ? "그리기" : "손 조작";
+                modeLabel.text = context == InputContext.Drawing
+                    ? drawingMovementAllowed ? "그리기 · WASD 이동" : "그리기"
+                    : "손 조작";
             }
         }
 

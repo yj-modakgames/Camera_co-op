@@ -10,6 +10,8 @@ namespace CameraCoop.Netplay
     // Steam Sockets(SDR relay) 기반 transport (docs/08 §2). host = relay listen socket, 클라 = ConnectRelay.
     public class SteamTransport : INetTransport
     {
+        internal const int MaxInboundMessageBytes = 64 * 1024;
+
         public bool IsHost { get; private set; }
         public string LocalPlayerId { get { return SteamClient.SteamId.ToString(); } }
 
@@ -24,11 +26,16 @@ namespace CameraCoop.Netplay
         private HostSocketManager hostSocket;      // host 전용
         private ClientConnectionManager clientConn; // 클라 전용
         private readonly Dictionary<string, Connection> peerConnections = new Dictionary<string, Connection>();
+        private readonly HashSet<uint> pendingHostConnections = new HashSet<uint>();
+        private readonly HashSet<uint> activeHostConnections = new HashSet<uint>();
+        private int maxHostConnections;
 
         // ---- host ----
         public static async Task<SteamTransport> HostAsync(int maxPlayers)
         {
+            if (maxPlayers < 2) throw new ArgumentOutOfRangeException(nameof(maxPlayers));
             var transport = new SteamTransport { IsHost = true };
+            transport.maxHostConnections = (maxPlayers - 1) * 2;
             transport.hostSocket = SteamNetworkingSockets.CreateRelaySocket<HostSocketManager>();
             transport.hostSocket.owner = transport;
             Lobby? created = await SteamMatchmaking.CreateLobbyAsync(maxPlayers);
@@ -102,6 +109,22 @@ namespace CameraCoop.Netplay
                 clientConn = null;
             }
             peerConnections.Clear();
+            pendingHostConnections.Clear();
+            activeHostConnections.Clear();
+        }
+
+        internal static bool IsInboundMessageSizeValid(int size)
+        {
+            return size >= 0 && size <= MaxInboundMessageBytes;
+        }
+
+        internal static bool TryCopyInboundMessage(IntPtr data, int size, out byte[] bytes)
+        {
+            bytes = null;
+            if (!IsInboundMessageSizeValid(size)) return false;
+            bytes = new byte[size];
+            System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
+            return true;
         }
 
         // ---- 내부: host socket 콜백 ----
@@ -112,12 +135,21 @@ namespace CameraCoop.Netplay
             public override void OnConnecting(Connection connection, ConnectionInfo info)
             {
                 base.OnConnecting(connection, info);
+                if (owner == null || owner.activeHostConnections.Count + owner.pendingHostConnections.Count
+                    >= owner.maxHostConnections)
+                {
+                    connection.Close(false, 0, "Relay quiz host connection budget reached");
+                    return;
+                }
+                owner.pendingHostConnections.Add(connection.Id);
                 connection.Accept();
             }
 
             public override void OnConnected(Connection connection, ConnectionInfo info)
             {
                 base.OnConnected(connection, info);
+                owner.pendingHostConnections.Remove(connection.Id);
+                owner.activeHostConnections.Add(connection.Id);
                 string id = info.Identity.SteamId.ToString();
                 owner.peerConnections[id] = connection;
                 owner.OnPeerConnected?.Invoke(id);
@@ -126,6 +158,8 @@ namespace CameraCoop.Netplay
             public override void OnDisconnected(Connection connection, ConnectionInfo info)
             {
                 base.OnDisconnected(connection, info);
+                owner.pendingHostConnections.Remove(connection.Id);
+                owner.activeHostConnections.Remove(connection.Id);
                 string id = info.Identity.SteamId.ToString();
                 owner.peerConnections.Remove(id);
                 owner.OnPeerDisconnected?.Invoke(id);
@@ -133,8 +167,11 @@ namespace CameraCoop.Netplay
 
             public override void OnMessage(Connection connection, NetIdentity identity, IntPtr data, int size, long messageNum, long recvTime, int channel)
             {
-                var bytes = new byte[size];
-                System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
+                if (!TryCopyInboundMessage(data, size, out byte[] bytes))
+                {
+                    connection.Close(false, 0, "Inbound message exceeds 64 KiB.");
+                    return;
+                }
                 owner.OnMessage?.Invoke(identity.SteamId.ToString(), bytes);
             }
         }
@@ -158,8 +195,11 @@ namespace CameraCoop.Netplay
 
             public override void OnMessage(IntPtr data, int size, long messageNum, long recvTime, int channel)
             {
-                var bytes = new byte[size];
-                System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
+                if (!TryCopyInboundMessage(data, size, out byte[] bytes))
+                {
+                    Connection.Close(false, 0, "Inbound message exceeds 64 KiB.");
+                    return;
+                }
                 owner.OnMessage?.Invoke("host", bytes); // 직결 상대는 항상 host — envelope.sender가 원 발신자
             }
         }

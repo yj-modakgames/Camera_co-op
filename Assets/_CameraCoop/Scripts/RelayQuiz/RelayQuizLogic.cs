@@ -117,6 +117,15 @@ namespace CameraCoop
             get { return records.Count == 0 ? null : records[records.Count - 1].drawing; }
         }
 
+        // 자동 pause 정책 (docs/09 §7). Setup은 시작 전이라 숨길 제시어도 멈출 타이머도 없어
+        // 포커스를 잃어도 차폐하지 않는다. 차폐하면 캠을 켜기 전이라 복구 조건을 영영 못 채운다.
+        public static bool ShouldAutoPause(RelayQuizState state, bool hasFocus, bool hasFreshHand)
+        {
+            if (state == RelayQuizState.Setup) return false;
+            if (!hasFocus) return true;
+            return state == RelayQuizState.Drawing && !hasFreshHand;
+        }
+
         public bool SetPlayerCount(int count, int captureGeneration)
         {
             if (!CanAct(captureGeneration) || state != RelayQuizState.Setup) return false;

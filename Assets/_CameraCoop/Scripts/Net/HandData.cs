@@ -108,4 +108,71 @@ namespace CameraCoop
             return pinch < startThreshold;
         }
     }
+
+    public static class HandGestureClassifier
+    {
+        private const float MinimumPalmScale = 0.000001f;
+        private const float MaximumFoldedChordRatio = 0.86f;
+        private const float MaximumTipPalmScale = 1.75f;
+
+        public static bool IsFist(HandData hand)
+        {
+            if (hand == null || hand.landmarks == null || hand.landmarks.Length != 63)
+            {
+                return false;
+            }
+            for (int i = 0; i < hand.landmarks.Length; i++)
+            {
+                if (!IsFinite(hand.landmarks[i])) return false;
+            }
+
+            Vector3 wrist = hand.GetLandmark(0);
+            float palmScale = 0f;
+            for (int finger = 0; finger < 4; finger++)
+            {
+                palmScale += Vector3.Distance(wrist, hand.GetLandmark(5 + finger * 4));
+            }
+            palmScale /= 4f;
+            if (!IsFinite(palmScale) || palmScale <= MinimumPalmScale)
+            {
+                return false;
+            }
+
+            Vector3 palmCenter = (wrist + hand.GetLandmark(5) + hand.GetLandmark(9) +
+                hand.GetLandmark(13) + hand.GetLandmark(17)) / 5f;
+            Vector3 thumbA = hand.GetLandmark(1);
+            Vector3 thumbB = hand.GetLandmark(2);
+            Vector3 thumbC = hand.GetLandmark(3);
+            Vector3 thumbTip = hand.GetLandmark(4);
+            float thumbPath = Vector3.Distance(thumbA, thumbB) + Vector3.Distance(thumbB, thumbC) +
+                Vector3.Distance(thumbC, thumbTip);
+            if (!IsFinite(thumbPath) || thumbPath <= palmScale * 0.15f ||
+                Vector3.Distance(thumbA, thumbTip) / thumbPath > MaximumFoldedChordRatio ||
+                Vector3.Distance(palmCenter, thumbTip) > palmScale * MaximumTipPalmScale)
+            {
+                return false;
+            }
+            for (int finger = 0; finger < 4; finger++)
+            {
+                int mcp = 5 + finger * 4;
+                Vector3 a = hand.GetLandmark(mcp);
+                Vector3 b = hand.GetLandmark(mcp + 1);
+                Vector3 c = hand.GetLandmark(mcp + 2);
+                Vector3 tip = hand.GetLandmark(mcp + 3);
+                float path = Vector3.Distance(a, b) + Vector3.Distance(b, c) + Vector3.Distance(c, tip);
+                if (!IsFinite(path) || path <= palmScale * 0.15f ||
+                    Vector3.Distance(a, tip) / path > MaximumFoldedChordRatio ||
+                    Vector3.Distance(palmCenter, tip) > palmScale * MaximumTipPalmScale)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+    }
 }

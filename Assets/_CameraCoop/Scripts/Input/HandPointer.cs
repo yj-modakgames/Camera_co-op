@@ -139,11 +139,13 @@ namespace CameraCoop
         private void Update()
         {
             if (localSurfaces.Count == 0) return;
-            var hands = new List<string>(localSurfaces.Keys);
-            foreach (string hand in hands)
-            {
-                if (localSurfaces.TryGetValue(hand, out CanvasSurface surface) && !CanUseCanvas(surface)) EndCanvasStroke(hand);
-            }
+            EndUnavailableLocalStroke("Left");
+            EndUnavailableLocalStroke("Right");
+        }
+
+        private void EndUnavailableLocalStroke(string hand)
+        {
+            if (localSurfaces.TryGetValue(hand, out CanvasSurface surface) && !CanUseCanvas(surface)) EndCanvasStroke(hand);
         }
 
         internal bool CanUseCanvas(CanvasSurface surface)
@@ -177,6 +179,11 @@ namespace CameraCoop
             if (hand == null || !localSurfaces.Remove(hand)) return;
             localModes.Remove(hand);
             OnCanvasStrokeEnd?.Invoke(hand);
+        }
+
+        public void CancelCanvasStrokes()
+        {
+            EndLocalStrokes();
         }
 
         private void EndLocalStrokes()

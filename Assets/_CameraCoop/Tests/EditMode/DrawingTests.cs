@@ -169,7 +169,10 @@ namespace CameraCoop.Tests
                 Assert.AreEqual(1, Get<int>(strokes.GetValue(1), "brushId"));
                 Assert.AreNotEqual(Get<int>(strokes.GetValue(0), "colorArgb"), Get<int>(strokes.GetValue(1), "colorArgb"));
                 Assert.Less(Get<int>(strokes.GetValue(0), "strokeId"), Get<int>(strokes.GetValue(1), "strokeId"));
-                Assert.AreEqual(.02f, drawing.Lines[0].widthMultiplier, 1e-6f);
+                float lineScale = Mathf.Min(
+                    drawing.Lines[0].transform.TransformVector(Vector3.right).magnitude,
+                    drawing.Lines[0].transform.TransformVector(Vector3.up).magnitude);
+                Assert.AreEqual(.02f, drawing.Lines[0].widthMultiplier * lineScale, 1e-6f);
             }
         }
 
@@ -252,8 +255,12 @@ namespace CameraCoop.Tests
                 Assert.AreEqual(40, Get<int>(exported.GetValue(1), "order"));
                 float shortSide = Mathf.Min(drawing.Surface.transform.TransformVector(Vector3.right).magnitude,
                     drawing.Surface.transform.TransformVector(Vector3.up).magnitude);
-                Assert.AreEqual(.02f * shortSide, drawing.Lines[0].widthMultiplier, 1e-6f);
-                Assert.AreEqual(drawing.Surface.NormToWorld(new Vector2(.6f, .2f)), drawing.Lines[0].GetPosition(0));
+                float actualWorldWidth = drawing.Lines[0].widthMultiplier * Mathf.Min(
+                    drawing.Lines[0].transform.TransformVector(Vector3.right).magnitude,
+                    drawing.Lines[0].transform.TransformVector(Vector3.up).magnitude);
+                Assert.AreEqual(.02f * shortSide, actualWorldWidth, 1e-6f);
+                Assert.AreEqual(drawing.Surface.NormToWorld(new Vector2(.6f, .2f)),
+                    drawing.Lines[0].transform.TransformPoint(drawing.Lines[0].GetPosition(0)));
                 Assert.Less(drawing.Lines[0].sortingOrder, drawing.Lines[1].sortingOrder);
                 Points(Strokes(archive).GetValue(0))[0] = .99f;
                 Assert.AreEqual(.2f, Points(Strokes(Call(drawing.Controller, "ExportDrawing")).GetValue(1))[0]);
@@ -600,9 +607,10 @@ namespace CameraCoop.Tests
                 Assert.AreEqual(2, Probe.presses);
             }
 
-            public void Send(string hand, ulong id, float now, bool pinched)
+            public void Send(string hand, ulong id, float now, bool fisted)
             {
-                Router.ProcessSample(new HandInputSample(hand, Vector2.zero, (uint)id, id, 0f, true, pinched), now, Probe, Vector3.zero);
+                Router.ProcessSample(new HandInputSample(hand, Vector2.zero, (uint)id, id, 0f, true, false,
+                    HandCancelReason.None, fisted), now, Probe, Vector3.zero);
             }
 
             public void Dispose()
@@ -704,6 +712,91 @@ namespace CameraCoop.Tests
                 fixture.Stroke("Left", .1f);
                 Assert.AreEqual(1, fixture.Lines.Length);
                 Assert.IsFalse(fixture.Lines[0].gameObject.activeSelf);
+            }
+        }
+
+        [Test]
+        public void LocalStrokeRenderer_FollowsCanvasSurfaceAfterBoardMoves()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Stroke("Left", .1f);
+                LineRenderer line = fixture.Lines[0];
+                Assert.IsFalse(line.useWorldSpace, "Personal-canvas ink must be stored relative to its moving surface.");
+
+                fixture.Surface.transform.position = new Vector3(3f, -2f, 5f);
+                fixture.Surface.transform.rotation = Quaternion.Euler(0f, 35f, 12f);
+                Vector3 renderedStart = line.transform.TransformPoint(line.GetPosition(0));
+                Vector3 expectedStart = fixture.Surface.NormToWorld(new Vector2(.1f, .2f));
+
+                Assert.AreEqual(expectedStart.x, renderedStart.x, 1e-4f);
+                Assert.AreEqual(expectedStart.y, renderedStart.y, 1e-4f);
+                Assert.AreEqual(expectedStart.z, renderedStart.z, 1e-4f);
+                Assert.AreSame(fixture.Surface.transform, line.transform.parent);
+            }
+        }
+
+        [Test]
+        public void LocalStrokeWidth_TracksCanvasScaleAndMatchesLoadedReplay()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Surface.transform.localScale = Vector3.one * 3f;
+                fixture.Stroke("Left", .1f);
+                CanvasDrawingData drawing = fixture.Controller.ExportDrawing();
+                float shortSide = Mathf.Min(fixture.Surface.transform.TransformVector(Vector3.right).magnitude,
+                    fixture.Surface.transform.TransformVector(Vector3.up).magnitude);
+                float expectedWidth = drawing.strokes[0].widthNormalized * shortSide;
+                float actualWidth = fixture.Lines[0].widthMultiplier * shortSide;
+                Assert.AreEqual(expectedWidth, actualWidth, 1e-6f,
+                    "The local renderer parent scale must supply the world scale exactly once.");
+
+                fixture.Surface.transform.position = new Vector3(2f, -1f, 4f);
+                fixture.Surface.transform.rotation = Quaternion.Euler(10f, 25f, 35f);
+                fixture.Surface.transform.localScale = Vector3.one * 5f;
+                shortSide = Mathf.Min(fixture.Surface.transform.TransformVector(Vector3.right).magnitude,
+                    fixture.Surface.transform.TransformVector(Vector3.up).magnitude);
+                expectedWidth = drawing.strokes[0].widthNormalized * shortSide;
+                actualWidth = fixture.Lines[0].widthMultiplier * shortSide;
+                Assert.AreEqual(expectedWidth, actualWidth, 1e-6f);
+
+                Assert.IsTrue(fixture.Controller.LoadDrawing(drawing));
+                actualWidth = fixture.Lines[0].widthMultiplier * shortSide;
+                Assert.AreEqual(expectedWidth, actualWidth, 1e-6f);
+            }
+        }
+
+        [Test]
+        public void PersonalCanvasCarryDock_PreservesNormalizedDrawingAndRevision()
+        {
+            using (var fixture = new DrawingFixture())
+            {
+                fixture.Stroke("Left", .1f);
+                CanvasDrawingData before = fixture.Controller.ExportDrawing();
+                uint revision = fixture.Controller.DrawingRevision;
+                var avatar = new GameObject("revision avatar");
+                var dock = new GameObject("revision dock");
+                try
+                {
+                    var placement = fixture.Root.AddComponent<PersonalCanvasPlacement>();
+                    placement.Configure("owner", avatar.transform, dock.transform, .5f);
+                    Assert.IsTrue(placement.TryCarry("owner"));
+                    avatar.transform.position = dock.transform.position;
+                    MethodInfo tryDock = typeof(PersonalCanvasPlacement).GetMethod("TryDock", new[] { typeof(string) });
+                    Assert.IsNotNull(tryDock, "Docking must validate the controlled canvas position instead of caller coordinates.");
+                    Assert.IsTrue((bool)tryDock.Invoke(placement, new object[] { "owner" }));
+
+                    CanvasDrawingData after = fixture.Controller.ExportDrawing();
+                    Assert.AreEqual(revision, fixture.Controller.DrawingRevision);
+                    Assert.AreEqual(before.version, after.version);
+                    CollectionAssert.AreEqual(before.strokes[0].xy, after.strokes[0].xy);
+                }
+                finally
+                {
+                    if (fixture.Root != null) fixture.Root.transform.SetParent(null, true);
+                    UnityEngine.Object.DestroyImmediate(avatar);
+                    UnityEngine.Object.DestroyImmediate(dock);
+                }
             }
         }
 

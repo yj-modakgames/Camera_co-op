@@ -21,7 +21,7 @@ namespace CameraCoop
 
         private void Awake()
         {
-            initialized = Validate();
+            initialized = ValidateRuntimeConfiguration(out _);
             if (!initialized)
             {
                 Debug.LogError("[RelayQuizGallery] 슬롯 root·presenter·surface 배열 길이가 같아야 하고 빈 원소가 없어야 합니다.", this);
@@ -30,8 +30,20 @@ namespace CameraCoop
             Clear();
         }
 
-        private bool Validate()
+        public void Configure(GameObject[] roots, CanvasDrawingPresenter[] presenters, CanvasSurface[] surfaces, Text caption = null)
         {
+            slotRoots = roots;
+            slotPresenters = presenters;
+            slotSurfaces = surfaces;
+            captionLabel = caption;
+            initialized = ValidateRuntimeConfiguration(out string error);
+            if (!initialized) throw new System.ArgumentException(error);
+            Clear();
+        }
+
+        public bool ValidateRuntimeConfiguration(out string error)
+        {
+            error = "RelayQuizGallery requires matching non-empty root, presenter and read-only surface arrays.";
             if (slotRoots == null || slotPresenters == null || slotSurfaces == null) return false;
             if (slotRoots.Length == 0) return false;
             if (slotRoots.Length != slotPresenters.Length || slotRoots.Length != slotSurfaces.Length) return false;
@@ -41,6 +53,7 @@ namespace CameraCoop
                 // 갤러리 표면은 쓰기 대상이 아니다.
                 if (slotSurfaces[i].GetComponentInParent<HandCanvasInteractable>() != null) return false;
             }
+            error = string.Empty;
             return true;
         }
 

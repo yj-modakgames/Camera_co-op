@@ -4,18 +4,17 @@
 # 손 미검출 프레임에도 빈 hands로 계속 전송한다 (heartbeat, docs/02_protocol.md §4).
 
 import json
+import argparse
 import math
 import os
 import socket
 import sys
 import time
-
-import cv2
-import mediapipe as mp
-from mediapipe.tasks.python import vision, BaseOptions
+from typing import Sequence
 
 import config
 from one_euro_filter import OneEuroFilter
+from camera_utils import CameraUnavailableError, discover_cameras, open_selected_camera
 
 PROTOCOL_VERSION = 1
 NUM_LANDMARKS = 21
@@ -93,17 +92,28 @@ def permission_hint():
     )
 
 
-def open_camera():
-    cap = cv2.VideoCapture(config.CAMERA_INDEX, camera_backend())
-    if not cap.isOpened():
-        cap.release()
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="CameraCo-op hand tracker")
+    parser.add_argument("--camera", type=int, default=config.CAMERA_INDEX, help="OpenCV camera index")
+    parser.add_argument("--list-cameras", action="store_true", help="List cameras that open and yield a frame")
+    preview = parser.add_mutually_exclusive_group()
+    preview.add_argument("--preview", dest="preview", action="store_true", help="Show camera preview")
+    preview.add_argument("--no-preview", dest="preview", action="store_false", help="Disable camera preview")
+    parser.set_defaults(preview=config.SHOW_PREVIEW)
+    return parser.parse_args(argv)
+
+
+def open_camera(index: int):
+    if index < 0:
+        sys.exit("[ERROR] camera index must be non-negative: {}".format(index))
+    try:
+        cap = open_selected_camera(
+            lambda selected: cv2.VideoCapture(selected, camera_backend()), index
+        )
+    except CameraUnavailableError as error:
         sys.exit(
-            "[ERROR] 카메라를 열 수 없습니다 (index={}).\n"
-            "  원인: 웹캠이 연결되지 않았거나, 다른 프로그램이 카메라를 점유 중이거나,\n"
-            "{}"
-            "        마지막으로 config.py의 CAMERA_INDEX 값을 다른 번호로 바꿔 재시도".format(
-                config.CAMERA_INDEX, permission_hint()
-            )
+            "[ERROR] 카메라를 열 수 없습니다 (index={}).\n  {}\n{}"
+            "  선택한 index를 자동으로 바꾸지 않습니다.".format(index, error, permission_hint())
         )
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.FRAME_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.FRAME_HEIGHT)
@@ -142,9 +152,23 @@ def draw_preview(frame, hand_landmarks_list):
     return frame
 
 
-def main():
+def main(argv: Sequence[str] | None = None) -> int:
+    global cv2, mp, vision, BaseOptions
+    args = parse_args(argv)
+    import cv2
+    if args.list_cameras:
+        devices = discover_cameras(
+            lambda index: cv2.VideoCapture(index, camera_backend()),
+            max_index=10,
+        )
+        print(json.dumps([{"index": device.index, "available": device.available} for device in devices]))
+        return 0
+
+    import mediapipe as mp
+    from mediapipe.tasks.python import BaseOptions, vision
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    cap = open_camera()
+    cap = open_camera(args.camera)
     landmarker = create_landmarker()
 
     # 손별 One Euro 필터: filters[handedness][landmark_idx][axis] ('x' 또는 'y')
@@ -228,7 +252,7 @@ def main():
 
             seq += 1
 
-            if config.SHOW_PREVIEW:
+            if args.preview:
                 preview = draw_preview(frame, hand_landmarks_list)
                 cv2.imshow("PythonTracker (q to quit)", preview)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -242,6 +266,7 @@ def main():
         landmarker.close()
         sock.close()
         print("[INFO] 리소스 정리 완료, 종료합니다.")
+    return 0
 
 
 if __name__ == "__main__":

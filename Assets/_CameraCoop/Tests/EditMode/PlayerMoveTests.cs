@@ -183,6 +183,22 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void ModalStep_WhenPartyZoneConfiguredClampsHorizontalPositionToOwnZone()
+        {
+            PlayerController player = CreateModalPlayer(out _, out _);
+            player.transform.position = new Vector3(1000f, 1000f, 1000f);
+            player.ConfigureMovementBounds(new Vector2(999.5f, 999.5f), new Vector2(1000.25f, 1000.25f), true);
+            Physics.SyncTransforms();
+
+            player.Step(Vector2.one, 1f);
+
+            Assert.That(player.transform.position.x, Is.LessThanOrEqualTo(1000.251f));
+            Assert.That(player.transform.position.z, Is.LessThanOrEqualTo(1000.251f));
+            Assert.That(player.transform.position.x, Is.GreaterThanOrEqualTo(999.499f));
+            Assert.That(player.transform.position.z, Is.GreaterThanOrEqualTo(999.499f));
+        }
+
+        [Test]
         public void ModalStep_CharacterControllerStopsAtWall()
         {
             PlayerController player = CreateModalPlayer(out _, out _);
@@ -211,6 +227,105 @@ namespace CameraCoop.Tests
             Assert.AreEqual(start.y - 0.6f, player.transform.position.y, 0.002f);
             Assert.AreEqual(start.x, player.transform.position.x, 0.002f);
             Assert.AreEqual(start.z, player.transform.position.z, 0.002f);
+        }
+
+        [Test]
+        public void ModalReferences_MissingAwakeRecoversMovementAndGroundedJumpAfterRuntimeInjection()
+        {
+            PlayerController player = CreateLegacyPlayer(out Transform camera);
+            SetField(player, "controlProfile", PlayerControlProfile.ModalFirstPerson);
+            LogAssert.Expect(LogType.Error, new Regex("PlayerController ModalFirstPerson requires explicit"));
+            InvokeCallback(player, "Awake");
+            Vector3 start = player.transform.position;
+
+            player.Step(Vector2.up, 0.1f);
+            Assert.That(player.enabled, Is.True);
+            Assert.That(player.transform.position, Is.EqualTo(start));
+
+            InputModeManager manager = player.gameObject.AddComponent<InputModeManager>();
+            CharacterController characterController = player.gameObject.AddComponent<CharacterController>();
+            characterController.height = 1.8f;
+            characterController.radius = 0.3f;
+            characterController.center = new Vector3(0f, 0.9f, 0f);
+            SetField(player, "playerCamera", camera);
+            SetField(player, "characterController", characterController);
+            SetField(player, "inputModeManager", manager);
+            player.gameObject.SetActive(true);
+            GameObject floor = CreateObject("recovery floor");
+            floor.transform.position = player.transform.position - Vector3.up * 0.1f;
+            floor.transform.localScale = new Vector3(20f, 0.2f, 20f);
+            floor.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+
+            player.Step(Vector2.up, 0.1f);
+            Vector3 moved = player.transform.position;
+            player.Step(Vector2.zero, 0.05f);
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+
+            Assert.That(moved.z, Is.GreaterThan(start.z));
+            Assert.That(player.transform.position.y, Is.GreaterThan(moved.y));
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void ModalJump_GroundedRequestProducesUpwardMovement()
+        {
+            PlayerController player = CreateGroundedModalPlayer(out _);
+            Vector3 start = player.transform.position;
+
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+
+            Assert.That(player.transform.position.y, Is.GreaterThan(start.y));
+            Assert.That(GetVerticalVelocity(player), Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void ModalJump_AirRequestDoesNotResetUpwardVelocityOrDoubleJump()
+        {
+            PlayerController player = CreateGroundedModalPlayer(out _);
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+            float upwardVelocity = GetVerticalVelocity(player);
+
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+
+            Assert.That(GetVerticalVelocity(player), Is.LessThan(upwardVelocity));
+        }
+
+        [Test]
+        public void ModalJump_BlockedInputDoesNotJump()
+        {
+            PlayerController player = CreateGroundedModalPlayer(out InputModeManager manager);
+            manager.SetContext(InputContext.Blocked);
+            Vector3 start = player.transform.position;
+
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+
+            Assert.That(player.transform.position, Is.EqualTo(start));
+            Assert.That(GetVerticalVelocity(player), Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void ModalJump_LowCeilingClearsUpwardVelocityAndNextStepFalls()
+        {
+            PlayerController player = CreateGroundedModalPlayer(out _);
+            GameObject ceiling = CreateObject("low jump ceiling");
+            ceiling.transform.position = player.transform.position + Vector3.up * 2.1f;
+            ceiling.transform.localScale = new Vector3(5f, 0.2f, 5f);
+            ceiling.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+
+            player.RequestJump();
+            player.Step(Vector2.zero, 0.1f);
+            float ceilingHitY = player.transform.position.y;
+            Assert.That(GetVerticalVelocity(player), Is.EqualTo(0f));
+            player.Step(Vector2.zero, 0.1f);
+
+            Assert.That(player.transform.position.y, Is.LessThan(ceilingHitY));
         }
 
         [Test]
@@ -298,7 +413,7 @@ namespace CameraCoop.Tests
         [TestCase("playerCamera")]
         [TestCase("characterController")]
         [TestCase("inputModeManager")]
-        public void ModalReferences_MissingExplicitReferenceLogsOnceAndDisablesLocalInput(string missingReference)
+        public void ModalReferences_MissingExplicitReferenceLogsOnceAndBlocksLocalInput(string missingReference)
         {
             PlayerController player = CreateModalPlayer(out _, out Transform camera, initialize: false);
             SetField(player, missingReference, null);
@@ -307,7 +422,7 @@ namespace CameraCoop.Tests
 
             InvokeCallback(player, "Awake");
 
-            Assert.IsFalse(player.enabled);
+            Assert.IsTrue(player.enabled);
             player.Step(Vector2.one, 1f);
             player.ApplyLookDelta(new Vector2(100f, 100f));
             Assert.AreEqual(start, player.transform.position);
@@ -347,6 +462,26 @@ namespace CameraCoop.Tests
                 Physics.SyncTransforms();
             }
             return player;
+        }
+
+        private PlayerController CreateGroundedModalPlayer(out InputModeManager manager)
+        {
+            PlayerController player = CreateModalPlayer(out manager, out _);
+            GameObject floor = CreateObject("jump test floor");
+            floor.transform.position = player.transform.position - Vector3.up * 0.1f;
+            floor.transform.localScale = new Vector3(20f, 0.2f, 20f);
+            floor.AddComponent<BoxCollider>();
+            Physics.SyncTransforms();
+            player.Step(Vector2.zero, 0.05f);
+            Assert.That(GetVerticalVelocity(player), Is.EqualTo(0f));
+            return player;
+        }
+
+        private static float GetVerticalVelocity(PlayerController player)
+        {
+            FieldInfo field = typeof(PlayerController).GetField("verticalVelocity", InstanceFlags);
+            Assert.IsNotNull(field, "PlayerController must retain its movement velocity.");
+            return (float)field.GetValue(player);
         }
 
         private GameObject CreateObject(string name)

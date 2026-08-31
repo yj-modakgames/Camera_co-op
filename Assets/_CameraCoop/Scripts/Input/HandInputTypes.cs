@@ -13,7 +13,8 @@ namespace CameraCoop
         FocusLost,
         TargetUnavailable,
         DrawingCommand,
-        ComponentDisabled
+        ComponentDisabled,
+        CanvasPlacementChanged
     }
 
     public readonly struct HandInputSample
@@ -25,10 +26,12 @@ namespace CameraCoop
         public readonly float sampleAgeSeconds;
         public readonly bool isTracked;
         public readonly bool isPinched;
+        public readonly bool isFist;
         public readonly HandCancelReason cancelReason;
 
         public HandInputSample(string handedness, Vector2 screenPosition, uint sequence, ulong sampleId,
-            float sampleAgeSeconds, bool isTracked, bool isPinched, HandCancelReason cancelReason = HandCancelReason.None)
+            float sampleAgeSeconds, bool isTracked, bool isPinched, HandCancelReason cancelReason = HandCancelReason.None,
+            bool isFist = false)
         {
             this.handedness = handedness;
             this.screenPosition = screenPosition;
@@ -37,6 +40,7 @@ namespace CameraCoop
             this.sampleAgeSeconds = sampleAgeSeconds;
             this.isTracked = isTracked;
             this.isPinched = isPinched;
+            this.isFist = isFist;
             this.cancelReason = cancelReason;
         }
     }

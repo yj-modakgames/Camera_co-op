@@ -117,16 +117,10 @@ namespace CameraCoop
             relayQuizUI.UpdateTimer(logic, logic.Paused);
         }
 
-        // focus 상실은 모든 상태, 손 추적 상실은 Drawing에서만 pause한다 (docs/09 §7).
         private void UpdatePauseRequest()
         {
             if (logic.Paused) return;
-            if (!hasFocus)
-            {
-                logic.RequestPause();
-                return;
-            }
-            if (logic.State == RelayQuizState.Drawing && !handInputRouter.HasFreshHand)
+            if (RelayQuizLogic.ShouldAutoPause(logic.State, hasFocus, handInputRouter.HasFreshHand))
             {
                 logic.RequestPause();
             }

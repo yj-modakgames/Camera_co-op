@@ -120,18 +120,23 @@ namespace CameraCoop
             {
                 return;
             }
+            ApplySelection(button.Kind, button.Index);
+        }
+
+        public void ApplySelection(ToolKind kind, int index)
+        {
             bool changed = false;
-            switch (button.Kind)
+            switch (kind)
             {
                 case ToolKind.Color:
-                    changed |= SetIndex(ref colorIndex, button.Index, palette != null ? palette.Length : 0, "palette");
+                    changed |= SetIndex(ref colorIndex, index, palette != null ? palette.Length : 0, "palette");
                     changed |= SetMode(Mode.Draw); // 색을 고르면 지우개에서 그리기로 돌아온다
                     break;
                 case ToolKind.Width:
-                    changed |= SetIndex(ref widthIndex, button.Index, widths != null ? widths.Length : 0, "widths");
+                    changed |= SetIndex(ref widthIndex, index, widths != null ? widths.Length : 0, "widths");
                     break;
                 case ToolKind.Brush:
-                    changed |= SetIndex(ref brushIndex, button.Index, brushes != null ? brushes.Length : 0, "brushes");
+                    changed |= SetIndex(ref brushIndex, index, brushes != null ? brushes.Length : 0, "brushes");
                     changed |= SetMode(Mode.Draw);
                     break;
                 case ToolKind.Eraser:

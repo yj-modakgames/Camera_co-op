@@ -13,6 +13,7 @@ namespace CameraCoop
         public HandPointer Pointer => handPointer;
         public override string DisplayName => "작업 캔버스";
         public override bool IsCanvas => true;
+        public override bool UsesWorldHitPosition => true;
         public override bool IsAvailable => base.IsAvailable && canvasSurface != null && canvasSurface.isActiveAndEnabled && handPointer != null && handPointer.isActiveAndEnabled;
 
         private void Awake()

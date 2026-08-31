@@ -64,6 +64,7 @@ namespace CameraCoop.EditorTools
             string tracker = Path.Combine(dest, "tracker");
             Directory.CreateDirectory(Path.Combine(tracker, "models"));
             Copy(Path.Combine(root, TrackerSrc, "hand_tracker.py"), Path.Combine(tracker, "hand_tracker.py"));
+            Copy(Path.Combine(root, TrackerSrc, "camera_utils.py"), Path.Combine(tracker, "camera_utils.py"));
             Copy(Path.Combine(root, TrackerSrc, "config.py"), Path.Combine(tracker, "config.py"));
             Copy(Path.Combine(root, TrackerSrc, "one_euro_filter.py"), Path.Combine(tracker, "one_euro_filter.py"));
             Copy(Path.Combine(root, TrackerSrc, "models", "hand_landmarker.task"), Path.Combine(tracker, "models", "hand_landmarker.task"));

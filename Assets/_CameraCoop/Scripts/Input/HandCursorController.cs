@@ -171,7 +171,7 @@ namespace CameraCoop
             if (valid)
             {
                 PublishSample(state, new HandInputSample(handedness, screenPosition, sampledSequence, sampleId,
-                    sampleAgeSeconds, true, state.pinched));
+                    sampleAgeSeconds, true, state.pinched, HandCancelReason.None, HandGestureClassifier.IsFist(hand)));
                 return;
             }
 

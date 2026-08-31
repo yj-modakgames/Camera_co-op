@@ -45,6 +45,9 @@ namespace CameraCoop
         private int localIdCounter;
         private int orderCounter = -1;
         private bool strokesVisible = true;
+        private uint drawingRevision;
+
+        public uint DrawingRevision => drawingRevision;
 
         private bool IsLocalDrawing { get { return handPointer != null && handPointer.InputSource == HandPointerInputSource.HandRouter; } }
 
@@ -144,7 +147,7 @@ namespace CameraCoop
 
             int count = stroke.line.positionCount;
             stroke.line.positionCount = count + 1;
-            stroke.line.SetPosition(count, world);
+            stroke.line.SetPosition(count, LinePosition(stroke.line, world));
             stroke.points.Add(world);
             if (stroke.xy != null)
             {
@@ -169,6 +172,7 @@ namespace CameraCoop
             float radius = toolState != null ? toolState.EraseRadius : 0.05f;
             for (int i = finishedStrokes.Count - 1; i >= 0; i--) // 최근 것부터, 첫 hit 1개만
             {
+                RefreshWorldPoints(finishedStrokes[i]);
                 if (!EraseLogic.HitsStroke(finishedStrokes[i].points, world, radius))
                 {
                     continue;
@@ -180,6 +184,7 @@ namespace CameraCoop
                     CanvasDrawingRender.DestroyOwned(hit.go);
                 }
                 if (IsLocalDrawing) RefreshRenderOrder();
+                IncrementDrawingRevision();
                 OnLocalStrokeErased?.Invoke(hit.localId);
                 return;
             }
@@ -214,18 +219,21 @@ namespace CameraCoop
                 };
             }
             var strokeObject = new GameObject("Stroke_" + handedness);
-            strokeObject.transform.SetParent(transform, worldPositionStays: true);
+            bool surfaceRelative = data != null;
+            strokeObject.transform.SetParent(surfaceRelative ? canvasSurface.transform : transform, worldPositionStays: !surfaceRelative);
+            if (surfaceRelative) ResetLocalTransform(strokeObject.transform);
             strokeObject.SetActive(strokesVisible);
 
             LineRenderer line = strokeObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
+            line.useWorldSpace = !surfaceRelative;
             line.numCapVertices = 4;    // ~14Hz 입력의 각짐 완화 (docs/07 §3)
             line.numCornerVertices = 4;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
 
             // 도구 값은 시작 시점에 고정한다 — 그리는 중 팔레트를 눌러도 진행 중 선은 바뀌지 않는다
-            line.widthMultiplier = toolState != null ? toolState.CurrentWidth : 0.02f;
+            line.widthMultiplier = surfaceRelative ? data.widthNormalized * LocalSurfaceShortSide() :
+                (toolState != null ? toolState.CurrentWidth : 0.02f);
             Material material = toolState != null ? toolState.CurrentMaterial : null;
             line.sharedMaterial = material != null ? material : lineMaterial;
             Color color = toolState != null ? toolState.CurrentColor : Color.black;
@@ -233,7 +241,7 @@ namespace CameraCoop
             line.endColor = color;
 
             line.positionCount = 1;
-            line.SetPosition(0, world);
+            line.SetPosition(0, LinePosition(line, world));
 
             int localId = ++localIdCounter; // 1부터 단조 증가
             activeStrokes[handedness] = new ActiveStroke
@@ -268,6 +276,7 @@ namespace CameraCoop
                 points = stroke.points,
                 data = stroke.data
             });
+            IncrementDrawingRevision();
             if (stroke.data != null)
             {
                 finishedStrokes.Sort((left, right) => left.data.order.CompareTo(right.data.order));
@@ -291,8 +300,10 @@ namespace CameraCoop
 
         public void ClearAll()
         {
+            bool hadContent = activeStrokes.Count > 0 || finishedStrokes.Count > 0;
             if (IsLocalDrawing) FinalizeActiveStrokes();
             DestroyStrokeObjects();
+            if (hadContent) IncrementDrawingRevision();
         }
 
         private void DestroyStrokeObjects()
@@ -344,6 +355,7 @@ namespace CameraCoop
             {
                 Material brush = toolState.GetBrushMaterial(stroke.brushId);
                 LineRenderer line = CanvasDrawingRender.Create(stroke, canvasSurface, transform, brush != null ? brush : lineMaterial);
+                MakeSurfaceRelative(line, stroke);
                 var points = new List<Vector3>(stroke.xy.Length / 2);
                 for (int i = 0; i < stroke.xy.Length; i += 2)
                     points.Add(canvasSurface.NormToWorld(new Vector2(stroke.xy[i], stroke.xy[i + 1])));
@@ -352,6 +364,7 @@ namespace CameraCoop
                 orderCounter = Math.Max(orderCounter, stroke.order);
             }
             RefreshRenderOrder();
+            IncrementDrawingRevision();
             return true;
         }
 
@@ -364,6 +377,7 @@ namespace CameraCoop
             CanvasDrawingRender.DestroyOwned(finishedStrokes[index].go);
             finishedStrokes.RemoveAt(index);
             RefreshRenderOrder();
+            IncrementDrawingRevision();
             return true;
         }
 
@@ -392,6 +406,55 @@ namespace CameraCoop
                 lines.Add(new KeyValuePair<int, LineRenderer>(stroke.data.order, stroke.line));
             lines.Sort((left, right) => left.Key.CompareTo(right.Key));
             for (int i = 0; i < lines.Count; i++) lines[i].Value.sortingOrder = i;
+        }
+
+        private Vector3 LinePosition(LineRenderer line, Vector3 world)
+        {
+            return line.useWorldSpace ? world : line.transform.InverseTransformPoint(world);
+        }
+
+        private void MakeSurfaceRelative(LineRenderer line, CanvasStrokeData stroke)
+        {
+            line.transform.SetParent(canvasSurface.transform, false);
+            ResetLocalTransform(line.transform);
+            line.useWorldSpace = false;
+            line.widthMultiplier = stroke.widthNormalized * LocalSurfaceShortSide();
+            for (int i = 0; i < line.positionCount; i++)
+            {
+                Vector2 norm = new Vector2(stroke.xy[i * 2], stroke.xy[i * 2 + 1]);
+                line.SetPosition(i, line.transform.InverseTransformPoint(canvasSurface.NormToWorld(norm)));
+            }
+        }
+
+        private static float LocalSurfaceShortSide()
+        {
+            Vector3 origin = CanvasSurfaceLogic.NormToLocal(Vector2.zero, 0f);
+            float width = (CanvasSurfaceLogic.NormToLocal(Vector2.right, 0f) - origin).magnitude;
+            float height = (CanvasSurfaceLogic.NormToLocal(Vector2.up, 0f) - origin).magnitude;
+            return Mathf.Min(width, height);
+        }
+
+        private void RefreshWorldPoints(FinishedStroke stroke)
+        {
+            if (stroke.data == null || stroke.data.xy == null) return;
+            int count = stroke.data.xy.Length / 2;
+            while (stroke.points.Count < count) stroke.points.Add(Vector3.zero);
+            for (int i = 0; i < count; i++)
+            {
+                stroke.points[i] = canvasSurface.NormToWorld(new Vector2(stroke.data.xy[i * 2], stroke.data.xy[i * 2 + 1]));
+            }
+        }
+
+        private static void ResetLocalTransform(Transform target)
+        {
+            target.localPosition = Vector3.zero;
+            target.localRotation = Quaternion.identity;
+            target.localScale = Vector3.one;
+        }
+
+        private void IncrementDrawingRevision()
+        {
+            unchecked { drawingRevision++; }
         }
     }
 }

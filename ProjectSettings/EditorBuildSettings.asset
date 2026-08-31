@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_CameraCoop/Scenes/RelayQuizOnline.unity
+    guid: bf035780e4c2ada4c9b89e8f5df474cb
+  - enabled: 1
     path: Assets/_CameraCoop/Scenes/NetplayTest.unity
     guid: c627199d6b6f048478c88143d588a21f
   - enabled: 1

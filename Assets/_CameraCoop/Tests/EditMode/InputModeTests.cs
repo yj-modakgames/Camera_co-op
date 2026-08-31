@@ -4,6 +4,7 @@ using System.Reflection;
 using CameraCoop;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -14,6 +15,7 @@ namespace CameraCoop.Tests
         private const BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 
         private GameObject rig;
+        private GameObject eventSystemRoot;
         private InputModeManager manager;
         private readonly List<InputMode> modeChanges = new List<InputMode>();
 
@@ -35,6 +37,10 @@ namespace CameraCoop.Tests
             if (rig != null)
             {
                 Object.DestroyImmediate(rig);
+            }
+            if (eventSystemRoot != null)
+            {
+                Object.DestroyImmediate(eventSystemRoot);
             }
         }
 
@@ -111,6 +117,26 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void CameraMouse_IsBlockedWhenEventSystemSelectsAnInputField()
+        {
+            manager.SetCameraControlState(true, false);
+            Assert.IsTrue(manager.RequestMode(InputMode.Interact));
+            Assert.IsTrue(manager.CanUseCameraMouse);
+
+            eventSystemRoot = new GameObject("input mode event system", typeof(EventSystem), typeof(StandaloneInputModule));
+            GameObject inputRoot = new GameObject("focused input", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(InputField));
+            inputRoot.transform.SetParent(eventSystemRoot.transform, false);
+            EventSystem eventSystem = eventSystemRoot.GetComponent<EventSystem>();
+            MethodInfo onEnable = typeof(EventSystem).GetMethod("OnEnable", InstanceFlags);
+            Assert.IsNotNull(onEnable, "EventSystem must initialize its current instance for the selected input test.");
+            onEnable.Invoke(eventSystem, null);
+            Assert.AreSame(eventSystem, EventSystem.current);
+            eventSystem.SetSelectedGameObject(inputRoot);
+
+            Assert.IsFalse(manager.CanUseCameraMouse);
+        }
+
+        [Test]
         public void TypingInDrawing_BlocksDrawingWithoutBlockingHandUi()
         {
             manager.SetContext(InputContext.Drawing);
@@ -120,6 +146,41 @@ namespace CameraCoop.Tests
 
             InputFocus.IsTyping = false;
             AssertPermissions(false, false, true, true, false);
+        }
+
+        [Test]
+        public void CarriedPersonalCanvas_AllowsMoveAndLookWhileKeepingFistAndWorldHandActions()
+        {
+            manager.SetContext(InputContext.Drawing);
+            manager.SetDrawingMovementAllowed(true);
+
+            Assert.That(manager.CurrentMode, Is.EqualTo(InputMode.Interact));
+            Assert.That(manager.CanMove, Is.True);
+            Assert.That(manager.CanLook, Is.True);
+            Assert.That(manager.CanUseHandUi, Is.True);
+            Assert.That(manager.CanDraw, Is.True);
+
+            InputFocus.IsTyping = true;
+            Assert.That(manager.CanMove, Is.False);
+            Assert.That(manager.CanLook, Is.False);
+            Assert.That(manager.CanDraw, Is.False);
+            Assert.That(manager.CanUseHandUi, Is.True);
+        }
+
+        [Test]
+        public void DrawingMovement_RemainsBlockedDuringCameraPreparationAndAfterCanvasDock()
+        {
+            manager.SetContext(InputContext.Drawing);
+            manager.SetDrawingMovementAllowed(true);
+            manager.SetCameraControlState(true, true);
+            Assert.That(manager.CanMove, Is.False);
+            Assert.That(manager.CanLook, Is.False);
+
+            manager.SetCameraControlState(true, false);
+            manager.SetDrawingMovementAllowed(false);
+            Assert.That(manager.CanMove, Is.False);
+            Assert.That(manager.CanLook, Is.False);
+            Assert.That(manager.CanDraw, Is.True);
         }
 
         [Test]
@@ -392,18 +453,43 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void CameraPreparation_BlockedContextDeniesMouseAndTakesHudPriority()
+        public void CameraPreparation_BlockedContextTakesHudPriorityAndDeniesMouseOnlyWhileReceiving()
         {
             Text label = AddModeLabel();
             SetCameraControlState(true, true);
             manager.SetContext(InputContext.Blocked);
 
             AssertPermissions(false, false, false, false, false);
-            Assert.IsFalse(ReadCanUseCameraMouse());
+            // 캠이 끊긴 동안에는 Blocked라도 재시도 컨트롤을 남긴다 (docs/06 §9).
+            Assert.IsTrue(ReadCanUseCameraMouse());
             Assert.AreEqual("입력 중지", label.text);
             Assert.IsTrue(manager.DesiredCursorVisible);
+
             SetCameraControlState(true, false);
-            Assert.IsFalse(ReadCanUseCameraMouse());
+            Assert.IsFalse(ReadCanUseCameraMouse(), "수신 중이면 Blocked에서 캠 마우스를 닫는다.");
+        }
+
+        [Test]
+        public void CameraPreparation_BlockedRetryStillRequiresFocus()
+        {
+            SetCameraControlState(true, true);
+            manager.SetContext(InputContext.Blocked);
+            Assert.IsTrue(ReadCanUseCameraMouse());
+
+            InvokeCallback("OnApplicationFocus", false);
+
+            Assert.IsFalse(ReadCanUseCameraMouse(), "포커스를 잃으면 캠 마우스도 막는다.");
+        }
+
+        [Test]
+        public void CameraPreparation_BlockedRetryDoesNotOpenGameInput()
+        {
+            SetCameraControlState(true, true);
+            manager.SetContext(InputContext.Blocked);
+
+            // 재시도 예외는 캠 컨트롤에만 적용되고 일반 게임 입력은 그대로 닫혀 있어야 한다.
+            AssertPermissions(false, false, false, false, false);
+            Assert.AreEqual(InputMode.Interact, manager.CurrentMode);
         }
 
         [Test]

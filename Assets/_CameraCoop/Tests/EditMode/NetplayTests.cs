@@ -224,6 +224,21 @@ namespace CameraCoop.Tests
             Assert.AreEqual("fake-1", gone);
         }
 
+        [TestCase(-1)]
+        [TestCase(65537)]
+        [TestCase(int.MaxValue)]
+        public void SteamTransport_InboundMessageSizeRejectsPayloadBeforeAllocationOrCopy(int size)
+        {
+            Assert.That(SteamTransport.TryCopyInboundMessage(System.IntPtr.Zero, size, out byte[] copied), Is.False);
+            Assert.That(copied, Is.Null);
+        }
+
+        [Test]
+        public void SteamTransport_InboundMessageSizeAllowsThe64KiBBoundary()
+        {
+            Assert.That(SteamTransport.IsInboundMessageSizeValid(64 * 1024), Is.True);
+        }
+
         // ---- SessionLogic (docs/08 §2, §3) ----
 
         [Test]

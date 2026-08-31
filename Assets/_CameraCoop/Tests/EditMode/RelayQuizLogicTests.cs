@@ -279,6 +279,45 @@ namespace CameraCoop.Tests
             Assert.Throws<ArgumentException>(() => new RelayQuizLogic(timings, null, null, null));
         }
 
+        // ---- 자동 pause 정책 (docs/09 §7) ----
+
+        // Setup은 캠을 켜기 전 화면이다. 여기서 차폐하면 복구 조건(유효한 손)을 영영 못 채운다.
+        [TestCase(RelayQuizState.Setup, false, false, false)]
+        [TestCase(RelayQuizState.Setup, true, false, false)]
+        [TestCase(RelayQuizState.Handover, false, true, true)]
+        [TestCase(RelayQuizState.WordReveal, false, true, true)]
+        [TestCase(RelayQuizState.Drawing, false, true, true)]
+        [TestCase(RelayQuizState.Guessing, false, true, true)]
+        [TestCase(RelayQuizState.Reveal, false, true, true)]
+        [TestCase(RelayQuizState.Gallery, false, true, true)]
+        public void ShouldAutoPause_FocusLossPausesEveryStateExceptSetup(
+            RelayQuizState state, bool hasFocus, bool hasFreshHand, bool expected)
+        {
+            Assert.AreEqual(expected, RelayQuizLogic.ShouldAutoPause(state, hasFocus, hasFreshHand));
+        }
+
+        // 손 추적 상실만을 원인으로 하는 자동 pause는 Drawing에만 적용한다.
+        [TestCase(RelayQuizState.Drawing, true)]
+        [TestCase(RelayQuizState.WordReveal, false)]
+        [TestCase(RelayQuizState.ObservePrevious, false)]
+        [TestCase(RelayQuizState.Guessing, false)]
+        [TestCase(RelayQuizState.Handover, false)]
+        [TestCase(RelayQuizState.Gallery, false)]
+        [TestCase(RelayQuizState.Setup, false)]
+        public void ShouldAutoPause_MissingHandPausesOnlyWhileDrawing(RelayQuizState state, bool expected)
+        {
+            Assert.AreEqual(expected, RelayQuizLogic.ShouldAutoPause(state, hasFocus: true, hasFreshHand: false));
+        }
+
+        [Test]
+        public void ShouldAutoPause_NeverPausesWhenFocusedWithAFreshHand()
+        {
+            foreach (RelayQuizState state in System.Enum.GetValues(typeof(RelayQuizState)))
+            {
+                Assert.IsFalse(RelayQuizLogic.ShouldAutoPause(state, hasFocus: true, hasFreshHand: true), state.ToString());
+            }
+        }
+
         // ---- pause와 수동 resume (docs/09 §7) ----
 
         [Test]
