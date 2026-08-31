@@ -1,132 +1,107 @@
-# 13. 폰 카메라 입력 설계 — 웹캠 없는 유저 지원
+# 13. 폰을 PC 카메라로 쓰는 입력 설계
 
-## 0. 결정 사항과 배경
+## 0. 범위와 결론
 
-| 결정 | 근거 |
-|---|---|
-| **마우스/키보드 폴백은 넣지 않는다** | 릴레이 그림 맞추기의 재미는 "손으로 그리기 어려움" 자체에서 나온다. 마우스 유저가 섞이면 그림을 잘 그려버려 웃음 포인트가 죽고, 대칭 경쟁 구도에서는 밸런스도 붕괴한다. 캠 조작이 게임의 정체성이자 유일한 마케팅 훅. |
-| **"웹캠 보유율" 문제는 폰-캠 경로로 푼다** | 웹캠 없는 유저도 스마트폰은 있다. 입력 설계를 건드리지 않고 온보딩으로 해결. |
-| 단계적 접근 (아래 §1) | 1~2단계는 코드 수정 0으로 즉시 가능. 3단계는 기존 UDP 입력 경로 위에 얹는 자연스러운 확장. |
+이 문서는 스마트폰 영상을 **PC의 카메라 장치로 노출**한 뒤, 기존 Python hand tracker를 유지하는 1차 경로를 정의한다.
 
-## 1. 3단계 로드맵
+```text
+[phone camera] -> [OS/USB/virtual webcam device on PC]
+                 -> PythonTracker/OpenCV
+                 -> UDP 127.0.0.1:5052
+                 -> Unity UdpHandReceiver -> HandInputRouter
+```
 
-| 단계 | 방식 | 게임 측 작업 | 시점 |
-|---|---|---|---|
-| 1 | 서드파티 가상 웹캠 앱 (DroidCam, Iriun, Camo) | 온보딩 가이드 문서 1장 | 출시 시점 |
-| 2 | OS 내장 기능 (Win11 연결된 카메라, macOS 연속성 카메라) | 가이드에 한 줄 추가 | 출시 시점 |
-| 3 | 폰 브라우저에서 MediaPipe 실행 → **좌표만** 전송 | `phone_bridge` + 폰용 웹페이지 | 후순위 (공식 기능화) |
+폰 안에서 hand tracker를 실행하거나, 게임 peer끼리 영상을 전달하는 설계는 1차 범위가 아니다. 폰-PC 카메라 영상 경로와 초대/Steam의 game-peer 데이터 경로는 별개이며, 영상이나 landmarks를 초대/Steam으로 보내지 않는다. 카메라 영상은 해당 PC의 Python tracker가 소비하고, Unity에는 파생된 hand packet만 local UDP로 보낸다.
 
-공통 선행 작업: **카메라 선택 UI** (§4). 가상 웹캠은 내장캠 옆에 함께 열거되므로 어느 단계든 필요하다.
-
-## 2. 1단계 — 가상 웹캠 온보딩 (코드 수정 0)
-
-폰 앱 + PC 드라이버를 설치하면 폰이 **일반 웹캠 장치로 등록**된다. OpenCV `VideoCapture`가 그대로 잡으므로 `hand_tracker.py`는 수정 없음.
-
-| 앱 | 플랫폼 | 비고 |
+| 항목 | 현재 확인 상태 | 문서에서의 취급 |
 |---|---|---|
-| Iriun Webcam | Android/iOS ↔ Win/mac | 무료 티어 무난, USB/Wi-Fi |
-| DroidCam | Android/iOS ↔ Win | 무료 티어는 저해상도 — 트래킹엔 640×480도 충분 |
-| Camo | iOS/Android ↔ Win/mac | 화질 우수 |
+| `PythonTracker/config.py`의 기본 `CAMERA_INDEX=0` | 소스 확인 | 기본값이며 `--camera N`으로 선택 가능 |
+| `hand_tracker.py`의 OpenCV 입력 | 소스 확인 | PC에 camera device가 노출되면 기존 tracker를 유지하는 전제 |
+| Python → UDP `127.0.0.1:5052` | 소스 확인 | 기존 경로 유지 |
+| Unity fresh packet/hand, 끊김 시 취소·재무장 | 소스 확인 | `CameraControlPanel`, `HandInputRouter` 동작을 기준으로 안내 |
+| Windows connected camera / Continuity Camera / Camo | 공식 문서 확인 | 사용 후보. 이 프로젝트에서 OpenCV 성공은 미실측 |
+| phone camera → OpenCV → tracker | 기기 실측 미실행 | 지원 보장으로 표현하지 않음 |
+| orientation, handedness, FPS, latency, 발열·전원 | 기기 실측 미실행 | 출시 전 검증 항목 |
 
-온보딩 가이드에 반드시 넣을 내용:
-- **USB 연결 권장.** Wi-Fi 스트리밍은 수십 ms 지연이 붙어 커서 조작에 체감된다.
-- 폰 거치 각도: 상반신+손이 프레임에 들어오게 (기존 웹캠 안내와 동일).
-- 게임/트래커의 카메라 선택 화면에서 가상 웹캠 장치를 고르라는 안내.
+640×480, 30fps는 목표 또는 시험 시작값으로 제안할 수 있지만 실측 결과가 아니다. 무료 여부, 모든 OS/기기 지원, 성능과 지연은 보장하지 않는다.
 
-<!-- ponytail: 앱별 상세 스크린샷 가이드는 출시 직전에 최신 버전 기준으로 작성. 지금 쓰면 UI가 바뀌어 낡는다 -->
+## 1. 1차 연결 선택
 
-## 3. 2단계 — OS 내장 기능
+먼저 운영체제의 안전한 내장 경로를 확인하고, 되지 않으면 사용자가 승인한 USB 또는 virtual webcam 도구를 선택한다. 특정 앱을 필수 채택하거나 USB가 항상 우수하다고 단정하지 않는다.
 
-- **Windows 11 23H2+ / Android 9+**: "휴대폰과 연결"(Link to Windows)의 **연결된 카메라**. 앱 설치 없이 폰이 웹캠 장치로 등록된다.
-- **macOS / iPhone**: 연속성 카메라(Continuity Camera). 동일하게 표준 카메라로 잡힌다.
+### Windows connected camera
 
-두 경우 모두 1단계와 동일하게 코드 수정 없음. 가이드에서 OS 버전 조건만 명시한다.
+Microsoft의 현재 안내는 Windows 11, Android 10 이상, Link to Windows app 1.24022.0 이상을 요구한다. `Settings > Bluetooth & devices > Mobile devices > Manage devices > Use as connected camera`에서 기능을 설정하며 앱과 카메라 권한이 필요하다. 기존 문서의 Android 9 이상·앱 불필요 조건은 폐기한다. [Microsoft: Use your mobile device's camera](https://support.microsoft.com/en-us/windows/apps/phonelink/use-your-mobile-device-s-camera)
 
-## 4. 선행 작업 — 카메라 선택 UI
+### Apple Continuity Camera
 
-현재 카메라 인덱스는 `PythonTracker/config.py` 고정값이다. 가상 웹캠 유저는 장치가 2개 이상이 되므로 선택 수단이 필요하다.
+Apple의 공식 조건은 iPhone XR 이상, iOS 16 이상, macOS Ventura 13 이상, 동일 Apple Account와 2FA, Wi-Fi와 Bluetooth다. USB 연결 시 Mac에서 Trust 절차가 필요하다. 이 조건은 카메라 노출 조건이며, Windows 또는 이 프로젝트의 OpenCV에서 열리는 것까지 의미하지 않는다. [Apple: Continuity Camera](https://support.apple.com/en-us/102546)
 
-- 최소 구현: `hand_tracker.py` 시작 시 사용 가능한 장치를 열거하고 콘솔/실행 인자(`--camera N`)로 선택. 프리뷰 창이 이미 있으므로 "맞는 카메라인지"는 프리뷰로 즉시 확인 가능.
-- 이후: Unity 쪽 설정 화면에서 선택 → 트래커 실행 인자로 전달.
+### USB 또는 virtual webcam
 
-<!-- ponytail: OpenCV는 장치 이름 열거 API가 없다(인덱스 프로빙만 가능). 이름까지 보여주려면 Windows는 pygrabber(DirectShow) 등이 필요 — 인덱스+프리뷰 확인으로 충분하면 추가하지 않는다 -->
+OS 기능이 없거나 카메라 장치로 나타나지 않을 때만 사용자가 선택한 도구를 검토한다. Camo는 PC/Mac의 Camo Studio와 iOS/Android의 Camo Camera를 USB 또는 Wi-Fi로 연결하는 후보이며, Windows virtual camera 호환 add-on과 관리자 권한이 필요할 수 있다. Android Windows USB에는 USB debugging 요구가 있으므로 설치·권한을 먼저 확인한다. Camo는 검증 후보이지 확정 채택이나 무료 보장이 아니다. [Camo: Getting started](https://camo.com/support/camo/camo-getting-started)
 
-## 5. 3단계 — 폰 브라우저 트래킹 + 좌표 전송
+기기와 PC에 표시된 virtual webcam 장치가 OpenCV에서 실제로 열리는지는 별도 시험한다. 온보딩에 앱 이름이나 낡은 화면 캡처를 고정하지 않는다.
 
-### 5.1 아키텍처
+## 2. 카메라 시작 UX와 입력 경계
 
-```
-[폰 브라우저]                          [PC]
-MediaPipe Hands (Tasks JS)      phone_bridge.py          Unity
-카메라 → 랜드마크 추출    --WSS-->  WebSocket 수신   --UDP-->  127.0.0.1:5052
-프로토콜 v1 JSON 생성              pass-through 재송신      기존 UdpHandReceiver
-```
+카메라 시작에 필요한 선택과 권한 확인만 mouse를 허용한다. 게임 그림, 물감 선택, 시작·준비 입력은 hand input으로만 처리한다. 마우스/키보드 폴백을 카메라 실패 복구 수단으로 추가하지 않는다.
 
-핵심: 영상이 아니라 **좌표만** 보낸다. 지연이 거의 없고, 트래킹 연산을 폰이 대신 하므로 PC 부담도 준다.
+`hand_tracker.py`는 `--camera N`, `--list-cameras`, `--preview/--no-preview`를 제공한다. Unity의 `CameraDeviceCatalog`와 `CameraControlPanel`은 후보 탐색·preview·재시도·world camera action을 연결한다. phone/Camo/Continuity Camera의 실제 OpenCV 호환성은 별도 기기 시험 대상이다.
 
-### 5.2 왜 브릿지가 필요한가
+preview에서 다음을 확인해야 한다.
 
-**브라우저는 UDP를 쏠 수 없다.** 폰 → PC는 WebSocket(또는 WebRTC DataChannel)만 가능하다. 기존 수신 경로(`UdpHandReceiver`, `PacketFilter`)를 그대로 재사용하려면 PC 쪽에 WS → UDP 재송신 릴레이가 최소 diff다. `PythonTracker/phone_bridge.py`로 추가하고, 배포는 기존 `dist/`(PyInstaller) 방식 그대로.
+- 전면 카메라의 좌우 미러와 화면 orientation이 tracker/Unity 좌표와 일치하는가
+- 왼손·오른손 handedness가 실제 손과 일치하는가
+- 손과 그림 영역이 동시에 들어오는 거치 위치인가
 
-브릿지가 하는 일 (전부):
-1. 폰용 정적 페이지(HTML+JS 1장) HTTPS 서빙
-2. 연결용 QR 표시 (PC의 LAN IP + 포트)
-3. WSS로 받은 v1 JSON을 `127.0.0.1:5052`로 UDP pass-through
+orientation과 handedness는 문서 추정값이 아니라 Android·iOS 실기기에서 각각 확인한다.
 
-패킷 내용은 건드리지 않는다. 검증·필터링은 기존 Unity 수신부가 이미 한다.
+## 3. 실패·복구 계약
 
-### 5.3 폰 쪽 JS가 지켜야 할 프로토콜 규칙 (docs/02_protocol.md v1 그대로)
+다음 상태는 모두 사용자에게 읽을 수 있는 상태로 표시하고, 재시도 경로를 제공한다.
 
-폰이 v1 JSON을 **완성해서** 보낸다. 브릿지는 무해석 통과.
-
-| 항목 | 규칙 |
+| 상황 | 처리 원칙 |
 |---|---|
-| 스키마 | `v:1, seq, timestamp, hands[]` — `fake_hand.py --selfcheck`가 검증하는 것과 동일 |
-| 셀피 미러 | Python의 `cv2.flip(frame, 1)`과 동일하게, 추론 전 미러 적용 (전면 카메라 기준) |
-| `handedness` 반전 | flip 후 MediaPipe 판정이 실제 손과 반대로 나오는 문제 — **폰 JS에서도 동일하게 반전해 송신** (02_protocol.md §2 검증법으로 실기기 확인 필수) |
-| `landmarks` | float[63] 평탄화, [0,1] 정규화, 원점 좌상단 |
-| `pinch` | `dist2D(4,8) / dist2D(0,9)` 동일 공식 |
-| heartbeat | 손 미검출에도 빈 `hands`로 계속 전송 |
-| 필터 | One Euro 필터를 폰 JS에 이식 (`one_euro_filter.py` 참고) — Unity 쪽은 필터 없는 raw를 기대하지 않으므로 송신 전 적용 위치를 기존과 동일하게 유지 |
+| 장치가 여러 개 | 후보 preview로 선택. `CameraDeviceCatalog`와 world camera action이 선택·재시도를 제공 |
+| 프레임 없음/권한 거부 | tracker 시작 실패로 표시하고 권한·장치 상태 확인 후 재시도 |
+| 다른 앱이 카메라 점유 | 점유 앱을 닫도록 안내 후 재시도 |
+| virtual webcam 연결 끊김 | tracker/Unity 수신 상태를 실패로 표시. 자동 복구를 보장하지 않음 |
+| tracker 프로세스 종료 | `CameraControlPanel`의 fresh packet 상태를 무효화하고 재시작 선택 제공 |
+| 재시작 후 오래된 입력 | 현재 packet을 폐기하고 fresh packet을 기다림. 손 입력은 다시 open 상태를 관찰해 재무장 |
+| active turn 또는 readiness 변경 | 카메라 준비 상태를 무효화하고 해당 turn의 입력을 일시정지. 새 fresh hand와 준비 절차 필요 |
 
-### 5.4 함정: getUserMedia는 secure context 필수
+Unity 소스상 `CameraControlPanel`은 fresh packet과 프로세스 상태를 구분하고, 상태가 바뀌면 `HandInputRouter.CancelAll(TrackingLost)`를 호출한다. `HandInputRouter`는 sample freshness를 검사하며 stale/invalid sample을 취소하고, 새 입력 뒤 open hand 관찰로 재무장한다. 이 문서는 소스에서 확인한 동작을 설명하며, 제품 UI와 자동 시작의 최종 상태는 다른 작업의 변경을 반영해 다시 확인해야 한다.
 
-폰 브라우저가 LAN IP의 `http://` 페이지에서는 **카메라 권한을 주지 않는다** (localhost 예외는 PC 자신에게만 적용).
+## 4. 네 명 동시 사용과 개인정보 경계
 
-- v1 해법: 브릿지가 **자체 서명 인증서로 HTTPS + WSS** 서빙. 폰에서 최초 1회 인증서 경고를 수락해야 한다 — 온보딩에 이 단계를 명시.
-- HTTPS 페이지에서 `ws://`(비암호화)로 내려가는 것도 mixed content로 차단되므로 **WSS까지 한 세트**다.
+4-player 목표는 **각 player의 PC가 자기 camera와 tracker 하나를 소유하는 4개의 독립 pipeline**이다. 현재 Python tracker의 local UDP 목적지 `127.0.0.1:5052`는 각 PC 안에서만 사용하므로 서로 다른 PC끼리 port가 충돌하지 않는다. 한 PC에서 tracker 여러 개를 실행하는 구성은 이 목표가 아니며 구현되었다고 가정하지 않는다. 각 PC의 장치 매핑, CPU/GPU, 유선·무선 지연은 실제 4개 instance에서 확인한다.
 
-<!-- ponytail: 인증서 경고 UX가 못 견딜 수준이면 WebRTC DataChannel(클라우드 HTTPS 페이지 + 로컬 시그널링) 또는 전용 폰 앱으로 승격. v1은 자체 서명으로 간다 -->
+초대/Steam에는 camera 영상, hand landmarks, QR 연결 정보, PC의 LAN 주소를 넣지 않는다. 전화기 영상 전송은 phone과 해당 PC 사이의 입력 장치 연결이고, game-peer 통신은 게임 상태 전송이다. 두 경로를 섞지 않는 것이 개인정보 경계다.
 
-### 5.5 성능 전제
+## 5. 검증 계획
 
-- MediaPipe Hand Landmarker(Tasks JS, GPU delegate)는 중급 폰 브라우저에서 30fps 근처가 나온다. 프레임률이 모자라면 게임이 아니라 폰이 병목이므로, 온보딩에서 "최근 3~4년 내 폰 권장"으로 안내.
-- 전송량은 손 2개 기준 패킷당 2~3KB × 30Hz ≈ 90KB/s. 같은 공유기 안에서는 무시 가능.
+아래 표에서 자동 검증과 외부 기기 검증을 구분한다. Python unit test와 Unity camera discovery test는 통과했지만, 실제 phone/Camo/Continuity Camera 기기 시험은 아직 미실행이다.
 
-### 5.6 연결 UX
+| 검증 | 방법 | 통과 기준 |
+|---|---|---|
+| 장치 노출 | 지원 OS/도구별로 PC 카메라 목록과 OpenCV `VideoCapture` frame 획득 확인 | preview에 연속 frame 표시 |
+| orientation/handedness | Android·iOS 각 1대에서 좌우 손과 화면 회전 시험 | Unity cursor 위치와 handedness 일치 |
+| no frame/권한/점유 | 권한 거부, 장치 제거, 다른 앱 점유를 각각 재현 | 실패 문구, 입력 취소, 재시도 가능 |
+| 연결 끊김/restart | USB·Wi-Fi를 끊고 tracker를 재시작 | stale packet 사용 금지, fresh packet 후 재무장 |
+| 4-player | 네 PC에서 각자 camera·tracker·game instance를 실행 | 서로의 local port와 장치를 공유하지 않고 각 player의 hand 입력 유지 |
+| latency | 손 동작과 Unity 반응을 같은 시간 기준의 고속 촬영으로 측정 | 유선/무선 및 장치별 분포 기록 |
+| 장시간 | 유선·무선 각각 장시간 실행하며 발열·배터리·절전·연결 유지 기록 | 지원 조건과 제한을 문서화 |
 
-1. PC에서 브릿지 실행 → QR + `https://<LAN IP>:<port>` 표시
-2. 폰 카메라로 QR 스캔 → 브라우저 열림 → 인증서 경고 수락(1회) → 카메라 권한 허용
-3. 폰 화면에 셀피 프리뷰 + 손 스켈레톤 오버레이 (트래킹 확인용)
-4. Unity는 아무것도 몰라도 된다 — 기존 UDP 수신 그대로
+phone timestamp와 PC 수신 timestamp의 단순 차이로 절대 latency를 주장하지 않는다. clock sync가 없으면 시계 오프셋이 포함되므로, 고속 촬영 또는 동기화된 측정 장치가 필요하다.
 
-## 6. 유실·단절 대응
+## 6. 후속 검토
 
-기존 규칙(02_protocol.md §4)을 그대로 상속한다. 브릿지 재시작 = 송신 측 재시작과 동일하게 seq 리셋 → 기존 `PacketFilter.IsNewSession`이 처리. 폰 Wi-Fi 순단은 0.5초 무수신 → 커서 fade out → 재수신 시 자동 복구로 이미 커버된다.
+폰 내 tracker, 자체 pairing QR, 브라우저 bridge, WebSocket/WebRTC 전송은 1차 경로의 구현 항목이 아니다. 나중에 검토할 때도 영상 대신 landmarks만 보내는지, secure context와 인증, 재연결, 개인정보 경계를 별도 설계하고 실제 기기로 검증한 뒤 결정한다. 현재 `phone_bridge.py`와 폰용 페이지는 존재하지 않으며, 이는 삭제된 기능이 아니라 아직 구현 전인 기능이다.
 
-추가로 필요한 것 하나: **WS 연결 끊김을 폰 화면에 표시** (유저가 "게임이 죽었다"고 오해하지 않게).
+## 7. 결정 기록
 
-## 7. 검증 계획
-
-| 검증 | 방법 |
-|---|---|
-| 브릿지 pass-through | `fake_hand.py`를 WS 클라이언트 모드로 확장하거나, 폰 페이지 JS에 `--selfcheck` 상당의 스키마 자체 점검 추가 |
-| handedness 반전 | 02_protocol.md §2 검증법 (양손 동시, wrist.x 비교)을 실기기 Android·iOS 각 1대에서 수행 |
-| 지연 | `timestamp`(폰) vs Unity 수신 시각 비교 — 단, 폰과 PC의 시계가 다르므로 **왕복이 아닌 상대 지터만** 신뢰. 절대 지연은 화면 녹화(240fps)로 손동작→커서 반응 측정 |
-| 기존 경로 무회귀 | PythonTracker(웹캠) 경로 그대로 실행해 커서 동작 확인 — 브릿지는 별도 프로세스라 간섭 없음 |
-
-## 8. 구현 순서 제안
-
-1. **카메라 선택** (§4) — 1단계 온보딩의 전제. 반나절 규모.
-2. **온보딩 가이드 1장** (§2~3) — 출시 패키지에 포함. 코드 0.
-3. **phone_bridge + 폰 페이지** (§5) — 후순위. 프로토콜이 이미 고정돼 있어 언제 해도 기존 코드와 충돌 없음.
+1. 1차는 phone을 PC camera device로 노출하고 기존 Python/OpenCV tracker와 UDP loopback 경로를 유지한다.
+2. 초대/Steam game-peer 경로에는 camera 영상이나 landmarks를 보내지 않는다.
+3. camera 시작의 선택·권한·실패 복구에만 mouse를 사용한다. 게임 조작은 hand input만 사용한다.
+4. camera 선택과 preview 경로는 구현됐다. phone/Camo/Continuity Camera의 장치 노출, orientation, latency, 장시간 지원 범위는 실측 후 확정한다.

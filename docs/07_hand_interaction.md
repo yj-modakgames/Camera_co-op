@@ -105,7 +105,7 @@ HandCursorController의 `OnHandSample`은 새로 수용된 LatestPacket 참조�
 4. 맞은 오브젝트의 HandCanvasInteractable과 **실제 CanvasSurface**를 확인한다. 등록된 현재 작업 캔버스 하나만 허용한다.
 5. 캔버스를 벗어나거나 중간에 UI가 가리면 선을 끝낸다. 핀치를 유지한 채 돌아와도 이어 그리지 않는다.
 
-커서 Image·커서 라벨·단순 타이머 Text는 raycastTarget=false다. 차폐 패널은 전체 화면에서 raycastTarget=true이며 입력 UI 중 최상위에 둔다. 입력 대상 탐색에 `Camera.main`이나 런타임 Find를 사용하지 않는다. Gallery의 CanvasSurface는 시각 배치에만 쓰고 HandCanvasInteractable을 붙이지 않는다.
+커서 Image·커서 라벨·단순 타이머 Text는 raycastTarget=false다. 차폐 패널은 전체 화면에서 raycastTarget=true이며 일반 게임 입력 UI 중 최상위에 둔다. `RelayQuiz`의 `CameraPanel`은 이 일반 UI 순서의 예외로 `OverlayRoot`의 마지막 자식에 두어 Handover·Pause 차폐보다 위에 보인다. 입력 대상 탐색에 `Camera.main`이나 런타임 Find를 사용하지 않는다. Gallery의 CanvasSurface는 시각 배치에만 쓰고 HandCanvasInteractable을 붙이지 않는다.
 
 `LeftHandCursor`와 `RightHandCursor`에는 각각 중첩 Canvas를 두고 `overrideSorting=true`, `sortingOrder=32767`을 지정한다. OverlayRoot는 100을 유지하고 다른 UI는 커서보다 낮은 순서를 사용해, 팔레트·팝업·차폐 패널 위에서도 양손 커서가 보이게 한다. 커서 Canvas에는 GraphicRaycaster를 붙이지 않으며 기존 CanvasGroup의 `interactable=false`, `blocksRaycasts=false`를 유지한다. 커서 위치·크기·추적 유실 시 fade 동작은 바꾸지 않는다.
 
@@ -208,6 +208,8 @@ AudioSource는 2D(spatialBlend=0), playOnAwake=false, volume=0.2다. Step 2에�
 
 ## 10. 캠 시작 버튼 보완안 (승인 완료)
 
+> 계약 보완일: 2026-08-28.
+
 아래 내용은 **기존 입력 정책의 승인된 변경안**이다. 2026-08-28 사용자가 “응”으로 카메라 컨트롤만의 마우스 예외와 게임 안 시작·종료 버튼 추가를 승인했다. 실제 카메라는 사용자가 Play에서 버튼을 누를 때만 시작한다.
 
 ### 선택지
@@ -221,7 +223,7 @@ AudioSource는 2D(spatialBlend=0), playOnAwake=false, volume=0.2다. Step 2에�
 ### 권장안의 입력·표시 계약
 
 - 화면 오른쪽 위에 `캠 켜기/끄기`와 연결 상태를 둔다. 사용자가 버튼을 누르기 전에는 카메라를 자동으로 켜지 않는다.
-- **이 카메라 컨트롤의 시작·재시도·종료만 마우스 왼쪽 클릭을 허용한다.** A/B/C, 팔레트, 릴레이 진행·제출은 계속 손 전용이다. Enter·Space·추가 단축키로 카메라를 조작하지 않는다.
+- **이 카메라 컨트롤의 시작·재시도·종료만 마우스 왼쪽 클릭을 허용한다.** A/B/C, 팔레트, 릴레이 진행·제출은 계속 손 전용이다. Enter·Space·추가 단축키로 카메라를 조작하지 않는다. 카메라 control이 available이고 app focus와 `Interact`가 모두 성립해야 한다. `Blocked`에서는 여기에 더해 카메라가 수신 중이 아닌 준비 상태(`IsCameraPreparing`)일 때만 복구용으로 허용하며, 수신 중 `Blocked`에서는 거부한다.
 - 최초 캠 준비 중에는 입력 모드 관리자가 Interact와 보이는 마우스 포인터를 제공하고 이동·룩을 막는다. 연결 후에는 기존 게임 컨텍스트로 돌아간다. Interact에서는 카메라 컨트롤용 마우스 포인터를 표시하고, Move에서는 기존 잠금·숨김을 유지한다.
 - 카메라 컨트롤 자체만 마우스 히트 검사한다. 공유 InputSystemUIInputModule의 Point/Click/Move/Submit/Cancel 참조를 다시 연결해 다른 UI까지 마우스로 활성화하지 않는다.
 - 기존 `TrackerLauncher`의 venv 실행·자기 프로세스 트리 종료 경로를 재사용한다. 필요한 Launcher·Receiver·InputModeManager·버튼·Text 참조는 Inspector로 직접 연결한다. 기존 온라인 씬의 동작은 유지한다.
@@ -232,7 +234,7 @@ AudioSource는 2D(spatialBlend=0), playOnAwake=false, volume=0.2다. Step 2에�
 
 ### 구현 후 검증
 
-기존 테스트에 카메라 전용 마우스 범위, 커서·모드 복구, 중복 실행 방지, 시작 실패 표시를 추가한다. 실제 캠 켜기·끄기·Play 종료 후 점유 해제는 사용자가 확인한다. 에이전트는 자동 Play를 하지 않는다. 기존 레이캐스트 실패 4건은 별도로 남아 있으며 이 보완안의 승인이나 구현으로 통과 처리하지 않는다.
+기존 테스트에 카메라 전용 마우스 범위, `Blocked` 준비·수신 분기, 포커스 복구, 커서·모드 복구, 중복 실행 방지, 시작 실패 표시를 추가한다. 실제 캠 켜기·끄기·Play 종료 후 점유 해제는 사용자가 확인한다. 에이전트는 자동 Play를 하지 않는다. 기존 레이캐스트 실패 4건은 별도로 남아 있으며 이 보완안의 승인이나 구현으로 통과 처리하지 않는다.
 
 ## 11. 카메라 보완 구현·검증 기록 — 2026-08-28
 

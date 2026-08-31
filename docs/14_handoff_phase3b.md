@@ -1,48 +1,32 @@
-# 14. 인계 — Phase 3b 미니게임 구현 진행 상태
+# 14. Phase 3b 미니게임 구현 판정 기록
 
-> 작성 2026-08-27 · **갱신 2026-08-28 (Task 3 재리뷰 종료 + Task 4·5·6 완료 반영)**
-> 이 문서는 **다른 세션이 Phase 3b 구현을 이어받기 위한** 인계 문서다.
-> 스펙: `docs/12_phase3b_guess_game.md` (구속력 있는 진실 원천)
-> 계획: `docs/superpowers/plans/2026-08-27-phase3b-guess-game.md` (Task 1~8, 체크박스)
-> 브랜치: **`main`** — 2026-08-28 확인 시점에 `main` = `origin/main` = `origin/phase3b-guess-game`이 모두 같은 커밋이었다. 별도 브랜치 작업은 사실상 종료됐고 Phase 3b 커밋은 전부 main에 있다.
+> 작성 2026-08-27 · 상태 정정 2026-08-31
+> 현재 요구·검증 결과의 기준은 [12_phase3b_guess_game.md](12_phase3b_guess_game.md)다. 이 문서는 source/test에서 참조하는 구현 판정과 환경 함정을 보존한다.
 
-## 1. 즉시 확인할 것 (재개 첫 단계)
+## 1. 현재 상태
 
-1. `git log --oneline -8` — 아래 §2 표와 대조. 2026-08-28 작업 종료 시점 HEAD: `4eece0a`(Task 6 리뷰 Important fix). working tree clean.
-2. **다음 작업은 Task 7 (통합 검증 G-2~G-7)** 이다. Task 3~6은 구현·리뷰·수정까지 끝났다. Task 7은 Play 모드 실행이 필요해 §9의 함정(특히 dirty 씬 + `run_tests`, instanceId 무효화)을 반드시 먼저 읽을 것.
-3. Task 7 착수 전 알아야 할 **미해결 리스크 1건**: `ProjectSettings/ProjectSettings.asset:933`이 `activeInputHandler: 1`(Input System Package only)이고 씬 EventSystem은 `InputSystemUIInputModule`이다. legacy `InputField`의 텍스트 입력은 IMGUI 이벤트 큐(`Event.PopEvent`)에 의존하므로 계획서 "깨지기 쉬운 것" 8번이 현실화될 수 있다. **에디터 Play는 에디터 자체 이벤트 펌프로 동작하고 빌드에서 안 될 수 있다 — 빌드 실측이 필요**하다. 폴백은 계획서대로 `Keyboard.current.onTextInput`. 단 `InputFocus` 게이트 자체는 `isFocused`만 보므로 텍스트 입력이 안 되더라도 게이트는 정상 동작한다.
-4. SDD 레저(git-ignored, 이 기기 한정): `.superpowers/sdd/2026-08-27-phase3b-guess-game/progress.md` — **2026-08-28 시점 존재하지 않음**. 이 문서 §2~§8이 유일한 기록이다.
+- Task 1~6의 핵심 구현과 review가 완료됐다. 아래 §4~§8은 당시 수정·수용 판단의 근거다.
+- commit `b121978`에서 Task 7 통합 결과가 `docs/12`에 기록됐다. G-2·G-3·G-5·G-6·G-7은 합성 UDP와 Loopback 환경에서 PASS다.
+- G-4는 `InputFocus` 이동 gate만 PASS다. legacy `InputField`의 실제 keyboard·한글 IME와 Player build 동작은 사용자 검증 대기다.
+- 실제 webcam 1 round, Steam 실제 2인 이상, G-8 `QUALITY_CHECKLIST` 평가는 남아 있다.
+- 따라서 이 기록의 과거 `239/239` 기준선이나 Loopback PASS를 새 4인 3D 제품의 완료 증거로 사용하지 않는다.
 
-## 2. Task 진행 상태 (2026-08-28 갱신)
+## 2. 최신 검증과 잔여 finding
 
-| Task | 내용 | 상태 | 커밋 | 테스트 |
-|---|---|---|---|---|
-| 1 | GameProtocol + GuessJudge + WordBank | **완료** (리뷰 clean) | `a1b434b` | 153/153 |
-| 2 | GuessGameLogic 상태 머신 | **완료** (리뷰 clean, minor 7 이연) | `8d5bc78` | 178/178 |
-| 3 | NetProtocol v3 + NetSession 통로 6건 | **완료** — 재리뷰 ADDRESSED (§4) | `b7d851a` + `8d3c353` | 197/197 |
-| 4 | 입력 게이트 (InputFocus·StrokesEnabled·WASD/C 차단) | **완료** (리뷰 CLEAN, minor 4 이연) | `a542c70` | 200/200 |
-| 5 | GameClientState + GameSession | **완료** (리뷰 CLEAN, minor 6 이연) | `2a63972` | 239/239 |
-| 6 | GameUI + words_ko.txt + 씬 배선 | **완료** — 리뷰 Important 1건 fix됨 (§4-2) | `82fb4af` + `4eece0a` | 239/239 |
-| 7 | 통합 검증 G-2~G-7 | 미착수 ← **다음 작업** | — | — |
-| 8 | 품질 채점 + 문서 마감 | 미착수 | — | — |
+최신 시나리오·수치·제약은 `docs/12` §6을 따른다. Task 7에서 수정하지 않고 남긴 finding은 다음과 같다.
 
-참고: `3c6b331`(docs/13 폰 카메라 설계)은 **사용자가 직접 만든 커밋** — 이 계획과 무관, 건드리지 말 것.
+1. 첫 `RoundEnd` 전까지 scoreboard가 비어 있다.
+2. 검증 중 Play 종료와 시작 버튼 자동 실행이 각각 관측됐지만 원인은 확정하지 못했다.
+3. 정지 pinch는 local point 추가가 없어도 `StrokePoints`를 매 frame 보내 전송량이 커질 수 있다.
+4. protocol v3는 이전 build와 호환되지 않는다. 실제 배포 전에 참여 기기를 같은 build로 갱신해야 한다.
 
-테스트 수치는 전부 메인 세션이 `unity cmd --timeout 300 run_tests --mode EditMode`를 **직접 재실행해 대조한 값**이다 (구현자 보고를 액면 수용하지 않았다). Task 5 구현자 보고의 "baseline 201"은 오기 — 정확한 값은 200이고, 리뷰어가 `[Test]`/`[TestCase]` 정적 계수로 `200 + 39 = 239`를 독립 확인했다.
+## 3. 이 문서를 유지하는 이유
 
-## 3. 재개 방법
+- runtime source와 test가 아래 §6의 권한·전이 판단을 직접 참조한다.
+- §8은 `RelaySwap` 첫 drawer 통지와 `StrokeEnd` gate의 수용 경계를 설명한다.
+- §9는 stale compile, dirty Scene test 저장, Unity 실행 순서 같은 재현 가능한 검증 함정을 보존한다.
 
-superpowers:subagent-driven-development 스킬로 계획을 이어서 실행한다:
-
-```
-docs/superpowers/plans/2026-08-27-phase3b-guess-game.md 를 subagent-driven-development로 이어서 실행.
-브랜치 main. Task 1~6 완료(리뷰·수정까지), Task 7(통합 검증 G-2~G-7)부터 진행.
-스펙 docs/12, 인계 노트는 docs/14 §1-3(입력 리스크)·§6·§7.
-```
-
-- 모델 배분(전역 규칙 §3): 계획의 각 Task 헤더에 명시 (sonnet=단순, opus=난이도 높음). 메인 세션은 구현하지 않고 위임·검수만.
-- Task당 절차: 구현자 파견(TDD) → 리뷰어 파견(스펙+품질) → 필요 시 수정 라운드(최대 5) → 레저 기록 → 다음 Task.
-- 전체 완료 후: 최종 브랜치 리뷰 → G-8 채점(≥9.0) → main 병합은 **사용자 확인 후**.
+오래된 branch·HEAD·working tree 상태와 재개 명령은 현재 작업 지시가 아니다. 실제 작업을 시작할 때는 현재 `git status`, `docs/12`, 활성 plan을 다시 확인한다.
 
 ## 4. 처리된 Important finding 기록
 

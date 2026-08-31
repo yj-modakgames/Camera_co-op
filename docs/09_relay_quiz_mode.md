@@ -52,13 +52,13 @@ Inspector 기본값은 `wordRevealSeconds=5`, `drawingSeconds=60`, `observeSecon
 | `Reveal` | 정답, 입력값, 정오, 손 `갤러리` 버튼 | 없음 | `UiOnly` | 손 버튼 → `Gallery` |
 | `Gallery` | 모든 그림을 순서대로 나란히, 손 `다시 시작` | 없음 | `Explore` | 다시 시작 → 안전 reset 후 `Setup` |
 
-각 상태의 overlay root는 해당 상태에서만 active다. `InputModeManager.SetContext(InputContext)`와 공개 권한 `CanMove`, `CanLook`, `CanUseHandUi`, `CanDraw`, `CanToggleMode`의 단일 계산 규칙은 [docs/06](./06_player_controller.md)을 따른다.
+각 상태의 overlay root는 해당 상태에서만 active다. `InputModeManager.SetContext(InputContext)`와 공개 권한 `CanMove`, `CanLook`, `CanUseHandUi`, `CanDraw`, `CanToggleMode`의 단일 계산 규칙은 [docs/06](./06_player_controller.md)을 따른다. 카메라 패널은 이 일반 입력 계약의 전용 예외지만, 카메라 control이 available이고 app focus와 `Interact`가 모두 성립해야 한다. `Blocked`에서는 여기에 더해 카메라가 수신 중이 아닌 준비 상태일 때만 왼쪽 클릭을 받는다.
 
 - `Explore`에서는 `Tab`으로 Move/Interact를 바꿀 수 있다. `WASD` 이동은 `Gallery`의 Move일 때만 가능하다.
 - `UiOnly`는 Interact를 강제하고 현재 활성 UI만 허용한다.
 - `Drawing`은 Interact와 active canvas·현재 도구 UI만 허용한다.
 - `Blocked`는 일반 입력 권한을 모두 끈다.
-- 키보드는 `WASD`, Explore의 mode key, 답변 편집에만 사용한다. 시작·준비·완료·포커스·제출·갤러리·재시작은 모두 손 버튼 전용이다.
+- 키보드는 `WASD`, Explore의 mode key, 답변 편집에만 사용한다. 시작·준비·완료·포커스·제출·갤러리·재시작은 모두 손 버튼 전용이다. 카메라 시작·재시도·종료만 별도 패널의 왼쪽 클릭 예외다.
 
 ## 4. 정상 전이
 
@@ -113,7 +113,9 @@ controller는 새 화면을 활성화하기 전에 `HandInputRouter.SetViewGener
 
 ## 7. Focus·tracking pause와 복구
 
-app focus를 잃으면 상태가 timed인지와 무관하게 즉시 `paused=true`, `InputContext.Blocked`로 바꾸고 불투명 pause overlay를 최상단에 올린다. **손 추적만을 원인으로 하는 자동 pause는 Drawing에만 적용**하며 Router.HasFreshHand가 false일 때 발생한다. 원래 상태와 남은 시간은 보존한다.
+> 계약 보완일: 2026-08-28.
+
+`Setup`에서는 아직 secret·timer가 없으므로 app focus 상실이나 손 부재만으로 자동 pause·차폐하지 않는다. 그 밖의 상태에서 app focus를 잃으면 상태가 timed인지와 무관하게 즉시 `paused=true`, `InputContext.Blocked`로 바꾸고 상태 UI 기준 불투명 pause overlay를 최상단에 올린다. 카메라 패널은 이 shield보다 위에 남아 수신 중이 아닌 준비 상태의 복구용 mouse만 받는다. **손 추적만을 원인으로 하는 자동 pause는 Drawing에만 적용**하며 Router.HasFreshHand가 false일 때 발생한다. 원래 상태와 남은 시간은 보존한다.
 
 WordReveal·ObservePrevious는 손을 내린 채 읽을 수 있어야 하므로 타이머를 계속 진행한다. Guessing도 손을 키보드로 내려 타이핑할 수 있어야 하므로 손 부재만으로 pause하지 않는다. 이 상태들에서도 invalid/stale 손의 UI 클릭은 취소된다. Setup·Handover·Reveal·Gallery는 손이 돌아올 때까지 해당 손 UI만 사용할 수 없다.
 
@@ -121,7 +123,7 @@ pause는 턴 완료나 archive를 발생시키지 않는다. capture 취소로 �
 
 복구는 자동 resume하지 않는다.
 
-1. app focus가 돌아오고 Router.HasFreshHand가 true일 때까지 `Blocked`를 유지한다. Blocked 중에도 Router는 샘플·신선도·재무장을 계속 관찰한다.
+1. app focus가 돌아오고 Router.HasFreshHand가 true일 때까지 `Blocked`를 유지한다. focus가 없는 동안에는 카메라 패널도 클릭을 받지 않는다. Blocked 중에도 Router는 샘플·신선도·재무장을 계속 관찰한다. app focus가 돌아온 뒤 카메라 control이 available이고 카메라가 수신 중이 아닌 준비 상태라면 카메라 패널의 복구용 왼쪽 클릭만 허용하고, 수신 중에는 허용하지 않는다.
 2. 조건이 충족되면 timer는 멈춘 채 pause overlay만 조작하는 `UiOnly`로 바꾼다. 손 `계속`은 Router.HasArmedHand, 즉 새 유효 샘플 2개 이상·fresh open 0.10초 조건 후에만 누를 수 있다. context 변경으로 재무장이 초기화되어도 타이머는 재개하지 않는다.
 3. `계속`을 pinch 후 release하면 capture를 다시 취소·rearm하고 저장한 상태의 context로 돌아가 timer를 재개한다.
 4. `계속` 전에 focus 또는 모든 손 freshness를 다시 잃으면 `Blocked`로 돌아간다.
@@ -195,7 +197,7 @@ pause overlay는 기존 secret·그림 위를 단순히 덮는 데 그치지 않
 
 로컬 PlayerController는 ModalFirstPerson 프로필이다. Setup·Handover에서 차폐된 동안 PlaceAt(WorkPose)로 다음 사람의 작업 시점을 정렬한다. Gallery 진입 시 차폐 중 PlaceAt(GalleryPose) 후 Explore·Move로 전환한다. 위치·동일 종횡비의 갤러리 크기는 [06_player_controller](06_player_controller.md) §6을 따른다. 참가자 기록 수만큼 읽기 전용 캔버스를 활성화하고 `플레이어 1 → 플레이어 2 → …` 표지를 함께 보여 준다.
 
-씬 overlay root는 `SetupRoot`, `HandoverRoot`, `WordRevealRoot`, `DrawingHudRoot`, `ObserveRoot`, `GuessRoot`, `RevealRoot`, `GalleryRoot`, 최상단 `PauseShieldRoot`로 구분한다. 한 프레임에 둘 이상의 상태 root를 상호작용 가능하게 두지 않는다.
+씬 overlay root는 `SetupRoot`, `HandoverRoot`, `WordRevealRoot`, `DrawingHudRoot`, `ObserveRoot`, `GuessRoot`, `RevealRoot`, `GalleryRoot`, 상태 UI 기준 최상단 `PauseShieldRoot`로 구분한다. `CameraPanel`은 `OverlayRoot`의 마지막 자식으로서 Handover·Pause shield보다 위에 보이지만, mouse 허용은 위의 camera control·focus·Interact·준비 상태 조건을 따른다. 한 프레임에 둘 이상의 상태 root를 상호작용 가능하게 두지 않는다.
 
 ## 12. 검증 계획
 
@@ -209,7 +211,7 @@ pause overlay는 기존 secret·그림 위를 단순히 덮는 데 그치지 않
 | 비공개 | 제시어는 `player0`의 `WordReveal`과 `Reveal`에서만 보이며 record·preview·gallery에 없음 |
 | 중복 전이 | 완료 button과 timeout 동시 입력, double release, stale generation action에서 archive·player 증가가 각각 1회 |
 | hand rearm | 화면 경계의 held pinch로 다음 버튼이 눌리지 않고 fresh open 0.10초 뒤 pinch+release만 승인 |
-| pause | focus loss는 모든 상태, 모든 손 stale/missing은 Drawing에서만 차폐·timer 정지. 새 손 `계속` 전에는 재개하지 않음 |
+| pause | `Setup`은 focus loss·손 stale/missing으로 자동 pause하지 않음. 그 밖의 focus loss는 차폐·timer 정지, 손 stale/missing은 Drawing에서만 차폐·timer 정지. 새 손 `계속` 전에는 재개하지 않음 |
 | 키보드 답변 | Guessing에서 손을 내리고 한글을 타이핑해도 pause하지 않음. 조합 중 제출 차단, timeout은 확정 문자열만 판정 |
 | snapshot | export 뒤 active canvas 수정·undo·clear를 해도 이전 `RelayTurnRecord`가 변하지 않음 |
 | IME | Windows player build에서 한글 조합·삭제·재포커스·손 제출 후 normalize 판정 확인 |

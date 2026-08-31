@@ -10,7 +10,7 @@
 - 기존 `Assets/_CameraCoop/Scripts/Input/PlayerController.cs`를 확장한다. 요청 초안의 `Scripts/Player/PlayerController.cs`는 중복 생성하지 않는다.
 - 현재 컨트롤러는 우클릭 유지 시 회전하고, XZ 사각 경계로 위치를 제한한다. CharacterController와 모드 상태는 아직 없다.
 - 기존 온라인 씬의 우클릭·경계 제한 동작은 보존한다. 로컬 씬만 새 제어 프로필을 사용한다.
-- 점프, 달리기, 웅크리기, 물리 밀기, 온라인 이동 동기화는 이번 범위에서 제외한다.
+- 점프는 `ModalFirstPerson` 로컬 이동에 포함한다. 달리기, 웅크리기, 물리 밀기, 온라인 이동 동기화는 이번 범위에서 제외한다.
 
 | 예정 파일 | 책임 |
 |---|---|
@@ -31,7 +31,7 @@
 
 WASD는 플레이어 yaw 기준 수평 이동이다. 대각선 길이를 정규화하고 `moveSpeed × deltaTime`을 적용한다. 마우스 delta는 픽셀 단위 감도로 yaw와 pitch에 적용하며 deltaTime을 다시 곱하지 않는다. pitch만 제한한다. 로컬 프로필에서는 우클릭을 요구하지 않는다.
 
-CharacterController의 수평 이동과 중력을 함께 처리한다. 중력은 점프 기능이 아니라 바닥 접촉용이다. Interact와 Blocked에서는 이동·회전을 적용하지 않고 수직 속도를 초기화한다. 바닥은 정적이며 캔버스 작업 위치는 바닥 위의 유효한 캡슐 위치로 배치한다.
+CharacterController의 수평 이동과 중력을 함께 처리한다. `Space`의 rising edge에서 grounded일 때만 `sqrt(jumpHeight × -2 × gravity)` impulse를 적용한다. 공중 재점프와 held key 반복 발동은 허용하지 않는다. 천장 충돌은 상승 속도를 제거하고, 착지 시 하강 속도를 초기화한다. Interact와 Blocked, 타이핑 중에는 점프를 포함한 이동 입력을 적용하지 않는다. 바닥과 구조물은 정적 collider로 두어 버튼이나 구조물이 통로를 막으며, 플레이어는 점프로 넘을 수 있다. 바닥은 유효한 캡슐 위치로 배치한다.
 
 선택 근거: [Unity 6.3 CharacterController](https://docs.unity3d.com/6000.3/Documentation/Manual/class-CharacterController.html).
 
@@ -61,7 +61,7 @@ CharacterController의 수평 이동과 중력을 함께 처리한다. 중력은
 | `CanMove`, `CanLook`, `CanUseHandUi`, `CanDraw`, `CanToggleMode` | 컨텍스트·모드·앱 포커스·InputFocus로 계산한 읽기 전용 권한 |
 | `OnModeChanged` | HUD·커서·라우터에 변경 통지 |
 
-판정 우선순위는 앱 포커스 상실 → Blocked → 타이핑 → 게임 컨텍스트 → Explore 모드다. `InputFocus.IsTyping`은 이동·룩·Tab·드로잉을 모두 막되 손 제출 버튼은 막지 않는다. 컨트롤러는 `ApplyLook`보다 먼저 이 권한을 검사한다.
+판정 우선순위는 앱 포커스 상실 → Blocked → 타이핑 → 게임 컨텍스트 → Explore 모드다. `InputFocus.IsTyping`은 이동·룩·Tab·드로잉을 모두 막되 손 제출 버튼은 막지 않는다. 컨트롤러는 `ApplyLook`보다 먼저 이 권한을 검사한다. 아래 카메라 전용 예외를 제외하면 `Blocked`의 모든 게임 입력은 닫힌다.
 
 로컬 씬에는 `GameSession`과 `NetSession`을 넣지 않는다. 기존 `GameSession.UpdateGates()`와 새 모드 관리자가 같은 `StrokesEnabled`를 덮어쓰는 구성을 금지한다. 로컬에서는 HandInputRouter만 계산된 `CanDraw`를 HandPointer에 반영한다. 온라인 게이트는 기존 소유자를 유지한다.
 
@@ -152,8 +152,14 @@ Step 4에는 PlayerController의 예정 `PlaceAt(Transform pose)`를 연결한�
 - HUD는 기존 uGUI의 Text와 Image다. 한글 표시에 [NanumGothic Regular](https://github.com/google/fonts/tree/main/ofl/nanumgothic)를 사용하고 `Assets/_CameraCoop/Fonts/OFL.txt`를 함께 보관했다. 패키지를 추가하지 않았다.
 - 관련 테스트 56건과 최종 전체 EditMode 287건이 통과했다. 정적 화면은 에이전트가 확인했고, 실제 Play는 사용자가 통과를 보고했다. Step 2 진행 승인을 받았다.
 
+## 10. Grounded jump 최종 구현 — 2026-08-31
+
+`ModalFirstPerson`에서 `Space`를 grounded jump로 사용한다. `CanMove`와 `CanLook` 권한은 기존 `InputModeManager` 계약을 따르며, `Blocked`·타이핑·앱 포커스 상실에서는 jump request를 거부한다. `CharacterController.isGrounded`가 확인된 rising edge만 소비하므로 키를 누르고 있는 동안 재발동하지 않는다. `jumpHeight`는 Inspector 설정값이며 기본값은 1.5m다. 관련 결과는 [검증 계획](05_test_plan.md) §11-4와 [최종 runtime QA](../.omo/evidence/world-labels-jump-runtime-qa-20260831/final-selective21-manual-qa.md)에 기록한다.
+
 ## 9. 캠 시작 컨트롤의 입력 예외 (승인 완료)
 
 [손 UI 설계 §10](07_hand_interaction.md#10-캠-시작-버튼-보완안-승인-완료)의 카메라 준비 화면과 카메라 컨트롤 전용 마우스 클릭 예외를 2026-08-28 사용자가 승인했다. 준비 동안 Interact·이동/룩 차단을 적용하며, Interact에서는 해당 컨트롤에 접근할 마우스 포인터를 표시한다. Move 잠금, 키보드 허용 범위, 일반 게임 UI의 손 전용 정책은 유지한다. 카메라 컨트롤이 없는 기존 씬의 기본 동작은 바꾸지 않는다.
 
-구현 API는 `SetCameraControlState(available, preparing)`와 `CanUseCameraMouse`다. 초기 꺼짐·시작 중·실패 재시도는 준비 화면으로 처리하고 실제 수신 뒤 해제한다. 준비 중 컨텍스트가 바뀌거나 포커스를 잃으면 그 변경을 존중한다. 기존 모드 28건과 새 카메라 권한 16건을 합친 44건이 통과했다. 전체 결과와 사용자 확인 대기는 손 UI 설계 §11을 따른다.
+구현 API는 `SetCameraControlState(available, preparing)`와 `CanUseCameraMouse`다. 초기 꺼짐·시작 중·실패 재시도는 준비 화면으로 처리하고 실제 수신 뒤 해제한다. 카메라 패널의 왼쪽 클릭은 앱 포커스가 있고 `Interact`일 때만 허용하며, `Blocked`에서도 카메라가 아직 수신 중이 아니고 `IsCameraPreparing`인 동안에만 복구용으로 허용한다. 수신 중 `Blocked`에서는 카메라 mouse도 거부한다. 준비 중 컨텍스트가 바뀌거나 포커스를 잃으면 그 변경을 존중한다. 기존 모드 28건과 새 카메라 권한 16건을 합친 44건이 통과했다. 전체 결과와 사용자 확인 대기는 손 UI 설계 §11을 따른다.
+
+> 계약 보완일: 2026-08-28.

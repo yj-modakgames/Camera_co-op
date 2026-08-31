@@ -1,116 +1,64 @@
-# 10. 빌드 조건 (단일 출처)
+# 10. 빌드 조건
 
-> 이 문서가 빌드 조건의 단일 진실 원천이다. 실행 가능한 형태는
-> `Assets/_CameraCoop/Editor/CameraCoopBuild.cs` — 문서를 고치면 그 파일도 같이 고친다.
+이 문서는 기존 build와 현재 4인 Steam `RelayQuizOnline` build의 조건을 구분해 기록한다. 현재 Windows x64 build와 Editor/Play evidence는 확인됐으며, 실제 Steam 4계정·camera 기기 QA는 외부 검증 대기다.
 
----
+## 1. 게임 용도와 scene 범위
 
-## 1. 공통 전제 (OS 무관)
+| 용도 | Scene | 설명 |
+|---|---|---|
+| 기존 Steam 게임 | `Assets/_CameraCoop/Scenes/NetplayTest.unity` + `Assets/_CameraCoop/Scenes/Netplay3D.unity` | 기존 `NetplayTest`/`Netplay3D` netplay 용도와 기존 build를 보존한다. |
+| 기존 local RelayQuiz | `Assets/_CameraCoop/Scenes/RelayQuiz.unity` | 한 화면에서 2–4명이 번갈아 진행하는 local game이다. |
+| 신규 Steam online RelayQuiz | `Assets/_CameraCoop/Scenes/RelayQuizOnline.unity` 하나 | 4명의 player가 Steam invite로 진행하는 별도 entry이다. 이 build는 이 scene만 사용한다. |
 
-| 항목 | 값 |
-|---|---|
-| Unity | **6000.3.15f1** 고정 (다른 버전은 URP 에셋 업그레이드 diff 발생, docs/09 §2-2) |
-| 빌드 씬 | **2개** — index 0 `Assets/_CameraCoop/Scenes/NetplayTest.unity`, index 1 `Assets/_CameraCoop/Scenes/Netplay3D.unity` (`ProjectSettings/EditorBuildSettings.asset`, commit `d1bf470`) |
-| Input | 새 Input System 전용 (`activeInputHandler: 1`). legacy `Input` API 사용 금지 |
-| Steam AppID | 개발용 **480** (Spacewar). 출시 시 `SteamBootstrap.DevAppId`만 교체 |
-| 산출물 위치 | `Builds/CameraCoop/` (gitignore 대상) |
+기존 legacy menu scene 목록과 `ProjectSettings/EditorBuildSettings.asset`의 `NetplayTest` + `Netplay3D` 목록 사이의 기존 불일치는 이 문서에서 기록만 한다. `RelayQuizOnlineBuild`가 전역 `EditorBuildSettings`를 바꾼다고 가정하지 않는다.
 
-**Canvas에는 `GraphicRaycaster`가 있어야 한다.** 없으면 버튼이 에러도 로그도 없이 조용히 죽는다 (2026-08-27 실제 발생, docs/09 §4).
+공통 Unity version은 `6000.3.15f1`이다. 기존 build의 정확한 산출물·payload·DoD는 이 문서의 legacy 항목을 따른다. 신규 online build에는 전용 helper `Assets/_CameraCoop/Editor/RelayQuizOnlineBuild.cs`의 scene 배열과 output path를 사용한다.
 
----
-
-## 2. OS별 조건
+## 2. 기존 build 조건
 
 | 항목 | Windows | macOS |
 |---|---|---|
 | BuildTarget | `StandaloneWindows64` | `StandaloneOSX` |
-| 산출물 | `CameraCoop.exe` | `CameraCoop.app` |
-| Steam plugin | `Facepunch.Steamworks.Win64.dll` + `steam_api64.dll` | `Facepunch.Steamworks.Posix.dll` + `libsteam_api.dylib` |
-| tracker 의존성 | `requirements.txt` (mediapipe **1.0.1**) | `requirements-intel-mac.txt` (mediapipe **0.10.21**) |
-| tracker 설치 스크립트 | `setup_tracker.bat` | `setup_tracker.sh` (+chmod) |
-| Python 버전 제약 | 없음 (1.0.1은 3.14까지 확인) | **3.12 이하** (0.10.21 wheel이 cp312까지) |
-| 프로세스 트리 종료 | `taskkill /PID <pid> /T /F` | `pkill -P <pid>` 후 부모 `Kill()` |
+| 기존 산출물 | `Builds/CameraCoop/CameraCoop.exe` | `Builds/CameraCoop/CameraCoop.app` |
+| tracker 의존성 | `requirements.txt` (`mediapipe 1.0.1`) | `requirements-intel-mac.txt` (`mediapipe 0.10.21`) |
+| setup script | `setup_tracker.bat` | `setup_tracker.sh` (+chmod) |
 
-Steam plugin 전환은 `.meta`의 Editor OS filter가 자동 처리한다 — 손댈 것 없다.
+기존 Steam AppID는 source의 `SteamBootstrap.DevAppId` 값인 개발용 `480` (Spacewar)이다. 기존 build의 `EditorBuildSettings`는 NetplayTest + Netplay3D이며, local `RelayQuiz`는 별도 scene이다.
 
-**Intel Mac에서 mediapipe 1.0.1은 설치 자체가 실패한다** (arm64 wheel만 배포). 근거는 `PythonTracker/requirements-intel-mac.txt` 주석.
+## 3. 신규 Steam online RelayQuiz 4p 조건
 
----
-
-## 3. 빌드 방법
-
-### 3-1. Editor 메뉴
-`Camera Co-op > Build for This OS` — 현재 Editor가 도는 OS에 맞춰 target·산출물 이름을 고르고 빌드한다.
-
-### 3-2. CLI
-```
-unity cmd build --target StandaloneWindows64 --outputPath "Builds/CameraCoop/CameraCoop.exe" --confirm true
-unity cmd build --target StandaloneOSX       --outputPath "Builds/CameraCoop/CameraCoop.app" --confirm true
-unity cmd build_status
-```
-`build`는 비동기다. `build_status`가 `completed`가 될 때까지 폴링한다.
-
-빌드 전에 `editor_status`로 `compiling:false`, `playMode:"stopped"`를 확인한다 (docs/09 §4).
-
----
-
-## 4. 빌드 후 자동 배치 (payload)
-
-`CameraCoopBuildPayload`(`IPostprocessBuildWithReport`)가 **메뉴 빌드든 CLI 빌드든 항상** 실행되어 산출물 옆에 다음을 깐다. 손으로 복사하는 단계는 없다.
-
-```
-Builds/CameraCoop/
-  CameraCoop.exe (또는 .app)
-  steam_appid.txt          <- 프로젝트 루트에서
-  fake_hand.py             <- PythonTracker/
-  README_FIRST.txt         <- PythonTracker/dist/
-  tracker/
-    hand_tracker.py
-    config.py
-    one_euro_filter.py
-    models/hand_landmarker.task
-    requirements.txt       <- OS에 맞는 원본을 이 이름으로 복사
-    setup_tracker.bat|sh   <- OS에 맞는 것만
-    run_tracker.bat|sh
-```
-
-배포 원본은 `PythonTracker/dist/`에 있다. 안내문·설치 스크립트를 고칠 일이 있으면 **그쪽**을 고친다 — `Builds/` 밑은 매 빌드마다 덮어써진다.
-
-`.venv`는 payload에 포함하지 않는다. 받는 쪽이 `setup_tracker` 를 1회 실행한다.
-
----
-
-## 5. 배포 zip 만들기
-
-`.venv`가 생긴 뒤에 묶으면 수백 MB가 딸려 들어간다. 반드시 확인하고 묶는다.
-
-```powershell
-# 확인
-Get-ChildItem Builds\CameraCoop -Recurse -Directory -Filter .venv
-# 묶기
-Compress-Archive -Path 'Builds\CameraCoop\*' -DestinationPath 'Builds\CameraCoop_Steam2p.zip' -Force
-```
-
----
-
-## 6. 빌드 후 확인 (DoD)
-
-| # | 확인 | 방법 |
+| 항목 | Windows | Intel Mac |
 |---|---|---|
-| B-1 | 빌드 성공, errors 0 | `build_status`의 `result: Succeeded` |
-| B-2 | Steam 초기화 | Player.log에 `Setting breakpad minidump AppID = 480` + `SteamInternal_SetMinidumpSteamID` |
-| B-3 | overlay 주입 | 프로세스 모듈에 `gameoverlayrenderer64.dll` (Windows) |
-| B-4 | 씬 기동 | Player.log에 `[UdpHandReceiver] listening on 127.0.0.1:5052` |
-| B-5 | **UI 클릭** | 버튼을 실제로 눌러 반응 확인. Editor에서만 확인하면 안 된다 (B-5는 빌드에서만 드러나는 결함이 있었다) |
-| B-6 | payload | `tracker/`, `steam_appid.txt`, `README_FIRST.txt` 존재 + `requirements.txt`가 해당 OS용인지 |
+| Scene | `Assets/_CameraCoop/Scenes/RelayQuizOnline.unity` 하나 | 같은 scene 하나 |
+| BuildTarget | `StandaloneWindows64` | `StandaloneOSX` |
+| Architecture | x64 | Intel x64 명시 |
+| 산출물 | `C:/git/Camera_co-op/Builds/RelayQuizOnline/CameraCoopRelayOnline.exe` | `Builds/RelayQuizOnlineMac/CameraCoopRelayOnline.app` |
+| helper entrypoint | `Camera Co-op/RelayQuiz Online/Build Windows x64` | `Camera Co-op/RelayQuiz Online/Build Intel Mac x64` |
 
-Player.log 위치:
-- Windows: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\Camera_co-op\Player.log`
-- macOS: `~/Library/Logs/DefaultCompany/Camera_co-op/Player.log`
+Windows path의 build는 `Succeeded`, errors 0, warnings 1로 확인됐다. warning은 `com.unity.pipeline` RuntimePipelineManager tooling warning이다. Intel Mac build에는 macOS Build Support 설치 승인 또는 별도 Mac build environment가 필요하며, 아직 실행하지 않았다.
 
----
+`RelayQuizOnlineBuild`는 idle EditMode, required scene 존재, target Build Support availability를 확인한 뒤 `BuildPipeline.BuildPlayer`에 `RelayQuizOnline.unity` 하나만 전달한다. Mac build 시 camera usage description도 임시 설정하지만, 이를 실제 macOS camera permission 검증으로 해석하지 않는다.
 
-## 7. 미해결
+## 4. tracker·payload·운영 전제
 
-- **N-5 (Steam 2인 실기 검증)** 미실시 — Steam 계정 2개 필요 (docs/09 §3)
-- macOS 빌드는 아직 한 번도 만들어진 적이 없다. §2의 macOS 열은 코드·문서 근거이며 실측이 아니다
+- Windows와 Intel Mac은 서로 다른 tracker dependency/setup을 사용한다. Windows `.venv`를 Mac에 복사하지 않으며, 기존 `.venv`를 설치·수정·삭제하지 않는다.
+- 신규 scene에서는 camera auto-start를 한 번 시도하고, `.venv` 누락·dependency 오류·OS camera permission·occupied camera 등 실패 원인을 표시한다. 실패 후 자동 반복하지 않고 retry를 제공한다. local `RelayQuiz` scene은 기존처럼 manual camera start다.
+- Camera raw video와 hand landmarks는 network payload로 보내지 않는다. Drawing은 recipient별 비공개 view 계약에 따라 실시간 전송하지 않는다.
+- Hand game buttons와 drawing, keyboard answer는 유지한다. Mouse exception은 connection/invite, camera recovery, pause `계속`에 한정한다. Drawing `Resume`은 app focus와 fresh hand 수신이 모두 필요하다.
+- Disconnect 시 현재 round를 abort하고 timer/input/private render를 중단한 뒤 re-invite한다. reconnect restoration과 host migration은 범위에 없다. 다음 game에서는 drawing/guessing role을 교대한다.
+
+## 5. 신규 online 실행 전제
+
+실기 확인에는 서로 다른 Steam account 네 개와 서로 다른 device 네 대가 필요하다. 현재 이 4계정·4device 시험은 실행하지 않았다. 두 build가 이미 실행된 상태에서 host가 invite하고 네 player가 ready인 뒤에만 시작한다. 이 절차는 app cold-start, deployment, store distribution을 보장하지 않는다.
+
+## 6. 기존 build 후 확인 기록
+
+기존 legacy build의 기존 확인 기록과 미해결 항목은 보존한다. 특히 기존 Steam 2인 실기 검증은 아직 미실시이고, macOS build도 실측되지 않았다. 이 문서의 legacy 기록을 신규 `RelayQuizOnline` build 성공 증거로 재사용하지 않는다.
+
+신규 Windows evidence: `Succeeded`, errors 0, warnings 1, output `Builds/RelayQuizOnline/CameraCoopRelayOnline.exe`, PE AMD64 `0x8664`/PE32+ `0x020B`; scene validator와 Play evidence도 통과했다. 배포 payload의 필수 `tracker/camera_utils.py`는 source/payload SHA256 일치와 import 성공까지 확인했다 ([payload evidence](../.omo/evidence/final-validation-20260831-security-postfix/windows-payload-import.txt)). Player는 10초 생존 후 owned PID가 종료됐고 log error-like line은 0이다 ([Player evidence](../.omo/evidence/final-validation-20260831-security-postfix/windows-player-launch.json)). Steam 4계정, 실제 webcam/phone, Intel Mac의 target-device 검증은 미검증이다.
+
+### 6-1. 기존 legacy build의 payload와 DoD
+
+기존 `CameraCoopBuildPayload`(`IPostprocessBuildWithReport`)는 legacy build 산출물 옆에 `steam_appid.txt`, `fake_hand.py`, `README_FIRST.txt`, OS별 `tracker/` source·model·requirements·setup/run script를 배치한다. `.venv`는 payload에 포함하지 않는다. 기존 legacy build의 상세 payload 원본은 `PythonTracker/dist/`이며, `Builds/` 아래 결과는 다음 build에서 덮어써질 수 있다.
+
+기존 legacy DoD 기록은 build report의 `Succeeded`와 errors 0, Steam 초기화 Player.log, Windows overlay module, `[UdpHandReceiver] listening on 127.0.0.1:5052`, 실제 build UI click, OS에 맞는 payload 확인이다. Player.log는 Windows에서 `%USERPROFILE%\\AppData\\LocalLow\\DefaultCompany\\Camera_co-op\\Player.log`, macOS에서 `~/Library/Logs/DefaultCompany/Camera_co-op/Player.log`에 있다. 이 항목들은 legacy evidence이며 신규 `RelayQuizOnline` 결과가 아니다.

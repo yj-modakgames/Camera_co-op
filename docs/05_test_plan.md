@@ -1,6 +1,6 @@
 # 05. 검증 계획
 
-> 갱신: 2026-08-28 · §1~5는 기존 Phase 1 기준·실측 기록이다. **현재 로컬 릴레이의 검증 설계는 §6~10**이며 구현·검증 결과는 §7에 기록한다.
+> 갱신: 2026-08-31 · §1~5와 §7~10은 historical Phase/local 기록이다. **현재 `RelayQuizOnline` 4p 검증 결과는 §11-3에 기록한다.**
 > 기존 Phase 1 채점 프로토콜: `QUALITY_CHECKLIST.md` 기준 총점 ≥9.0. 과거 기록을 현재 릴레이 검증 통과로 재사용하지 않는다.
 
 ## 1. Step별 완료 판정 기준 (Definition of Done)
@@ -100,7 +100,7 @@ Editor Play 모드, 5분 연속 8843 패킷, 통계 window 88개 기준.
 
 ## 6. 로컬 릴레이 검증 절차와 책임
 
-대상 설계: [06_player_controller](06_player_controller.md), [07_hand_interaction](07_hand_interaction.md), [08_drawing_canvas](08_drawing_canvas.md), [09_relay_quiz_mode](09_relay_quiz_mode.md). 로컬 씬은 `Assets/_CameraCoop/Scenes/RelayQuiz.unity`다. Step 1·2와 카메라는 사용자 확인을 받았다. Step 3 구현·자동 검증은 §7-4, 사용자 Play 절차는 §7-5에 기록했다. **Step 3 Play는 대기, Step 4·5는 미실행**이다.
+대상 설계: [06_player_controller](06_player_controller.md), [07_hand_interaction](07_hand_interaction.md), [08_drawing_canvas](08_drawing_canvas.md), [09_relay_quiz_mode](09_relay_quiz_mode.md). 로컬 씬과 Phase 기록은 historical 범위다. 현재 4p online 결과는 §11-3을 우선한다.
 
 | 순서 | 담당·절차 | 완료 판정 |
 |---|---|---|
@@ -202,7 +202,9 @@ Unity.exe -batchmode -quit -projectPath "C:\git\Camera_co-op" -logFile "C:\git\C
 
 결과는 `S2-01~08 통과` 또는 실패 ID·입력 순서·스크린샷·Console 메시지로 전달한다. 손/오디오 실측과 다른 해상도는 자동 EditMode 통과로 대신하지 않는다. 캔버스·팔레트·정답 입력창은 이번 테스트 씬에 아직 없다.
 
-#### 카메라 보완 체크리스트
+#### 카메라 보완 체크리스트 (historical 3D action 기록)
+
+> 계약 보완일: 2026-08-28.
 
 | ID | 확인할 동작 | 기대 결과 |
 |---|---|---|
@@ -214,6 +216,10 @@ Unity.exe -batchmode -quit -projectPath "C:\git\Camera_co-op" -logFile "C:\git\C
 | CAM-06 | 외부 Python 송신 중 Play | 외부 연결 표시, 중복 실행·외부 프로세스 종료 없음 |
 | CAM-07 | 캠을 켠 뒤 Play 종료 | 직접 시작한 프로세스와 웹캠 점유 해제. 다음 Play에서 자동 실행하지 않음 |
 | CAM-08 | 카메라 버튼 밖 클릭, 누른 뒤 영역 이탈, 포커스 변경, Enter/Space | 캠 실행·종료 없음. 영역 안에서 새 왼쪽 press/release만 동작 |
+| CAM-09 | 카메라 준비 중 focus loss 후 복귀, `Blocked`에서 재시도 | focus 상실 중 클릭은 거부된다. 카메라 control이 available이고 app focus와 `Interact`가 모두 성립해야 하며, `Blocked`에서는 추가로 수신 중이 아닌 준비 상태(`IsCameraPreparing`)일 때만 카메라 패널 왼쪽 클릭으로 재시도 가능 |
+| CAM-10 | 카메라가 수신 중인 상태에서 `Blocked` 진입 후 패널 클릭 | 카메라 mouse도 거부. 일반 게임 입력과 손 UI는 계속 차단 |
+| CAM-11 | Handover·Pause 차폐가 켜진 상태에서 카메라 패널 클릭 | `CameraPanel`은 시각적으로 차폐 위에 있지만 실제 mouse 허용은 CAM-09/10 조건을 따른다. 다른 게임 버튼은 계속 손 전용이며 실행되지 않음 |
+| CAM-12 | Setup에서 focus 상실·손 부재, 다른 상태에서 focus 상실·손 부재 | Setup은 자동 pause·차폐·secret/timer 생성 없음. 다른 상태 focus 상실은 pause, 손 부재 자동 pause는 Drawing에서만 발생 |
 
 ### 7-4. Step 3 실행 기록 — 2026-08-28
 
@@ -285,18 +291,90 @@ Unity.exe -batchmode -quit -projectPath "C:\git\Camera_co-op" -logFile "C:\git\C
 | H4-01 | 4인 정상 한 판 | 중간 두 사람은 각각 직전 한 장만 관찰, 최종 갤러리 3장·작성자 순서 일치 |
 | R-01 | Drawing에서 손 하나 숨김 / 둘 다 숨김 | 하나는 해당 선만 종료, 둘 다 유효하지 않으면 차폐·일시정지. 기존 그림 유지 |
 | R-02 | WordReveal·ObservePrevious·Guessing에서 손을 내림 | 손 UI만 차단되고 단계 타이머는 계속. 키보드 답변을 위해 손을 내릴 수 있음 |
-| R-03 | 각 상태에서 앱 포커스 상실·복귀 | 실제 비공개 표시 숨김·차폐·타이머 정지, 새 손 `계속` 전에는 자동 복귀 없음 |
+| R-03 | 각 상태에서 앱 포커스 상실·복귀 | `Setup`은 자동 pause·차폐 없음. 그 밖의 상태는 실제 비공개 표시 숨김·차폐·타이머 정지, 새 손 `계속` 전에는 자동 복귀 없음. 수신 중이 아닌 준비 상태이면 focus 복귀 후 카메라 패널만 복구용 mouse 허용 |
 | R-04 | Python 중단·재시작, seq 재시작 | stale UI 클릭 0회, Drawing pause, 복구 시 새 open·핀치 필요 |
 | R-05 | 그림 완료와 timeout 동시 / 오래된 버튼 release | record 추가와 player 증가 각각 한 번. 새 화면 동작으로 바뀌지 않음 |
 | R-06 | 캔버스 겹침 선·브러시 반투명·다른 크기 재생 | 저장 전후 스타일·겹침 순서·폭 비율 일치 |
 | R-07 | Windows 빌드에서 한글 조합·삭제·caret·재포커스·손 제출 | 글자 손실·중복 제출 없음. Editor만 통과하면 빌드 통과로 기록하지 않음 |
 | R-08 | 사용자에게 기존 Netplay3D 회귀 확인 요청 | 기존 Legacy 이동·우클릭·팔레트·네트워크 게이트 동작 유지. 실제 연결 검증 불가 시 그 범위를 명시 |
 
-관찰·제시어 시간은 앱 포커스 상실 때만 멈춘다. 손 추적만으로 중단하면 화면을 읽거나 답을 입력하기 어려우므로 Drawing 외에는 자동 pause하지 않는다.
+관찰·제시어 시간은 `Setup`을 제외한 상태에서 앱 포커스 상실 때 멈춘다. 손 추적만으로 중단하면 화면을 읽거나 답을 입력하기 어려우므로 Drawing 외에는 자동 pause하지 않는다. `Setup`에는 아직 secret·timer가 없으므로 focus loss나 손 부재로 멈출 대상이 없다.
+
+## 11. Historical Steam online RelayQuiz 2인 실기 검증
+
+이 절차는 이전 2p 승인 범위의 historical 기록이다. 현재 4p online 검증은 아래 §11-3을 따른다. synthetic packet이나 synthetic webcam은 real-device equivalence로 기록하지 않는다.
+
+### 11-1. 실행 전제와 build evidence
+
+서로 다른 Steam account 두 개, 서로 다른 device 두 대, matching online build, compatible game/version을 준비한다. 두 build가 이미 실행된 상태에서 host가 invite하고 guest가 accept한 뒤 두 player가 모두 ready인지 기록한다. app cold-start, deployment, store distribution은 이 절차의 보장 범위가 아니다.
+
+Windows 예정 output은 `C:/git/Camera_co-op/Builds/RelayQuizOnline/CameraCoopRelayOnline.exe` (`StandaloneWindows64`, PE x64)이고, Intel Mac 예정 output은 `Builds/RelayQuizOnlineMac/CameraCoopRelayOnline.app` (`StandaloneOSX`, Intel x64 Mach-O)이다. build report, 실제 architecture, payload를 각 device에서 증거로 남긴다. 현재 Windows Unity에는 `windowsstandalonesupport`만 있으며 Mac Build Support 설치 승인 전이므로 Mac 항목을 통과로 처리하지 않는다.
+
+### 11-2. 실기 checklist
+
+| ID | 확인 동작 | 기대 결과·기록 |
+|---|---|---|
+| ON-01 | 각 device에서 scene 진입 후 camera auto-start 관찰 | 신규 scene에서 한 번만 시도한다. missing `.venv`, dependency 오류, OS camera permission, occupied camera를 각각 표시하고 stderr/exit 원인을 기록한다. 자동 반복은 없다. |
+| ON-02 | camera 실패 뒤 retry, permission 허용 뒤 재시도 | continued recovery가 가능하고, 새 시도 뒤 fresh hand 수신을 기록한다. local `RelayQuiz`의 manual start와 혼동하지 않는다. |
+| ON-03 | host invite, guest accept, 두 player ready | 두 peer만 연결되고 ready 이후 round가 시작된다. 세 번째 peer·stale session은 허용하지 않는다. |
+| ON-04 | WordReveal/Drawing에서 host와 guest의 화면 확인 | 제시어·완료 그림이 recipient별로 비공개다. camera raw video와 hand landmarks가 network payload에 없다. 각 recipient screenshot을 남긴다. |
+| ON-05 | 수동 `drawing complete`와 drawing timeout을 각각 실행 | active stroke가 종료되고 drawing이 정확히 한 번 archive된다. 상대 timer는 최종 snapshot 전 시작하지 않는다. 두 결과를 별도 round로 기록한다. |
+| ON-06 | Guessing에서 keyboard answer와 hand `제출` | keyboard/IME answer가 동작하고, hand game buttons/drawing 규칙이 유지된다. mouse는 connection/invite, camera recovery, pause `계속` 예외만 확인한다. |
+| ON-07 | 다음 game 진행 | drawing/guessing role이 교대되고 두 player가 다시 ready해야 한다. |
+| ON-08 | active player와 waiting player가 각각 focus를 잃고 복귀 | active player는 pause shield 후 focus와 fresh hand가 모두 있어야 `계속`으로 resume한다. waiting player 차폐는 상대 timer를 멈추지 않는다. |
+| ON-09 | 연결 중 disconnect 후 re-invite | round가 abort되고 timer/input/private render가 중단된다. 새 invite로만 다시 시작하며 reconnect restoration/host migration으로 기록하지 않는다. |
+| ON-10 | Windows output 검사 | 실제 실행 파일이 PE x64인지 확인하고 build report·Player.log·payload 경로를 기록한다. |
+| ON-11 | Intel Mac output 검사 | 실제 app이 Intel x64 Mach-O인지 확인한다. Mac Build Support 미설치 상태에서는 `미실행`으로 남긴다. |
+| ON-12 | tracker 환경과 기존 파일 확인 | Windows와 Intel Mac dependency를 분리하고, 기존 Windows `.venv`가 설치·수정·삭제되지 않았음을 hash/목록으로 기록한다. Windows `.venv`를 Mac에 복사하지 않는다. |
+
+각 항목에는 날짜, commit/code state, Unity·OS·build version, device/account 식별자(비밀값 제외), 실제 입력 방식, PASS/FAIL/미실행, log·screenshot 경로를 남긴다. synthetic packet/webcam 또는 Editor-only 결과는 ON-04~ON-12의 real-device PASS를 대신하지 않는다.
+
+## 11-3. Current RelayQuizOnline 4p verification — 2026-08-31
+
+> 이 절의 `724/724`, `734/734` 및 cyan `CAMERA ON / OFF` 수치는 당시 camera/setup regression의 historical 결과다. 최종 label·jump 기준과 현재 수치는 §11-4의 fresh `744/744` 기록을 우선한다.
+
+#### 11-3-1. Current Canvas camera and transient RelaySetupRoot contract
+
+기존 §11-3에 남아 있는 cyan 3D `CAMERA ON / OFF`와 `CameraStartStop` 기록은 historical regression evidence이며 현재 계약으로 사용하지 않는다. 현재 camera 시작·종료는 오른쪽 위 Canvas `CameraToggle`의 mouse press/release만 담당한다. 버튼 상태는 `캠 켜기`·`시작 중…`·`캠 끄기`이고, 나머지 13개 world action은 hand-only다. `CameraStation`의 `Refresh`·`Prev`·`Next`·`Preview`는 세부 설정용으로 유지한다.
+
+`RelaySetupRoot`는 Scene load 시 inactive이며 안정된 lobby에서 계속 숨겨진다. join/leave와 game start 때만 notice를 2.5 unscaled seconds 동안 표시하고, 표시 중 phase overlay를 억제한 뒤 timeout 시 가장 최신으로 수신한 online view를 복원한다. setup error는 persistent 상태로 남긴다.
+
+최종 runtime QA에서 idle hidden, join notice, game-start notice, latest-view restore, answer focus cleanup, Canvas production pointer route `Off → Starting → Receiving → Off`를 확인했다. camera route는 실제 serialized button center에 `CameraControlPanel.ProcessPointer`를 호출한 것이며 physical OS mouse click이나 hand gesture를 수행했다고 주장하지 않는다. scoped Unity errors는 0이고 tracker process도 stop 뒤 0이다. [runtime QA 기록](../.omo/evidence/relay-setup-final-runtime-qa-20260831/relay-setup-final-runtime-qa-manual-qa.md)
+
+자동 검증은 focused `RelayQuizUITests 14/14`, `InputModeTests 49/49`, `CameraControlTests 46/46`, full EditMode **734/734 pass**이며, validator는 injected active `RelaySetupRoot`를 거부한다. [final review-fixes verification](../.omo/evidence/camera-canvas-final-review-fixes/verification.json)
+
+Scene validator는 PASS, `dotnet build`는 warnings/errors 0, Windows build는 success다. build에는 기존 `com.unity.pipeline` `RuntimePipelineManager` warning 1건이 남아 있으며, Windows Player 10초 smoke의 error-like line은 0이다. [final build gate evidence](../.omo/evidence/relay-setup-final-build-gate-20260831/)
+
+`Assets/_CameraCoop/Scenes/RelayQuizOnline.unity`와 `RelayQuizOnlineBuild`를 기준으로 확인했다. Unity EditMode는 **724/724 pass, fail/skip/inconclusive 0** ([latest raw XML](../.omo/evidence/camera-world-button-fix-20260831/unity-editmode-full-latest.xml))이다. XML attributes로 `result=Passed`, `total=724`, `passed=724`, `failed=0`, `skipped=0`, `inconclusive=0`, `start-time=2026-08-31 05:53:30Z`, `end-time=2026-08-31 05:53:32Z`를 직접 확인했다. PlayMode test inventory는 0이며, Editor Play에서 중앙 3D lobby, `Steam 4인 · 0/4명`, world `Host/Invite/Leave`, cyan `CAMERA ON / OFF`, `RelayCopy`/`MemoryCopy`/`CoopMural`/`Start`, 2D Ready action 부재를 확인했다. `context=Explore mode=Move canMove=True canLook=True`, `revealRichText=False`이며 scoped Play error/warning은 0이다.
+
+이번 regression 시나리오는 기존 camera action이 scene에는 active/available로 있었지만 초기 runtime viewport `(2.284,-0.502)`로 화면 밖에 놓여 사용자가 camera 시작 버튼을 찾을 수 없었던 경우다. 이후 `RoomBounds` trigger가 nearest hit로 target을 가리는 두 번째 regression도 확인했다. `HandInputRouter` world raycast를 `QueryTriggerInteraction.Ignore`로 수정하고 RelayQuizOnline의 HandInteractable에 trigger collider가 없음을 확인했으며, solid collider occlusion은 유지했다. `CameraStartStop` action을 중앙 lobby `(4.7,1.05,-0.65)`로 이동하고 cyan `CAMERA ON / OFF` label을 부여한 뒤 validator의 RED `(2.14,0.32,2.50)` outside margin이 GREEN PASS로 바뀌었다. initial scene center probe는 `screen=(1456.0,144.3,6.6)|target=Action_CameraStartStop|uiBlocked=False|state=Off|canMouse=True`다. post-fix runtime viewport는 `(0.758,0.134,6.550)`, `active=True`, `available=True`다. production `CameraControlPanel.ProcessPointer`에 scene screen coordinate press/release를 주입하고 application focus를 복구해 `Off → Starting (running=True) → Receiving`을 확인했다. 이는 사람이 실제 mouse나 hand gesture로 누른 결과를 뜻하지 않는다. 동일 route로 `Receiving → Off/running=False` shutdown과 tracker process 없음도 확인했다. 최종 HandInputRouter 수정 이후 새로 캡처한 [fresh Off state](../.omo/evidence/camera-world-button-fix-20260831/play-final-mouse-off-fresh.png)는 2026-08-31 14:46:04 KST 기준이며, 이전 `play-final-mouse-before.png`는 freshness 근거로 사용하지 않는다. after action 확인은 [after action](../.omo/evidence/camera-world-button-fix-20260831/play-final-mouse-after.png)이다.
+
+Scene validator는 14 unique actions, 4 slots, 3 remote avatars, 4 mural layers, read-only Gallery/private shells를 PASS했다. focused tests는 `CameraControlTests 46/46`, `PartyWorldControllerTests 18/18`, `InputModeTests 48/48`, `HandInputRouterTests 46/46`, `PhysicalPaintToolTests 9/9`다. Editor 측정값은 drawCalls 128, setPass 16, triangles 8700, CPU 7.7669ms, GPU 2.1504ms, main thread 1.7934ms다.
+
+Windows x64 build는 `Succeeded`, errors 0, warnings 1이며 warning은 Pipeline tooling RuntimePipelineManager warning이다 ([latest build evidence](../.omo/evidence/camera-world-button-fix-20260831/windows-build.json)). 산출물은 `Builds/RelayQuizOnline/CameraCoopRelayOnline.exe`, PE AMD64 `0x8664`/PE32+ `0x020B`다. `tracker/camera_utils.py`는 source/payload SHA256가 일치하고 import 성공했다 ([payload evidence](../.omo/evidence/final-validation-20260831-security-postfix/windows-payload-import.txt)). Player는 10초 생존 후 owned PID가 종료됐고 log error-like line은 0이다 ([Player evidence](../.omo/evidence/final-validation-20260831-security-postfix/windows-player-launch.json)). camera button fix의 최신 Player 실행도 10초 생존·owned PID 종료·error-like 0으로 확인했다 ([bootstrap log](../.omo/evidence/camera-world-button-fix-20260831/windows-player-mouse-bootstrap.log), [log audit](../.omo/evidence/camera-world-button-fix-20260831/windows-player-log-audit.json)). `dotnet build`는 warnings 0/errors 0, Python unittest는 **2/2**, `py_compile`도 통과했다.
+
+아직 실행하지 않은 범위는 실제 Steam 4 account/4 machine 연결, 실제 physical mouse/hand gesture, 실제 webcam hand tracking, phone/Camo/Continuity Camera 조합, Intel Mac build다. 따라서 자동·Editor 검증 완료를 실제 player 지원 완료로 해석하지 않는다.
 
 ## 10. 결과 기록과 최종 종료 조건
 
 각 시험은 날짜, 코드 상태, Unity·Python 환경, Editor/빌드 구분, 시나리오 ID, 입력 방식(실손/합성), 실제 결과, PASS/FAIL/미실행, 관련 로그·스크린샷 경로를 함께 기록한다. 사용자의 응답이 없으면 사용자 검증 대기로 남기며 통과 처리하지 않는다.
+
+## 11-4. World label readability + grounded jump final verification — 2026-08-31
+
+최종 기준은 `RelayQuizOnline` Scene의 선택적 billboard 정책과 `PlayerController`의 grounded `Space` jump다. 전체 EditMode는 **744/744 pass**이며 focused `PlayerMoveTests 34/34`, `PartyWorldControllerTests 23/23`이다. Scene contract는 `34 TextMesh / 21 WorldLabelBillboard / 13 static / static presenter 0`이다. 21개는 즉시 조작해야 하는 control label만 player camera를 향하고, architectural/static sign은 의도한 정면에 고정한다. lobby title은 `LobbyDesk` front facade에 mount되어 있다.
+
+| ID | 시나리오 | 결과 |
+|---|---|---|
+| WL-01 | 중앙·사선 시야에서 21개 control label이 camera를 향하고 readable | PASS, dot `1.0000..1.0000` |
+| WL-02 | 13개 static sign이 billboard로 오염되지 않고 intended front에 mount | PASS, static presenter 0 |
+| WL-03 | lobby title이 `LobbyDesk` facade에 부착되고 control과 겹치지 않음 | PASS |
+| JP-01 | grounded 상태에서 rising edge `Space` 입력 | PASS, Play Input System maxY `1.454` |
+| JP-02 | 착지 후 held `Space`가 재점프하지 않음 | PASS, press transition 1 / landing 1 |
+| JP-03 | 공중 재점프·Blocked·typing 입력 거부 | PASS |
+| JP-04 | 바닥 button/structure collider를 jump로 통과하고 착지 | PASS |
+| QA-01 | Play scoped console error, build, smoke | PASS, scoped errors 0 |
+
+Play 측정값은 draw calls `129`, setPass `14`, triangles `8654`다. GC/CPU/GPU per-frame 측정은 이 QA surface에서 제공되지 않아 미실행으로 남긴다. `dotnet build Camera_co-op.slnx --no-restore`는 warnings/errors 0이며 Windows x64 build와 smoke가 성공했다. 기존 Pipeline tooling warning은 알려진 잔여 warning으로 기록한다. code review와 visual review는 모두 **APPROVE**다. 실제 Steam 4 account, webcam/phone camera, physical hand gesture, Intel Mac은 미검증이며 authored mural의 rear backface는 반대편에서 mirror처럼 보일 수 있다. 상세 guide는 [플레이어 게임 방법](17_player_game_guide.md)을 따른다.
 
 실패 수정이 설계 변경을 요구하면 **문서 수정 → 사용자 승인 → 코드 반영** 순서를 따른다. 다음 Step 승인은 이전 Step의 실행 결과 보고와 별개로 명시적으로 받는다.
 
