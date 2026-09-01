@@ -37,6 +37,7 @@ namespace CameraCoop.Party
                 throw new ArgumentOutOfRangeException(nameof(smoothingSeconds));
 
             Unsubscribe();
+            HideAvatar();
             session = poseSession;
             remoteSlot = slot;
             avatarRoot = explicitAvatarRoot;
@@ -46,13 +47,15 @@ namespace CameraCoop.Party
             fromPosition = targetPosition = avatarRoot.position;
             fromYaw = targetYaw = avatarRoot.eulerAngles.y;
             hasPose = false;
+            SetAvatarRootActive(session.IsSlotOccupied(remoteSlot));
             session.RemotePoseUpdated += HandlePose;
             session.RemotePoseRemoved += HandleRemoved;
+            session.SlotOccupancyChanged += HandleSlotOccupancyChanged;
         }
 
         public void Render(float nowSeconds)
         {
-            if (!hasPose || avatarRoot == null) return;
+            if (avatarRoot == null || session == null || !hasPose) return;
             float t = Mathf.Clamp01((nowSeconds - poseReceivedAt) / interpolationSeconds);
             avatarRoot.SetPositionAndRotation(
                 Vector3.LerpUnclamped(fromPosition, targetPosition, t),
@@ -62,7 +65,8 @@ namespace CameraCoop.Party
 
         internal void ApplyPose(PartyPoseSample sample, float receivedAt)
         {
-            if (sample.Slot != remoteSlot || avatarRoot == null) return;
+            if (sample.Slot != remoteSlot || avatarRoot == null || session == null) return;
+            SetAvatarRootActive(true);
             fromPosition = avatarRoot.position;
             fromYaw = avatarRoot.eulerAngles.y;
             targetPosition = sample.Position;
@@ -80,6 +84,7 @@ namespace CameraCoop.Party
 
         private void OnDestroy()
         {
+            HideAvatar();
             Unsubscribe();
         }
 
@@ -91,9 +96,30 @@ namespace CameraCoop.Party
         private void HandleRemoved(int slot)
         {
             if (slot != remoteSlot) return;
+            HideAvatar();
+        }
+
+        private void HandleSlotOccupancyChanged(int slot, bool occupied)
+        {
+            if (slot != remoteSlot) return;
             hasPose = false;
             targetMoveSpeed = 0f;
             if (animator != null && moveSpeedHash != 0) animator.SetFloat(moveSpeedHash, 0f);
+            SetAvatarRootActive(occupied);
+        }
+
+        private void HideAvatar()
+        {
+            hasPose = false;
+            targetMoveSpeed = 0f;
+            if (animator != null && moveSpeedHash != 0) animator.SetFloat(moveSpeedHash, 0f);
+            SetAvatarRootActive(false);
+        }
+
+        private void SetAvatarRootActive(bool active)
+        {
+            if (avatarRoot != null && avatarRoot.gameObject.activeSelf != active)
+                avatarRoot.gameObject.SetActive(active);
         }
 
         private void Unsubscribe()
@@ -101,7 +127,9 @@ namespace CameraCoop.Party
             if (session == null) return;
             session.RemotePoseUpdated -= HandlePose;
             session.RemotePoseRemoved -= HandleRemoved;
+            session.SlotOccupancyChanged -= HandleSlotOccupancyChanged;
             session = null;
+            remoteSlot = -1;
         }
     }
 }

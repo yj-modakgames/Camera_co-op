@@ -9,6 +9,7 @@ namespace CameraCoop
     public sealed class OnlineRelayQuizSession : IDisposable
     {
         private const float TransferTimeout = 10f;
+        private const float SceneBarrierTimeout = 15f;
         private const int MaxQueuedBytes = 2 * 1024 * 1024;
         private const int MaxQueuedMessages = 192;
         private const int MaxHandshakeCandidates = OnlineRelayQuizProtocol.PlayerCount - 1;
@@ -42,6 +43,9 @@ namespace CameraCoop
         private int roundId;
         private int modeGeneration;
         private int startSignal;
+        private int transitionGeneration;
+        private PartyTransitionPhase transitionPhase;
+        private int sceneReadyMask;
         private int stateRevision = 1;
         private int drawingRevision;
         private int localSlot = -1;
@@ -52,6 +56,7 @@ namespace CameraCoop
         private float pendingElapsed;
         private float handshakeElapsed;
         private float publishElapsed;
+        private float transitionElapsed;
         private CanvasDrawingData finalDrawing;
         private string finalAnswer;
         private string finalTransferId;
@@ -64,6 +69,8 @@ namespace CameraCoop
         private PartyMode selectedMode;
         private bool hasSelectedMode;
         private bool modeStarted;
+        private bool coopMuralFinalDisplay;
+        private string transitionStatus = string.Empty;
 
         public OnlineRelayQuizSession(INetTransport transport, string expectedHostId, Func<string> wordSource,
             Func<CanvasDrawingData> drawingSource, Func<string> answerSource, int brushCount)
@@ -269,6 +276,28 @@ namespace CameraCoop
             }
             else handshakeElapsed = 0f;
             if (!IsHost) return;
+            if (transitionPhase == PartyTransitionPhase.LoadingGame
+                || transitionPhase == PartyTransitionPhase.ReturningToLobby)
+            {
+                transitionElapsed += delta;
+                if (transitionElapsed >= SceneBarrierTimeout)
+                {
+                    if (transitionPhase == PartyTransitionPhase.LoadingGame)
+                        BeginReturningToLobby("Scene load time out · lobby로 돌아갑니다");
+                    else
+                    {
+                        transitionStatus = "Lobby return time out · lobby 상태를 복구했습니다";
+                        CompleteReturnToLobby();
+                    }
+                }
+                else
+                {
+                    publishElapsed += delta;
+                    if (publishElapsed >= 0.25f) Publish();
+                }
+                return;
+            }
+            if (transitionPhase != PartyTransitionPhase.InGame) return;
             if (Pending)
             {
                 if (wasPending) pendingElapsed += delta;
@@ -372,7 +401,9 @@ namespace CameraCoop
             if (!slotByPeer.TryGetValue(peer, out int senderSlot) || senderSlot <= 0) return;
             bool setupReady = packet.kind == "ready" && logic.State == RelayQuizState.Setup
                 && PacketMatchesSetup(packet);
-            if (!setupReady && !PacketMatchesHost(packet)) return;
+            bool transitionCommand = (packet.kind == "scene-ready" || packet.kind == "lobby-ready"
+                || packet.kind == "scene-load-failed") && PacketMatchesTransition(packet);
+            if (!setupReady && !transitionCommand && !PacketMatchesHost(packet)) return;
             if (incomingSequences.TryGetValue(peer, out long previous) && packet.sequence <= previous) return;
             incomingSequences[peer] = packet.sequence;
             if (packet.kind == "abort")
@@ -411,6 +442,15 @@ namespace CameraCoop
                     break;
                 case "prepared-ack":
                     ReceivePreparedAck(senderSlot, packet);
+                    break;
+                case "scene-ready":
+                    ReceiveTransitionReady(senderSlot, packet, PartyTransitionPhase.LoadingGame);
+                    break;
+                case "lobby-ready":
+                    ReceiveTransitionReady(senderSlot, packet, PartyTransitionPhase.ReturningToLobby);
+                    break;
+                case "scene-load-failed":
+                    ReceiveSceneLoadFailure(senderSlot, packet);
                     break;
             }
         }
@@ -463,6 +503,9 @@ namespace CameraCoop
             roundId = packet.roundId;
             modeGeneration = packet.modeGeneration;
             startSignal = packet.startSignal;
+            transitionGeneration = packet.transitionGeneration;
+            transitionPhase = (PartyTransitionPhase)packet.transitionPhase;
+            sceneReadyMask = packet.sceneReadyMask;
             hasSelectedMode = packet.selectedMode >= 0;
             if (hasSelectedMode) selectedMode = (PartyMode)packet.selectedMode;
             stateRevision = packet.revision;
@@ -479,6 +522,9 @@ namespace CameraCoop
                 selectedMode = selectedMode,
                 modeGeneration = modeGeneration,
                 startSignal = startSignal,
+                transitionGeneration = transitionGeneration,
+                transitionPhase = transitionPhase,
+                sceneReadyMask = sceneReadyMask,
                 localSlot = localSlot,
                 isHost = false
             };
@@ -489,7 +535,10 @@ namespace CameraCoop
             return packet.sessionId == sessionId && packet.rosterGeneration == rosterGeneration
                 && packet.roundId == roundId && packet.turnId == CurrentTurnId
                 && packet.revision == stateRevision && packet.selectedMode == SelectedModeValue
-                && packet.modeGeneration == modeGeneration && packet.startSignal == startSignal;
+                && packet.modeGeneration == modeGeneration && packet.startSignal == startSignal
+                && packet.transitionGeneration == transitionGeneration
+                && packet.transitionPhase == (int)transitionPhase
+                && packet.sceneReadyMask == sceneReadyMask;
         }
 
         private bool PacketMatchesSetup(OnlineRelayQuizPacket packet)
@@ -497,7 +546,17 @@ namespace CameraCoop
             return packet.sessionId == sessionId && packet.rosterGeneration == rosterGeneration
                 && packet.roundId == roundId && packet.turnId == 0
                 && packet.revision > 0 && packet.revision <= stateRevision
-                && packet.modeGeneration <= modeGeneration && packet.startSignal == startSignal;
+                && packet.modeGeneration <= modeGeneration && packet.startSignal == startSignal
+                && packet.transitionGeneration <= transitionGeneration;
+        }
+
+        private bool PacketMatchesTransition(OnlineRelayQuizPacket packet)
+        {
+            return packet.sessionId == sessionId && packet.rosterGeneration == rosterGeneration
+                && packet.roundId == roundId && packet.selectedMode == SelectedModeValue
+                && packet.modeGeneration == modeGeneration && packet.startSignal == startSignal
+                && packet.transitionGeneration == transitionGeneration
+                && packet.transitionPhase == (int)transitionPhase;
         }
 
         private bool PacketMatchesView(OnlineRelayQuizPacket packet)
@@ -505,65 +564,233 @@ namespace CameraCoop
             return packet.sessionId == View.sessionId && packet.rosterGeneration == View.rosterGeneration
                 && packet.roundId == View.roundId && packet.turnId == View.turnId
                 && packet.revision == View.revision && packet.selectedMode == ViewSelectedModeValue
-                && packet.modeGeneration == View.modeGeneration && packet.startSignal == View.startSignal;
+                && packet.modeGeneration == View.modeGeneration && packet.startSignal == View.startSignal
+                && packet.transitionGeneration == View.transitionGeneration
+                && packet.transitionPhase == (int)View.transitionPhase
+                && packet.sceneReadyMask == View.sceneReadyMask;
         }
 
         public void SetReady(bool ready)
         {
-            if (disposed || View.aborted || View.state != RelayQuizState.Setup || !Assigned || View.modeStarted) return;
+            if (disposed || View.aborted || View.state != RelayQuizState.Setup || !Assigned
+                || View.transitionPhase != PartyTransitionPhase.Lobby || View.modeStarted) return;
             if (IsHost) Ready(0, ready);
             else SendToHost("ready", new OnlineRelayQuizCommand { cameraReady = ready }, localSlot);
         }
 
         private void Ready(int slot, bool ready)
         {
-            if (logic.State != RelayQuizState.Setup || modeStarted || slot < 0 || slot >= RosterCount
+            if (logic.State != RelayQuizState.Setup || transitionPhase != PartyTransitionPhase.Lobby
+                || modeStarted || slot < 0 || slot >= RosterCount
                 || ready && !freshHand[slot] || cameraReady[slot] == ready) return;
             cameraReady[slot] = ready;
             AdvanceRevision();
             Publish();
         }
 
-        public bool SelectMode(PartyMode mode)
+        public bool OpenModeSelector()
         {
-            if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup || modeStarted
+            if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup
+                || transitionPhase != PartyTransitionPhase.Lobby || modeStarted || hasSelectedMode
                 || !rosterLocked || RosterCount != OnlineRelayQuizProtocol.PlayerCount
-                || !PartyModeCatalog.TryGet(mode, out _) || hasSelectedMode && selectedMode == mode) return false;
-            selectedMode = mode;
-            hasSelectedMode = true;
+                || !AllPlayersReady) return false;
             modeGeneration++;
-            ClearPrivateCache();
+            transitionGeneration++;
+            transitionPhase = PartyTransitionPhase.SelectingMode;
+            sceneReadyMask = 0;
+            transitionElapsed = 0f;
+            transitionStatus = string.Empty;
             AdvanceRevision();
             Publish();
             return true;
         }
 
-        public bool StartSelectedMode()
+        public bool SelectModeAndBeginLoad(PartyMode mode)
         {
-            if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup || modeStarted
+            if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup
+                || transitionPhase != PartyTransitionPhase.SelectingMode || modeStarted || hasSelectedMode
                 || !rosterLocked || RosterCount != OnlineRelayQuizProtocol.PlayerCount
-                || !AllPlayersReady || !hasSelectedMode) return false;
-
+                || !AllPlayersReady
+                || !PartyModeCatalog.TryGet(mode, out _)) return false;
+            selectedMode = mode;
+            hasSelectedMode = true;
             roundId++;
-            ClearRoundPayloads();
-            modeStarted = true;
             modeGeneration++;
             startSignal++;
-            if (selectedMode == PartyMode.CoopMural)
-            {
-                AdvanceRevision();
-                Publish();
-                return true;
-            }
-            logic.SetPlayerCount(OnlineRelayQuizProtocol.PlayerCount, logic.PhaseGeneration);
-            if (!logic.StartGame(logic.PhaseGeneration))
-            {
-                modeStarted = false;
-                return false;
-            }
+            transitionGeneration++;
+            transitionPhase = PartyTransitionPhase.LoadingGame;
+            sceneReadyMask = 0;
+            transitionElapsed = 0f;
+            coopMuralFinalDisplay = false;
+            ClearRoundPayloads();
             AdvanceRevision();
             Publish();
             return true;
+        }
+
+        public bool MarkLocalSceneReady(int generation)
+        {
+            if (disposed || View.aborted || !Assigned || generation != View.transitionGeneration
+                || View.transitionPhase != PartyTransitionPhase.LoadingGame) return false;
+            if (IsHost) return MarkTransitionReady(0, generation, PartyTransitionPhase.LoadingGame);
+            SendToHost("scene-ready", new OnlineRelayQuizTransitionCommand
+            {
+                transitionGeneration = generation
+            }, localSlot);
+            return true;
+        }
+
+        public bool RequestReturnToLobby()
+        {
+            if (disposed || View.aborted || !IsHost || transitionPhase != PartyTransitionPhase.InGame
+                || !modeStarted || !hasSelectedMode) return false;
+            bool resultVisible = selectedMode == PartyMode.CoopMural
+                ? coopMuralFinalDisplay
+                : logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery;
+            if (!resultVisible) return false;
+            BeginReturningToLobby();
+            return true;
+        }
+
+        public bool MarkCoopMuralFinalDisplay()
+        {
+            if (disposed || View.aborted || !IsHost
+                || transitionPhase != PartyTransitionPhase.InGame
+                || !modeStarted || !hasSelectedMode || selectedMode != PartyMode.CoopMural
+                || coopMuralFinalDisplay) return false;
+            coopMuralFinalDisplay = true;
+            AdvanceRevision();
+            Publish();
+            return true;
+        }
+
+        public bool MarkLocalLobbyReady(int generation)
+        {
+            if (disposed || View.aborted || !Assigned || generation != View.transitionGeneration
+                || View.transitionPhase != PartyTransitionPhase.ReturningToLobby) return false;
+            if (IsHost) return MarkTransitionReady(0, generation, PartyTransitionPhase.ReturningToLobby);
+            SendToHost("lobby-ready", new OnlineRelayQuizTransitionCommand
+            {
+                transitionGeneration = generation
+            }, localSlot);
+            return true;
+        }
+
+        public void ReportSceneLoadFailure(int generation, PartySceneLoadFailure failure)
+        {
+            if (disposed || View.aborted || !Assigned
+                || failure <= PartySceneLoadFailure.None
+                || failure > PartySceneLoadFailure.InvalidTransition
+                || generation != View.transitionGeneration
+                || View.transitionPhase != PartyTransitionPhase.LoadingGame) return;
+            if (IsHost) BeginReturningToLobby("Scene load failed: " + failure);
+            else SendToHost("scene-load-failed", new OnlineRelayQuizTransitionCommand
+            {
+                transitionGeneration = generation,
+                failure = (int)failure
+            }, localSlot);
+        }
+
+        private void ReceiveTransitionReady(
+            int senderSlot,
+            OnlineRelayQuizPacket packet,
+            PartyTransitionPhase expectedPhase)
+        {
+            OnlineRelayQuizTransitionCommand command =
+                OnlineRelayQuizProtocol.Read<OnlineRelayQuizTransitionCommand>(packet.payload);
+            if (command == null || packet.ownerSlot != senderSlot) return;
+            MarkTransitionReady(senderSlot, command.transitionGeneration, expectedPhase);
+        }
+
+        private bool MarkTransitionReady(
+            int senderSlot,
+            int generation,
+            PartyTransitionPhase expectedPhase)
+        {
+            if (!IsHost || transitionPhase != expectedPhase || generation != transitionGeneration
+                || senderSlot < 0 || senderSlot >= RosterCount) return false;
+            int bit = 1 << senderSlot;
+            if ((sceneReadyMask & bit) != 0) return false;
+            sceneReadyMask |= bit;
+            if (sceneReadyMask == (1 << OnlineRelayQuizProtocol.PlayerCount) - 1)
+            {
+                if (expectedPhase == PartyTransitionPhase.LoadingGame) StartSelectedDomain();
+                else CompleteReturnToLobby();
+            }
+            else
+            {
+                AdvanceRevision();
+                Publish();
+            }
+            return true;
+        }
+
+        private void StartSelectedDomain()
+        {
+            if (transitionPhase != PartyTransitionPhase.LoadingGame || modeStarted) return;
+            if (selectedMode != PartyMode.CoopMural)
+            {
+                logic.SetPlayerCount(OnlineRelayQuizProtocol.PlayerCount, logic.PhaseGeneration);
+                if (!logic.StartGame(logic.PhaseGeneration))
+                {
+                    BeginReturningToLobby("Selected mode could not start");
+                    return;
+                }
+            }
+            modeStarted = true;
+            transitionPhase = PartyTransitionPhase.InGame;
+            transitionElapsed = 0f;
+            AdvanceRevision();
+            Publish();
+        }
+
+        private void ReceiveSceneLoadFailure(int senderSlot, OnlineRelayQuizPacket packet)
+        {
+            OnlineRelayQuizTransitionCommand command =
+                OnlineRelayQuizProtocol.Read<OnlineRelayQuizTransitionCommand>(packet.payload);
+            if (command == null || packet.ownerSlot != senderSlot
+                || command.transitionGeneration != transitionGeneration
+                || transitionPhase != PartyTransitionPhase.LoadingGame
+                || command.failure <= (int)PartySceneLoadFailure.None
+                || command.failure > (int)PartySceneLoadFailure.InvalidTransition) return;
+            BeginReturningToLobby("Scene load failed: " + (PartySceneLoadFailure)command.failure);
+        }
+
+        private void BeginReturningToLobby(string status = "")
+        {
+            if (transitionPhase == PartyTransitionPhase.ReturningToLobby
+                || transitionPhase == PartyTransitionPhase.Lobby) return;
+            if (logic.State == RelayQuizState.Reveal)
+                logic.OpenGallery(logic.PhaseGeneration);
+            if (logic.State == RelayQuizState.Gallery)
+                logic.Restart(logic.PhaseGeneration);
+            rosterGeneration++;
+            transitionGeneration++;
+            transitionPhase = PartyTransitionPhase.ReturningToLobby;
+            sceneReadyMask = 0;
+            transitionElapsed = 0f;
+            transitionStatus = status ?? string.Empty;
+            modeStarted = false;
+            coopMuralFinalDisplay = false;
+            Array.Clear(cameraReady, 0, cameraReady.Length);
+            ClearRoundPayloads();
+            AdvanceRevision();
+            Publish();
+        }
+
+        private void CompleteReturnToLobby()
+        {
+            if (transitionPhase != PartyTransitionPhase.ReturningToLobby) return;
+            transitionPhase = PartyTransitionPhase.Lobby;
+            sceneReadyMask = 0;
+            transitionElapsed = 0f;
+            hasSelectedMode = false;
+            selectedMode = default;
+            modeStarted = false;
+            coopMuralFinalDisplay = false;
+            modeGeneration++;
+            AdvanceRevision();
+            Publish();
         }
 
         public void Execute(RelayQuizAction action, int generation)
@@ -607,16 +834,10 @@ namespace CameraCoop
                 return;
             }
             else if (action == RelayQuizAction.Restart && senderSlot == 0
-                && logic.Restart(logic.PhaseGeneration))
+                && transitionPhase == PartyTransitionPhase.InGame
+                && (logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery))
             {
-                Array.Clear(cameraReady, 0, cameraReady.Length);
-                modeStarted = false;
-                hasSelectedMode = false;
-                selectedMode = default;
-                modeGeneration++;
-                ClearRoundPayloads();
-                AdvanceRevision();
-                Publish();
+                BeginReturningToLobby();
                 return;
             }
             if (!changed) return;
@@ -879,13 +1100,20 @@ namespace CameraCoop
                 || next.turnId != packet.turnId || next.ownerSlot != packet.ownerSlot
                 || next.revision != packet.revision || next.modeGeneration != packet.modeGeneration
                 || next.startSignal != packet.startSignal
+                || next.transitionGeneration != packet.transitionGeneration
+                || (int)next.transitionPhase != packet.transitionPhase
+                || next.sceneReadyMask != packet.sceneReadyMask
                 || (next.hasSelectedMode ? (int)next.selectedMode : -1) != packet.selectedMode
                 || next.rosterGeneration < View.rosterGeneration
                 || next.roundId < View.roundId || next.revision < View.revision
                 || next.modeGeneration < View.modeGeneration || next.startSignal < View.startSignal
+                || next.transitionGeneration < View.transitionGeneration
                 || next.generation < View.generation || next.serial < View.serial
                 || !Enum.IsDefined(typeof(RelayQuizState), next.state)
                 || next.hasSelectedMode && !Enum.IsDefined(typeof(PartyMode), next.selectedMode)
+                || !PartyTransitionPhaseRules.IsDefined(next.transitionPhase)
+                || next.sceneReadyMask < 0
+                || next.sceneReadyMask >= 1 << OnlineRelayQuizProtocol.PlayerCount
                 || float.IsNaN(next.remaining) || float.IsInfinity(next.remaining)
                 || next.remaining < 0f || next.remaining > 60f || next.rosterCount < 1
                 || next.rosterCount > OnlineRelayQuizProtocol.PlayerCount
@@ -910,6 +1138,9 @@ namespace CameraCoop
             roundId = next.roundId;
             modeGeneration = next.modeGeneration;
             startSignal = next.startSignal;
+            transitionGeneration = next.transitionGeneration;
+            transitionPhase = next.transitionPhase;
+            sceneReadyMask = next.sceneReadyMask;
             hasSelectedMode = next.hasSelectedMode;
             selectedMode = next.selectedMode;
             modeStarted = next.modeStarted;
@@ -978,14 +1209,19 @@ namespace CameraCoop
                 selectedMode = selectedMode,
                 modeGeneration = modeGeneration,
                 startSignal = startSignal,
+                transitionGeneration = transitionGeneration,
+                transitionPhase = transitionPhase,
+                sceneReadyMask = sceneReadyMask,
                 modeStarted = modeStarted,
                 active = active,
                 paused = logic.Paused,
                 transferPending = Pending,
                 hasTimer = logic.HasTimer && !Pending,
                 remaining = Pending ? 0f : logic.RemainingSeconds,
-                status = RosterCount == OnlineRelayQuizProtocol.PlayerCount
-                    ? "4명 roster 연결됨" : RosterCount + "/4명 연결됨",
+                status = string.IsNullOrEmpty(transitionStatus)
+                    ? (RosterCount == OnlineRelayQuizProtocol.PlayerCount
+                        ? "4명 roster 연결됨" : RosterCount + "/4명 연결됨")
+                    : transitionStatus,
                 word = recipientSlot == 0 && (logic.State == RelayQuizState.WordReveal
                     || logic.State == RelayQuizState.Drawing) ? secretWord : string.Empty,
                 answer = logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery
@@ -1068,6 +1304,9 @@ namespace CameraCoop
                 selectedMode = -1,
                 modeGeneration = 0,
                 startSignal = 0,
+                transitionGeneration = 0,
+                transitionPhase = (int)PartyTransitionPhase.Lobby,
+                sceneReadyMask = 0,
                 sequence = ++outgoingSequence,
                 kind = "hello",
                 payload = JsonUtility.ToJson(new OnlineRelayQuizHello
@@ -1113,6 +1352,9 @@ namespace CameraCoop
                 selectedMode = ViewSelectedModeValue,
                 modeGeneration = View.modeGeneration,
                 startSignal = View.startSignal,
+                transitionGeneration = View.transitionGeneration,
+                transitionPhase = (int)View.transitionPhase,
+                sceneReadyMask = View.sceneReadyMask,
                 sequence = ++outgoingSequence,
                 kind = kind,
                 payload = JsonUtility.ToJson(payload)
@@ -1142,6 +1384,9 @@ namespace CameraCoop
                 selectedMode = SelectedModeValue,
                 modeGeneration = modeGeneration,
                 startSignal = startSignal,
+                transitionGeneration = transitionGeneration,
+                transitionPhase = (int)transitionPhase,
+                sceneReadyMask = sceneReadyMask,
                 sequence = sequence,
                 kind = kind,
                 payload = JsonUtility.ToJson(payload)
@@ -1252,6 +1497,9 @@ namespace CameraCoop
                 selectedMode = selectedMode,
                 modeGeneration = modeGeneration,
                 startSignal = startSignal,
+                transitionGeneration = transitionGeneration,
+                transitionPhase = transitionPhase,
+                sceneReadyMask = sceneReadyMask,
                 modeStarted = modeStarted,
                 rosterCount = IsHost ? RosterCount : View.rosterCount,
                 rosterLocked = IsHost ? rosterLocked : View.rosterLocked,

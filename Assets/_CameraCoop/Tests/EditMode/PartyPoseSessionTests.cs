@@ -142,6 +142,87 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void PartialRosterReconfigurationExposesOnlyOccupiedSlots()
+        {
+            using (var transport = new StandaloneTransport("p0", true))
+            using (var session = new PartyPoseSession(transport, 15f, 100f, 20f))
+            {
+                session.Configure(Roster("p0"));
+                Assert.That(session.IsSlotOccupied(0), Is.True);
+                Assert.That(session.IsSlotOccupied(1), Is.False);
+                Assert.That(session.IsSlotOccupied(2), Is.False);
+                Assert.That(session.IsSlotOccupied(3), Is.False);
+
+                session.Configure(Roster("p0", "p1"));
+                Assert.That(session.IsSlotOccupied(1), Is.True);
+                Assert.That(session.IsSlotOccupied(2), Is.False);
+                Assert.That(session.IsSlotOccupied(3), Is.False);
+
+                session.Configure(Roster("p0", "p1", "p2", "p3"));
+                for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+                    Assert.That(session.IsSlotOccupied(slot), Is.True);
+            }
+        }
+
+        [Test]
+        public void RebindSpaceRejectsPriorEpochAndAcceptsTeleportInNewEpoch()
+        {
+            using (Fixture fixture = new Fixture(positionBound: 100f, maxSpeed: 5f))
+            {
+                var received = new List<PartyPoseSample>();
+                fixture.Sessions[0].RemotePoseUpdated += received.Add;
+
+                fixture.Transports[1].SendToHost(Packet("submit", 1, 1, Vector3.zero, 0f, transitionGeneration: 0), false);
+                fixture.Sessions[0].Tick(1f, Vector3.zero, 0f, PartyMoveState.Idle);
+                fixture.Sessions[0].RebindSpace(1, new Vector3(50f, 0f, 0f), 180f);
+                Assert.That(fixture.Sessions[0].LocalSpaceSpawn, Is.EqualTo(new Vector3(50f, 0f, 0f)));
+                Assert.That(fixture.Sessions[0].LocalSpaceYawDegrees, Is.EqualTo(180f));
+                fixture.Transports[1].SendToHost(Packet("submit", 99, 1, new Vector3(99f, 0f, 0f), 0f, transitionGeneration: 0), false);
+                fixture.Transports[1].SendToHost(Packet("submit", 1, 1, new Vector3(50f, 0f, 0f), 180f, transitionGeneration: 1), false);
+                fixture.Sessions[0].Tick(1.01f, Vector3.zero, 0f, PartyMoveState.Idle);
+
+                Assert.That(received, Has.Count.EqualTo(2));
+                Assert.That(received[1].Position, Is.EqualTo(new Vector3(50f, 0f, 0f)));
+            }
+        }
+
+        [Test]
+        public void RebindSpacePreservesSameEpochOwnerAndSpeedChecks()
+        {
+            using (Fixture fixture = new Fixture(positionBound: 100f, maxSpeed: 5f))
+            {
+                int accepted = 0;
+                fixture.Sessions[0].RemotePoseUpdated += _ => accepted++;
+                fixture.Sessions[0].RebindSpace(1, Vector3.zero, 0f);
+
+                fixture.Network.Inject("intruder", "p0", Packet("submit", 1, 1, Vector3.zero, 0f, transitionGeneration: 1));
+                fixture.Transports[1].SendToHost(Packet("submit", 1, 1, Vector3.zero, 0f, transitionGeneration: 1), false);
+                fixture.Sessions[0].Tick(1f, Vector3.zero, 0f, PartyMoveState.Idle);
+                fixture.Transports[1].SendToHost(Packet("submit", 2, 1, new Vector3(10f, 0f, 0f), 0f, transitionGeneration: 1), false);
+                fixture.Sessions[0].Tick(1.01f, Vector3.zero, 0f, PartyMoveState.Idle);
+
+                Assert.That(accepted, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void RosterReconfigurationPreservesTheActivePoseSpaceEpoch()
+        {
+            using (var transport = new StandaloneTransport("p0", true))
+            using (var session = new PartyPoseSession(transport, 15f, 100f, 20f))
+            {
+                session.Configure(Roster("p0"));
+                session.RebindSpace(4, new Vector3(12f, 0f, -3f), 270f);
+
+                session.Configure(Roster("p0", "p1", "p2"));
+
+                Assert.That(session.TransitionGeneration, Is.EqualTo(4));
+                Assert.That(session.LocalSpaceSpawn, Is.EqualTo(new Vector3(12f, 0f, -3f)));
+                Assert.That(session.LocalSpaceYawDegrees, Is.EqualTo(270f));
+            }
+        }
+
+        [Test]
         public void SerializedPoseContractContainsNoPrivateCameraOrGameData()
         {
             string[] forbidden = { "frame", "landmark", "fist", "pinch", "drawing", "word", "answer", "sender" };
@@ -162,7 +243,8 @@ namespace CameraCoop.Tests
             Vector3 position,
             float yaw,
             string sessionId = SessionId,
-            int rosterGeneration = Generation)
+            int rosterGeneration = Generation,
+            int transitionGeneration = 0)
         {
             return PartyPoseProtocol.Encode(new PartyPosePacket
             {
@@ -170,6 +252,7 @@ namespace CameraCoop.Tests
                 version = PartyPoseProtocol.Version,
                 sessionId = sessionId,
                 rosterGeneration = rosterGeneration,
+                transitionGeneration = transitionGeneration,
                 sequence = sequence,
                 kind = kind,
                 slot = slot,
@@ -221,6 +304,14 @@ namespace CameraCoop.Tests
             return new PartyRosterSnapshot(SessionId, Generation, "p0", slots);
         }
 
+        private static PartyRosterSnapshot Roster(params string[] identities)
+        {
+            var slots = new PartyRosterSlotSnapshot[PartyRoster.Capacity];
+            for (int slot = 0; slot < identities.Length; slot++)
+                slots[slot] = new PartyRosterSlotSnapshot(slot, identities[slot], identities[slot], true);
+            return new PartyRosterSnapshot(SessionId, Generation, "p0", slots);
+        }
+
         private sealed class FakePoseNetwork
         {
             private readonly Dictionary<string, FakePoseTransport> endpoints = new Dictionary<string, FakePoseTransport>();
@@ -246,6 +337,26 @@ namespace CameraCoop.Tests
             {
                 foreach (FakePoseTransport endpoint in endpoints.Values) endpoint.RaiseDisconnected(id);
             }
+        }
+
+        private sealed class StandaloneTransport : INetTransport, IDisposable
+        {
+            internal StandaloneTransport(string localPlayerId, bool isHost)
+            {
+                LocalPlayerId = localPlayerId;
+                IsHost = isHost;
+            }
+
+            public bool IsHost { get; }
+            public string LocalPlayerId { get; }
+            public event Action<string> OnPeerConnected { add { } remove { } }
+            public event Action<string> OnPeerDisconnected { add { } remove { } }
+            public event Action<string, byte[]> OnMessage { add { } remove { } }
+            public void Dispose() { }
+            public void SendToHost(byte[] data, bool reliable) { }
+            public void SendTo(string playerId, byte[] data, bool reliable) { }
+            public void Shutdown() { }
+            public void Tick() { }
         }
 
         private sealed class FakePoseTransport : INetTransport

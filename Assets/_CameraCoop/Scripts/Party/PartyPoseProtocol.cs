@@ -18,6 +18,7 @@ namespace CameraCoop.Party
         public int version = PartyPoseProtocol.Version;
         public string sessionId;
         public int rosterGeneration;
+        public int transitionGeneration;
         public long sequence;
         public string kind;
         public int slot = -1;
@@ -49,7 +50,7 @@ namespace CameraCoop.Party
     public static class PartyPoseProtocol
     {
         public const string GameId = "camera-coop-party-pose";
-        public const int Version = 1;
+        public const int Version = 2;
         public const int MaxMessageBytes = 1024;
         public const string KindSubmit = "submit";
         public const string KindRelay = "relay";
@@ -78,6 +79,7 @@ namespace CameraCoop.Party
                     && !string.IsNullOrEmpty(packet.sessionId)
                     && packet.sessionId.Length <= 64
                     && packet.rosterGeneration > 0
+                    && packet.transitionGeneration >= 0
                     && packet.sequence > 0
                     && (packet.kind == KindSubmit || packet.kind == KindRelay || packet.kind == KindRemove)
                     && packet.slot >= -1

@@ -66,24 +66,22 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void HostSelectsOnlyCatalogModesAndStartsOnlyWithLockedFourReadyRoster()
+        public void HostStartsSelectorBeforeChoosingCatalogMode()
         {
             var gateway = new FakeGateway { Host = true };
             gateway.View = ReadySetup();
-            gateway.View.allReady = false;
+            gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
             PartyWorldController controller = CreateController(gateway);
 
+            Assert.That(controller.TryExecute(PartyWorldAction.SelectRelayCopy), Is.False);
+            Assert.That(controller.TryExecute(PartyWorldAction.StartSelectedMode), Is.True);
+            gateway.View.transitionPhase = PartyTransitionPhase.SelectingMode;
             Assert.That(controller.TryExecute(PartyWorldAction.SelectRelayCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectMemoryCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectCoopMural), Is.True);
             CollectionAssert.AreEqual(
                 new[] { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural },
                 gateway.SelectedModes);
-            Assert.That(controller.TryExecute(PartyWorldAction.StartSelectedMode), Is.False);
-
-            gateway.View.allReady = true;
-            gateway.View.hasSelectedMode = true;
-            Assert.That(controller.TryExecute(PartyWorldAction.StartSelectedMode), Is.True);
             Assert.That(gateway.StartCalls, Is.EqualTo(1));
         }
 
@@ -859,8 +857,8 @@ namespace CameraCoop.Tests
             public string LocalIdentity => "p1";
             public OnlineRelayQuizView PartyView => session.View;
             public void SetReady(bool ready) => session.SetReady(ready);
-            public bool SelectMode(PartyMode mode) => session.SelectMode(mode);
-            public bool StartSelectedMode() => session.StartSelectedMode();
+            public bool SelectMode(PartyMode mode) => session.SelectModeAndBeginLoad(mode);
+            public bool StartSelectedMode() => session.OpenModeSelector();
             public void RequestHost() { }
             public void RequestInvite() { }
             public void RequestLeave() { }
@@ -899,11 +897,18 @@ namespace CameraCoop.Tests
                 Host.SetReady(true);
                 foreach (OnlineRelayQuizSession client in clients) client.SetReady(true);
                 Pump();
-                if (!Host.SelectMode(PartyMode.CoopMural))
+                if (!Host.OpenModeSelector())
+                    throw new InvalidOperationException("Host could not open the mode selector in the ready four-player fixture.");
+                Pump();
+                if (!Host.SelectModeAndBeginLoad(PartyMode.CoopMural))
                     throw new InvalidOperationException("Host could not select CoopMural in the locked four-player fixture.");
                 Pump();
-                if (!Host.StartSelectedMode())
-                    throw new InvalidOperationException("Host could not start CoopMural in the ready four-player fixture.");
+                int transition = Host.View.transitionGeneration;
+                if (!Host.MarkLocalSceneReady(transition))
+                    throw new InvalidOperationException("Host could not acknowledge the CoopMural Scene.");
+                foreach (OnlineRelayQuizSession client in clients)
+                    if (!client.MarkLocalSceneReady(transition))
+                        throw new InvalidOperationException("Client could not acknowledge the CoopMural Scene.");
                 Pump();
             }
 

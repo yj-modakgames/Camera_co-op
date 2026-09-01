@@ -18,6 +18,9 @@ namespace CameraCoop
         public int selectedMode = -1;
         public int modeGeneration;
         public int startSignal;
+        public int transitionGeneration;
+        public int transitionPhase;
+        public int sceneReadyMask;
         public long sequence;
         public string kind;
         public string payload;
@@ -69,6 +72,13 @@ namespace CameraCoop
     }
 
     [Serializable]
+    internal sealed class OnlineRelayQuizTransitionCommand
+    {
+        public int transitionGeneration;
+        public int failure;
+    }
+
+    [Serializable]
     public sealed class OnlineRelayQuizChunk
     {
         public string id;
@@ -81,7 +91,7 @@ namespace CameraCoop
     public static class OnlineRelayQuizProtocol
     {
         public const string GameId = "camera-coop-relayquiz-4p";
-        public const int Version = 3;
+        public const int Version = 4;
         public const int PlayerCount = 4;
         public const int MaxMessageBytes = 64 * 1024;
         public const int MaxDrawingBytes = 512 * 1024;
@@ -113,7 +123,12 @@ namespace CameraCoop
                     && packet.rosterGeneration >= 0 && packet.roundId >= 0 && packet.turnId >= 0
                     && packet.ownerSlot >= -1 && packet.ownerSlot < PlayerCount && packet.revision >= 0
                     && packet.selectedMode >= -1 && packet.selectedMode <= 2
-                    && packet.modeGeneration >= 0 && packet.startSignal >= 0;
+                    && packet.modeGeneration >= 0 && packet.startSignal >= 0
+                    && packet.transitionGeneration >= 0
+                    && Party.PartyTransitionPhaseRules.IsDefined(
+                        (Party.PartyTransitionPhase)packet.transitionPhase)
+                    && packet.sceneReadyMask >= 0
+                    && packet.sceneReadyMask < 1 << PlayerCount;
             }
             catch (Exception exception) when (exception is ArgumentException || exception is DecoderFallbackException)
             {

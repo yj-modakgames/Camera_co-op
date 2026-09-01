@@ -26,6 +26,12 @@ namespace CameraCoop.Tests
             public RelayQuizAction action;
         }
 
+        [Serializable]
+        private sealed class TransitionFixture
+        {
+            public int transitionGeneration;
+        }
+
         private const string HostId = "host-id";
         private const string Secret = "비밀단어";
         private readonly List<LoopbackTransport> clientTransports = new List<LoopbackTransport>();
@@ -93,6 +99,182 @@ namespace CameraCoop.Tests
             Assert.That(type.GetField("selectedMode"), Is.Not.Null);
             Assert.That(type.GetField("modeGeneration"), Is.Not.Null);
             Assert.That(type.GetField("startSignal"), Is.Not.Null);
+            Assert.That(type.GetField("transitionGeneration"), Is.Not.Null);
+            Assert.That(type.GetField("transitionPhase"), Is.Not.Null);
+            Assert.That(type.GetField("sceneReadyMask"), Is.Not.Null);
+            Assert.That(OnlineRelayQuizProtocol.Version, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void OpenModeSelectorChangesOnlySelectorAndTransitionEpochs()
+        {
+            ReadyLobby();
+            string session = host.View.sessionId;
+            int roster = host.View.rosterGeneration;
+            int round = host.View.roundId;
+            int signal = host.View.startSignal;
+            int modeEpoch = host.View.modeGeneration;
+            int transitionEpoch = host.View.transitionGeneration;
+
+            Assert.That(host.OpenModeSelector(), Is.True);
+            Pump();
+
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.SelectingMode));
+            Assert.That(host.View.sessionId, Is.EqualTo(session));
+            Assert.That(host.View.rosterGeneration, Is.EqualTo(roster));
+            Assert.That(host.View.roundId, Is.EqualTo(round));
+            Assert.That(host.View.startSignal, Is.EqualTo(signal));
+            Assert.That(host.View.modeGeneration, Is.EqualTo(modeEpoch + 1));
+            Assert.That(host.View.transitionGeneration, Is.EqualTo(transitionEpoch + 1));
+            Assert.That(host.View.modeStarted, Is.False);
+            Assert.That(host.View.hasSelectedMode, Is.False);
+        }
+
+        [Test]
+        public void ModeSelectionRequiresHostAndOpenSelector()
+        {
+            ReadyLobby();
+
+            Assert.That(host.SelectModeAndBeginLoad(PartyMode.MemoryCopy), Is.False);
+            Assert.That(clients[0].OpenModeSelector(), Is.False);
+            Assert.That(host.OpenModeSelector(), Is.True);
+            Pump();
+            Assert.That(clients[0].SelectModeAndBeginLoad(PartyMode.MemoryCopy), Is.False);
+            Assert.That(host.SelectModeAndBeginLoad(PartyMode.MemoryCopy), Is.True);
+            Pump();
+
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.LoadingGame));
+            Assert.That(host.View.selectedMode, Is.EqualTo(PartyMode.MemoryCopy));
+            Assert.That(host.View.modeStarted, Is.False);
+            Assert.That(host.View.sceneReadyMask, Is.Zero);
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
+        }
+
+        [Test]
+        public void FourthCurrentSceneReadyAckStartsSelectedDomainExactlyOnce()
+        {
+            ReadyLobby();
+            BeginModeLoad(PartyMode.RelayCopy);
+            int transition = host.View.transitionGeneration;
+
+            for (int slot = 0; slot < 3; slot++)
+            {
+                Assert.That(Session(slot).MarkLocalSceneReady(transition), Is.True);
+                Pump();
+                Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.LoadingGame));
+                Assert.That(host.View.modeStarted, Is.False);
+                Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
+            }
+
+            Assert.That(Session(3).MarkLocalSceneReady(transition), Is.True);
+            Pump();
+            int signal = host.View.startSignal;
+            int generation = host.View.generation;
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.InGame));
+            Assert.That(host.View.modeStarted, Is.True);
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
+            Assert.That(Session(3).MarkLocalSceneReady(transition), Is.False);
+            Pump();
+            Assert.That(host.View.startSignal, Is.EqualTo(signal));
+            Assert.That(host.View.generation, Is.EqualTo(generation));
+        }
+
+        [Test]
+        public void StaleFutureWrongSenderAndDuplicateCommandsCannotCorruptBarrier()
+        {
+            ReadyLobby();
+            BeginModeLoad(PartyMode.RelayCopy);
+            int transition = host.View.transitionGeneration;
+
+            Assert.That(clients[0].MarkLocalSceneReady(transition - 1), Is.False);
+            clients[0].ReportSceneLoadFailure(transition - 1, PartySceneLoadFailure.LoadFailed);
+            var wrongSender = ClientPacket(1, "scene-ready", JsonUtility.ToJson(new TransitionFixture
+            {
+                transitionGeneration = transition
+            }), 2);
+            hostWires[0].Send(OnlineRelayQuizProtocol.Encode(wrongSender));
+            var future = ClientPacket(1, "scene-ready", JsonUtility.ToJson(new TransitionFixture
+            {
+                transitionGeneration = transition + 1
+            }), 1);
+            future.transitionGeneration = transition + 1;
+            hostWires[0].Send(OnlineRelayQuizProtocol.Encode(future));
+            Pump();
+
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.LoadingGame));
+            Assert.That(host.View.sceneReadyMask, Is.Zero);
+            Assert.That(host.View.modeStarted, Is.False);
+
+            Assert.That(clients[0].MarkLocalSceneReady(transition), Is.True);
+            Assert.That(clients[0].MarkLocalSceneReady(transition), Is.True);
+            Pump();
+            Assert.That(host.View.sceneReadyMask, Is.EqualTo(1 << 1));
+        }
+
+        [Test]
+        public void CurrentLoadFailureReturnsIntactPartyWithoutDisposingTransport()
+        {
+            ReadyLobby();
+            BeginModeLoad(PartyMode.MemoryCopy);
+            int transition = host.View.transitionGeneration;
+            string session = host.View.sessionId;
+            string[] identities = (string[])host.View.roster.Clone();
+
+            clients[1].ReportSceneLoadFailure(transition, PartySceneLoadFailure.MissingAdapter);
+            Pump();
+
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.ReturningToLobby));
+            Assert.That(host.View.sessionId, Is.EqualTo(session));
+            Assert.That(host.View.roster, Is.EqualTo(identities));
+            Assert.That(host.View.aborted, Is.False);
+            Assert.That(host.View.modeStarted, Is.False);
+            Assert.That(host.View.sceneReadyMask, Is.Zero);
+        }
+
+        [Test]
+        public void LoadBarrierTimeoutReturnsAndReturnBarrierTimeoutSettlesLobby()
+        {
+            ReadyLobby();
+            BeginModeLoad(PartyMode.RelayCopy);
+            string session = host.View.sessionId;
+
+            host.Tick(15f);
+            Pump();
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.ReturningToLobby));
+            Assert.That(host.View.sessionId, Is.EqualTo(session));
+            Assert.That(host.View.aborted, Is.False);
+
+            host.Tick(15f);
+            Pump();
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.Lobby));
+            Assert.That(host.View.hasSelectedMode, Is.False);
+            Assert.That(host.View.modeStarted, Is.False);
+        }
+
+        [Test]
+        public void HostReturnIsResultOnlyAndLobbyBarrierPreservesSlots()
+        {
+            StartFour();
+            Assert.That(host.RequestReturnToLobby(), Is.False);
+            ReachGuessingFromStartedRound();
+            clients[2].Execute(RelayQuizAction.Submit, clients[2].View.generation);
+            Pump();
+            string session = host.View.sessionId;
+            string[] identities = (string[])host.View.roster.Clone();
+
+            Assert.That(clients[0].RequestReturnToLobby(), Is.False);
+            Assert.That(host.RequestReturnToLobby(), Is.True);
+            Pump();
+            int transition = host.View.transitionGeneration;
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).MarkLocalLobbyReady(transition), Is.True);
+            Pump();
+
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.Lobby));
+            Assert.That(host.View.sessionId, Is.EqualTo(session));
+            Assert.That(host.View.roster, Is.EqualTo(identities));
+            Assert.That(host.View.rosterCount, Is.EqualTo(4));
+            Assert.That(host.View.aborted, Is.False);
         }
 
         [Test]
@@ -107,10 +289,8 @@ namespace CameraCoop.Tests
             Pump();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
             Assert.That(Field<bool>(host.View, "allReady"), Is.True);
-            Assert.That(SelectMode(host, PartyMode.RelayCopy), Is.True);
-            Pump();
-            Assert.That(StartSelectedMode(host), Is.True);
-            Pump();
+            BeginModeLoad(PartyMode.RelayCopy);
+            CompleteLoadBarrier();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
             Assert.That(Field<bool>(host.View, "rosterLocked"), Is.True);
             Assert.That(Field<int>(host.View, "localSlot"), Is.Zero);
@@ -124,12 +304,12 @@ namespace CameraCoop.Tests
         [Test]
         public void OnlyHostCanSelectModeAndSelectionBroadcasts()
         {
-            Assert.That(SelectMode(clients[0], PartyMode.MemoryCopy), Is.False);
+            ReadyLobby();
+            Assert.That(clients[0].SelectModeAndBeginLoad(PartyMode.MemoryCopy), Is.False);
             Pump();
             Assert.That(Field<bool>(host.View, "hasSelectedMode"), Is.False);
 
-            Assert.That(SelectMode(host, PartyMode.MemoryCopy), Is.True);
-            Pump();
+            BeginModeLoad(PartyMode.MemoryCopy);
 
             int generation = Field<int>(host.View, "modeGeneration");
             for (int slot = 0; slot < 4; slot++)
@@ -143,18 +323,20 @@ namespace CameraCoop.Tests
         [Test]
         public void StartIsRejectedUntilAllReadyAndOnlyHostCanReleaseGate()
         {
-            Assert.That(SelectMode(host, PartyMode.RelayCopy), Is.True);
             for (int slot = 0; slot < 3; slot++) Session(slot).SetReady(true);
             Pump();
-            Assert.That(StartSelectedMode(host), Is.False);
+            Assert.That(host.OpenModeSelector(), Is.False);
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
 
             Session(3).SetReady(true);
             Pump();
             Assert.That(Field<bool>(host.View, "allReady"), Is.True);
-            Assert.That(StartSelectedMode(clients[0]), Is.False);
-            Assert.That(StartSelectedMode(host), Is.True);
+            Assert.That(clients[0].OpenModeSelector(), Is.False);
+            Assert.That(host.OpenModeSelector(), Is.True);
             Pump();
+            Assert.That(host.SelectModeAndBeginLoad(PartyMode.RelayCopy), Is.True);
+            Pump();
+            CompleteLoadBarrier();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
         }
 
@@ -184,7 +366,7 @@ namespace CameraCoop.Tests
             StartFour();
             int modeGeneration = Field<int>(host.View, "modeGeneration");
             clients[0].SetReady(false);
-            Assert.That(SelectMode(host, PartyMode.MemoryCopy), Is.False);
+            Assert.That(host.SelectModeAndBeginLoad(PartyMode.MemoryCopy), Is.False);
             Pump();
             Assert.That(clients[0].View.localReady, Is.True);
             Assert.That(Field<PartyMode>(host.View, "selectedMode"), Is.EqualTo(PartyMode.RelayCopy));
@@ -416,7 +598,13 @@ namespace CameraCoop.Tests
             Pump();
             host.Execute(RelayQuizAction.Restart, host.View.generation);
             Pump();
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.ReturningToLobby));
+            int transition = host.View.transitionGeneration;
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).MarkLocalLobbyReady(transition), Is.True);
+            Pump();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
+            Assert.That(host.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.Lobby));
             Assert.That(Field<bool>(host.View, "rosterLocked"), Is.True);
             for (int slot = 0; slot < 4; slot++)
             {
@@ -430,9 +618,8 @@ namespace CameraCoop.Tests
             Pump();
             Assert.That(Field<bool>(host.View, "allReady"), Is.True);
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Setup));
-            Assert.That(SelectMode(host, PartyMode.RelayCopy), Is.True);
-            Assert.That(StartSelectedMode(host), Is.True);
-            Pump();
+            BeginModeLoad(PartyMode.RelayCopy);
+            CompleteLoadBarrier();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
         }
 
@@ -457,15 +644,13 @@ namespace CameraCoop.Tests
         public void CoopMuralEmitsOneShotStartSignalWithoutStartingPrivateRelay()
         {
             ReadyLobby();
-            Assert.That(SelectMode(host, PartyMode.CoopMural), Is.True);
-            Pump();
             int before = Field<int>(host.View, "startSignal");
-
-            Assert.That(StartSelectedMode(host), Is.True);
-            Pump();
-
+            BeginModeLoad(PartyMode.CoopMural);
             int signal = Field<int>(host.View, "startSignal");
             Assert.That(signal, Is.GreaterThan(before));
+
+            CompleteLoadBarrier();
+
             for (int slot = 0; slot < 4; slot++)
             {
                 Assert.That(Session(slot).View.state, Is.EqualTo(RelayQuizState.Setup));
@@ -475,8 +660,31 @@ namespace CameraCoop.Tests
                 Assert.That(Session(slot).View.referenceDrawing, Is.Null);
                 Assert.That(Field<Array>(Session(slot).View, "gallery").Length, Is.Zero);
             }
-            Assert.That(StartSelectedMode(host), Is.False);
+            Assert.That(host.MarkLocalSceneReady(host.View.transitionGeneration), Is.False);
             Assert.That(Field<int>(host.View, "startSignal"), Is.EqualTo(signal));
+        }
+
+        [Test]
+        public void CoopMuralReturnRequiresAuthoritativeFinalDisplay()
+        {
+            ReadyLobby();
+            BeginModeLoad(PartyMode.CoopMural);
+            CompleteLoadBarrier();
+
+            Assert.That(host.RequestReturnToLobby(), Is.False);
+            Assert.That(clients[0].MarkCoopMuralFinalDisplay(), Is.False);
+            Assert.That(host.MarkCoopMuralFinalDisplay(), Is.True);
+            Assert.That(host.MarkCoopMuralFinalDisplay(), Is.False);
+            Assert.That(host.RequestReturnToLobby(), Is.True);
+        }
+
+        [Test]
+        public void CoopMuralFinalDisplayIsRejectedForAnotherMode()
+        {
+            StartFour();
+
+            Assert.That(host.MarkCoopMuralFinalDisplay(), Is.False);
+            Assert.That(clients[0].MarkCoopMuralFinalDisplay(), Is.False);
         }
 
         [Test]
@@ -615,10 +823,8 @@ namespace CameraCoop.Tests
         private void StartFour()
         {
             ReadyLobby();
-            Assert.That(SelectMode(host, PartyMode.RelayCopy), Is.True);
-            Pump();
-            Assert.That(StartSelectedMode(host), Is.True);
-            Pump();
+            BeginModeLoad(PartyMode.RelayCopy);
+            CompleteLoadBarrier();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
         }
 
@@ -638,10 +844,8 @@ namespace CameraCoop.Tests
         private void StartDrawing(PartyMode mode)
         {
             ReadyLobby();
-            Assert.That(SelectMode(host, mode), Is.True);
-            Pump();
-            Assert.That(StartSelectedMode(host), Is.True);
-            Pump();
+            BeginModeLoad(mode);
+            CompleteLoadBarrier();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
             host.Execute(RelayQuizAction.Ready, host.View.generation);
             Pump();
@@ -654,6 +858,21 @@ namespace CameraCoop.Tests
         private void ReachGuessing()
         {
             StartDrawing();
+            ReachGuessingFromActiveDrawing();
+        }
+
+        private void ReachGuessingFromStartedRound()
+        {
+            host.Execute(RelayQuizAction.Ready, host.View.generation);
+            Pump();
+            host.Tick(5f);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Drawing));
+            ReachGuessingFromActiveDrawing();
+        }
+
+        private void ReachGuessingFromActiveDrawing()
+        {
             CompleteDrawing(0);
             ReadyAndEnterTurn(1);
             CompleteDrawing(1);
@@ -744,6 +963,9 @@ namespace CameraCoop.Tests
                 ? (int)Field<PartyMode>(host.View, "selectedMode") : -1);
             Set(packet, "modeGeneration", Field<int>(host.View, "modeGeneration"));
             Set(packet, "startSignal", Field<int>(host.View, "startSignal"));
+            Set(packet, "transitionGeneration", host.View.transitionGeneration);
+            Set(packet, "transitionPhase", (int)host.View.transitionPhase);
+            Set(packet, "sceneReadyMask", host.View.sceneReadyMask);
             return packet;
         }
 
@@ -794,18 +1016,20 @@ namespace CameraCoop.Tests
             field.SetValue(target, value);
         }
 
-        private static bool SelectMode(OnlineRelayQuizSession session, PartyMode mode)
+        private void BeginModeLoad(PartyMode mode)
         {
-            MethodInfo method = session.GetType().GetMethod("SelectMode", BindingFlags.Instance | BindingFlags.Public);
-            Assert.That(method, Is.Not.Null, "SelectMode(PartyMode)");
-            return (bool)method.Invoke(session, new object[] { mode });
+            Assert.That(host.OpenModeSelector(), Is.True);
+            Pump();
+            Assert.That(host.SelectModeAndBeginLoad(mode), Is.True);
+            Pump();
         }
 
-        private static bool StartSelectedMode(OnlineRelayQuizSession session)
+        private void CompleteLoadBarrier()
         {
-            MethodInfo method = session.GetType().GetMethod("StartSelectedMode", BindingFlags.Instance | BindingFlags.Public);
-            Assert.That(method, Is.Not.Null, "StartSelectedMode()");
-            return (bool)method.Invoke(session, Array.Empty<object>());
+            int transition = host.View.transitionGeneration;
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).MarkLocalSceneReady(transition), Is.True);
+            Pump();
         }
     }
 }

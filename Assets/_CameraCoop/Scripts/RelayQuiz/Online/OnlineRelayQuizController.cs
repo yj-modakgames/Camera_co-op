@@ -474,8 +474,8 @@ namespace CameraCoop
         }
 
         public void SetReady(bool ready) => session?.SetReady(ready);
-        public bool SelectMode(PartyMode mode) => session != null && session.SelectMode(mode);
-        public bool StartSelectedMode() => session != null && session.StartSelectedMode();
+        public bool SelectMode(PartyMode mode) => session != null && session.SelectModeAndBeginLoad(mode);
+        public bool StartSelectedMode() => session != null && session.OpenModeSelector();
         public void RequestHost() => OnClickHostSteam();
         public void RequestInvite() => OnClickInvite();
         public void RequestLeave() => OnClickLeave();

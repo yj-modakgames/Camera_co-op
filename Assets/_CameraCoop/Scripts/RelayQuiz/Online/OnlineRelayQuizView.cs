@@ -47,6 +47,9 @@ namespace CameraCoop
         public PartyMode selectedMode;
         public int modeGeneration;
         public int startSignal;
+        public int transitionGeneration;
+        public PartyTransitionPhase transitionPhase;
+        public int sceneReadyMask;
         public bool modeStarted;
         public bool active;
         public bool paused;
