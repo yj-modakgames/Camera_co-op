@@ -26,12 +26,13 @@ namespace CameraCoop
 
         public override void Press(HandInputSample sample, Vector3 hitPosition, HandClickContext context)
         {
+            base.Press(sample, hitPosition, context);
             if (owner != null) TryPickup(owner.LocalPlayerId, hitPosition, sample.handedness);
         }
 
         public override bool Release(HandInputSample sample, Vector3 hitPosition)
         {
-            return false;
+            return base.Release(sample, hitPosition);
         }
     }
 }

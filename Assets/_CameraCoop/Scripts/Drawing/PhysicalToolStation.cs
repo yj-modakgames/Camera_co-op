@@ -35,6 +35,7 @@ namespace CameraCoop
 
         public override void Press(HandInputSample sample, Vector3 hitPosition, HandClickContext context)
         {
+            base.Press(sample, hitPosition, context);
             TryUse(paintTool != null ? paintTool.LocalPlayerId : null, hitPosition);
         }
 

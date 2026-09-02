@@ -39,6 +39,7 @@ namespace CameraCoop.Party
 
         public override bool Release(HandInputSample sample, Vector3 hitPosition)
         {
+            base.Release(sample, hitPosition);
             return partyWorld != null && partyWorld.TryExecute(action);
         }
     }

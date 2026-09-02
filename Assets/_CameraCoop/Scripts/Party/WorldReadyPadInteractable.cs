@@ -65,12 +65,14 @@ namespace CameraCoop.Party
 
         public override void HoverEnter(HandInputSample sample, Vector3 hitPosition)
         {
+            base.HoverEnter(sample, hitPosition);
             if (sample.isTracked && sample.cancelReason == HandCancelReason.None)
                 SetHandPresence(sample.handedness, true);
         }
 
         public override void HoverExit(HandInputSample sample, Vector3 hitPosition)
         {
+            base.HoverExit(sample, hitPosition);
             SetHandPresence(sample.handedness, false);
             if (!leftPresent && !rightPresent) ResetPresence(true);
         }
