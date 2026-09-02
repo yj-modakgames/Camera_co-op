@@ -21,13 +21,8 @@ namespace CameraCoop
 
         private void Awake()
         {
-            initialized = ValidateRuntimeConfiguration(out _);
-            if (!initialized)
-            {
-                Debug.LogError("[RelayQuizGallery] 슬롯 root·presenter·surface 배열 길이가 같아야 하고 빈 원소가 없어야 합니다.", this);
-                return;
-            }
-            Clear();
+            initialized = HasAnyBinding() && ValidateBoundConfiguration(out _);
+            if (initialized) Clear();
         }
 
         public void Configure(GameObject[] roots, CanvasDrawingPresenter[] presenters, CanvasSurface[] surfaces, Text caption = null)
@@ -41,7 +36,27 @@ namespace CameraCoop
             Clear();
         }
 
+        public void Release()
+        {
+            Clear();
+            slotRoots = null;
+            slotPresenters = null;
+            slotSurfaces = null;
+            captionLabel = null;
+            initialized = false;
+        }
+
         public bool ValidateRuntimeConfiguration(out string error)
+        {
+            if (!HasAnyBinding())
+            {
+                error = string.Empty;
+                return true;
+            }
+            return ValidateBoundConfiguration(out error);
+        }
+
+        private bool ValidateBoundConfiguration(out string error)
         {
             error = "RelayQuizGallery requires matching non-empty root, presenter and read-only surface arrays.";
             if (slotRoots == null || slotPresenters == null || slotSurfaces == null) return false;
@@ -55,6 +70,14 @@ namespace CameraCoop
             }
             error = string.Empty;
             return true;
+        }
+
+        private bool HasAnyBinding()
+        {
+            return (slotRoots != null && slotRoots.Length > 0)
+                || (slotPresenters != null && slotPresenters.Length > 0)
+                || (slotSurfaces != null && slotSurfaces.Length > 0)
+                || captionLabel != null;
         }
 
         public void Show(IReadOnlyList<RelayTurnRecord> records)

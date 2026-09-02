@@ -11,7 +11,8 @@ namespace CameraCoop.Party
         private static PartyGameSceneAdapter registeredAdapter;
         private static PartyTransitionKey registeredTransitionKey;
 
-        private const int RequiredActionCount = 2;
+        private const int RequiredActionCount = 3;
+        private const int RequiredGallerySlotCount = PartyRoster.Capacity - 1;
         private const int RequiredBrushCount = 1;
         private const int RequiredToolStationCount = 1;
 
@@ -37,10 +38,16 @@ namespace CameraCoop.Party
             if (!ValidateTransforms(bindings.SlotDocks, "slotDocks", PartyRoster.Capacity, out error)) return false;
             if (!ValidateTransform(bindings.CarryAnchor, "carryAnchor", out error)) return false;
             if (!ValidateComponents(bindings.Actions, "actions", RequiredActionCount, out error)) return false;
+            PartyWorldAction[] requiredActions =
+                { PartyWorldAction.CarryCanvas, PartyWorldAction.DockCanvas, PartyWorldAction.ReturnToLobby };
+            for (int index = 0; index < requiredActions.Length; index++)
+                if (bindings.Actions[index].Action != requiredActions[index])
+                    return Fail("actions must be CarryCanvas, DockCanvas, ReturnToLobby in order.", out error);
             if (!ValidateGameObjects(bindings.AvatarRoots, "avatarRoots", PartyRoster.Capacity, out error)) return false;
             if (!ValidateComponents(bindings.AvatarPresenters, "avatarPresenters", PartyRoster.Capacity - 1, out error)) return false;
             if (!ValidateGameObject(bindings.WritablePaperRoot, "writablePaperRoot", out error)) return false;
             if (!ValidateComponent(bindings.WritableSurface, "writableSurface", out error)) return false;
+            if (!ValidateComponent(bindings.WritableInteractable, "writableInteractable", out error)) return false;
             if (!ValidateTransform(bindings.ToolRack, "toolRack", out error)) return false;
             if (!ValidateComponent(bindings.PhysicalPaintTool, "physicalPaintTool", out error)) return false;
             if (!ValidateComponents(bindings.Brushes, "brushes", RequiredBrushCount, out error)) return false;
@@ -48,6 +55,7 @@ namespace CameraCoop.Party
 
             if (bindings.Mode == PartyMode.CoopMural)
             {
+                if (!ValidateGameObject(bindings.ResultRoot, "resultRoot", out error)) return false;
                 if (!ValidateGameObjects(bindings.MuralLayerRoots, "muralLayerRoots", PartyRoster.Capacity, out error)) return false;
                 if (!ValidateComponents(bindings.MuralLayerPresenters, "muralLayerPresenters", PartyRoster.Capacity, out error)) return false;
                 if (!ValidateComponents(bindings.MuralLayerSurfaces, "muralLayerSurfaces", PartyRoster.Capacity, out error)) return false;
@@ -57,8 +65,10 @@ namespace CameraCoop.Party
                 if (!ValidateComponent(bindings.ReferencePresenter, "referencePresenter", out error)) return false;
                 if (!ValidateComponent(bindings.ReferenceSurface, "referenceSurface", out error)) return false;
                 if (!ValidateGameObject(bindings.ResultRoot, "resultRoot", out error)) return false;
-                if (!ValidateComponent(bindings.GalleryPresenter, "galleryPresenter", out error)) return false;
-                if (!ValidateComponent(bindings.GallerySurface, "gallerySurface", out error)) return false;
+                if (!ValidateTransform(bindings.ResultViewPose, "resultViewPose", out error)) return false;
+                if (!ValidateGameObjects(bindings.GalleryRoots, "galleryRoots", RequiredGallerySlotCount, out error)) return false;
+                if (!ValidateComponents(bindings.GalleryPresenters, "galleryPresenters", RequiredGallerySlotCount, out error)) return false;
+                if (!ValidateComponents(bindings.GallerySurfaces, "gallerySurfaces", RequiredGallerySlotCount, out error)) return false;
             }
 
             error = string.Empty;

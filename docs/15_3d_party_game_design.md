@@ -91,7 +91,7 @@ host는 서로 다른 4명의 준비만 센다. 한 사람이 양손을 올려�
 
 host가 시작하면 방 안의 mode 전시대가 열린다. 각 전시대에는 손으로 만질 수 있는 대표 물체, 짧은 규칙, 예상 진행 방식이 있다. 친구들은 돌아다니며 내용을 볼 수 있고 host만 선택을 확정한다. 투표 기능은 첫 구현의 필수 범위가 아니다.
 
-선택 확정 후 참가자와 순서를 잠그고 규칙을 보여 준 다음 게임 공간에 배치한다. 이때 다른 player가 준비를 취소하거나 연결이 끊기면 시작하지 않고 lobby로 돌아간다. 게임이 끝나도 같은 Steam party를 유지해 다음 게임을 고를 수 있다.
+선택 확정 후 참가자와 순서를 잠그고 규칙을 보여 준 다음 게임 공간에 배치한다. 이때 다른 player가 준비를 취소하면 시작하지 않고 lobby에서 다시 준비한다. 연결이 끊기면 정상적인 lobby return이 아니라 session `Abort`로 round를 폐기하고 새 invite를 요구한다. 게임이 정상 종료된 경우에만 같은 Steam party를 유지해 다음 게임을 고를 수 있다.
 
 ## 4. 공간 구성
 
@@ -121,12 +121,13 @@ host가 시작하면 방 안의 mode 전시대가 열린다. 각 전시대에는
 - 4개의 작업 구역을 한 줄로 놓는다. player 순서와 구역 순서는 같다.
 - 각 구역의 중앙에는 자기 canvas dock, 옆에는 자기 붓·물감·굵기 조절 물체를 둔다. canvas는 `Docked`로 시작한다.
 - canvas handle을 pinch하면 canvas가 해당 avatar에 latched되어 `Carried`가 된다. 손을 놓아도 carry가 유지되며, player는 WASD와 look으로 이동·회전할 수 있다.
+- `Docked` canvas는 자기 dock에 고정되어 player 이동을 따라가지 않는다. player가 canvas를 이동하려면 먼저 `Carried`로 전환해야 한다.
 - `Carried` canvas를 자기 zone 중앙의 dock 위치로 가져가 dock 영역을 pinch하면 `Docked`로 돌아간다. 다른 player의 canvas나 다른 zone의 dock에는 전환할 수 없다.
 - 두 상태는 동일한 canvas object의 drawing data와 revision을 사용한다. carry·dock 전환으로 복사본, 새 revision, 별도 기록을 만들지 않는다.
 - 전환을 시작할 때 active stroke와 hand capture를 취소하고, open hand를 새로 확인한 뒤 drawing을 재무장한다. 전환 중 입력은 drawing으로 기록하지 않는다.
 - canvas 이동·dock 전환은 owner만 수행한다. round abort·reset·disconnect 때 해당 canvas의 transform은 자기 dock으로 돌아가고 `Docked`로 초기화한다. drawing data·revision 폐기는 round reset 정책에 따르며 다음 round에 이전 private canvas를 재사용하지 않는다.
 - 이전 그림은 **직전 player가 넘겨준 별도 read-only 종이**로 표시한다. 내가 그릴 빈 canvas와 구분한다.
-- lobby와 gallery는 자유 이동한다. `RelayCopy` 중에도 `Carried` 상태에서는 WASD와 look을 허용하고, `Docked` 상태에서는 자기 zone 안에서 canvas를 바라보며 그린다. 도구까지 걸어갈 수 있지만 다른 사람의 구역을 가로막지 않는다.
+- lobby와 gallery는 자유 이동한다. game `Drawing` 중에는 `Carried` 상태에서만 canvas와 함께 WASD와 look을 허용한다. `Docked` canvas는 dock에 고정되고 이동하지 않는다. lobby `Explore/Interact`의 registered practice paper는 별도 연습 계약이다.
 - 가림판·종이 뒷면·카메라 배치는 분위기를 위한 장치다. 비공개 보장은 §8의 데이터 수신 권한으로 수행한다.
 
 3D 물체에는 collider와 명확한 hover·선택 반응을 둔다. `World Space Canvas`는 이름·숫자·설명·답 입력 등 읽기 요소에 사용할 수 있다. 버튼을 작은 평면 UI로 옮겨놓는 것만으로 이 목표를 달성했다고 보지 않는다.
@@ -167,7 +168,7 @@ fist에서 검지 끝이 가려져도 조준이 튀지 않도록 손바닥 기�
 
 물감 선택을 마친 손이 닫힌 채 canvas 위로 이동해도 즉시 선을 그리지 않는다. 대상 변경·도구 변경·차례 변경·pause·camera 재연결 때 capture를 취소하고, fresh open hand를 다시 확인한 뒤 새 drawing을 허용한다. canvas 밖으로 나가면 선을 끝내고 재진입 시 새 선을 만든다. ray가 가림 물체를 통과해 뒤의 canvas를 쓰지 않게 한다.
 
-그림을 그릴 때 `Carried` 상태에서는 WASD와 look을 계속 허용한다. `Docked` 상태에서는 자기 zone 안의 이동과 손 조준을 함께 허용한다. 두 상태 모두 fist drawing을 사용하며, `Move`와 `Drawing`을 항상 배타적으로 처리하지 않는다.
+그림을 그릴 때 game `Drawing` context에서는 `Carried` 상태에서만 canvas와 함께 WASD와 look을 허용한다. `Docked` 상태의 canvas는 dock에 고정되며 player 이동을 따라가지 않는다. 두 상태 모두 fist drawing을 사용하지만 이동 권한은 `Carried`에만 있다.
 
 ### 2D와 mouse를 남겨야 하는 범위
 
@@ -335,3 +336,11 @@ pause는 무제한으로 친구를 붙잡는 기능이 되면 안 된다. 제한
 이번 문서는 구현 요구와 결정 사항을 갱신한 것이다. `RelayQuizOnline` Scene, world gesture, phone camera 선택 경로, Steam 4p contract, `RelayCopy`/`MemoryCopy`/`CoopMural`은 구현·자동 검증됐다. 실제 Steam 4계정, webcam hand tracking, phone/Camo/Continuity Camera 실기는 외부 검증 대기다. 세부 상태는 [구현 순서와 완료 기준](16_implementation_roadmap.md)에 기록한다.
 
 기존 [품질 기준](../QUALITY_CHECKLIST.md)은 그대로 유지한다. 문서 검토를 기능 구현 점수로 환산하지 않는다. 각 기능의 실제 테스트·성능 근거·4인 Player 관찰 결과를 남겨야 한다.
+
+## 10. Task 14 현재 플레이 흐름과 Scene 경계
+
+`RelayQuizOnline`에서 camera button을 mouse로 눌러 연결한 뒤 Host/Invite를 손으로 실행한다. lobby의 자유 연습에서 brush pickup, paint·width·eraser 선택, fist drawing, grounded jump를 확인하고, 네 player가 각각 `ReadyPad`에 dwell하면 Host가 `START`를 실행해 `ModeSelectorRoot`를 표시한다. Host가 mode를 선택하면 `SelectModeAndBeginLoad`가 `startSignal`을 증가시키고 선택한 Scene만 additive로 load한다. Host의 `RETURN TO LOBBY`는 game adapter를 unbind하고 game Scene을 unload한 뒤 lobby와 camera·Steam session을 유지한다.
+
+`RelayCopy`는 직전 그림을 현재 owner에게만 전달하고, `MemoryCopy`는 관찰 시간이 끝나면 reference를 숨긴 뒤 복사하게 한다. `CoopMural`은 P1→P2→P3→P4 순서로 한 layer씩 그리고 완료 layer를 freeze한다. paper는 `Docked`에서 시작하며 owner만 `Carried`로 들고 자기 zone dock에 되돌릴 수 있다. brush 선택과 paint·width·eraser는 pinch, drawing은 fist다. mode Scene은 persistent owner를 갖지 않는다.
+
+Scene load failure와 timeout은 current round를 abort하고 private data와 input을 정리한 뒤 lobby 복귀를 요구한다. disconnect는 `Abort`로 처리하고 새 Steam invite를 요구한다. 정상적인 mode return에서만 같은 Steam party/session과 camera process를 유지한다. 실제 4 account, phone/webcam, physical gesture, long profile, Intel Mac은 아직 검증하지 않았다.

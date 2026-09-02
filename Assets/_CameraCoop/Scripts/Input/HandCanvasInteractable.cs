@@ -16,9 +16,20 @@ namespace CameraCoop
         public override bool UsesWorldHitPosition => true;
         public override bool IsAvailable => base.IsAvailable && canvasSurface != null && canvasSurface.isActiveAndEnabled && handPointer != null && handPointer.isActiveAndEnabled;
 
+        public void Rebind(CanvasSurface surface, HandPointer pointer)
+        {
+            if (surface == null) throw new System.ArgumentNullException(nameof(surface));
+            if (pointer == null) throw new System.ArgumentNullException(nameof(pointer));
+            var hands = new List<string>(drawingHands);
+            foreach (string hand in hands) End(hand);
+            canvasSurface = surface;
+            handPointer = pointer;
+            enabled = true;
+        }
+
         private void Awake()
         {
-            if (canvasSurface == null || handPointer == null || handPointer.InputSource != HandPointerInputSource.HandRouter)
+            if (canvasSurface == null || handPointer != null && handPointer.InputSource != HandPointerInputSource.HandRouter)
             {
                 Debug.LogError("HandCanvasInteractable: assign canvasSurface and a HandRouter handPointer.", this);
                 enabled = false;

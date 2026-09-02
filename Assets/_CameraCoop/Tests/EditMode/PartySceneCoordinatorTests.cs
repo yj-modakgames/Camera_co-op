@@ -239,6 +239,105 @@ namespace CameraCoop.Tests
             Assert.That(fixture.Coordinator.AppliedTransitionKey.SessionId, Is.EqualTo("new-session"));
         }
 
+        [Test]
+        public void ShutdownBoundaryUnloadsWithoutReadyAndAllowsNextSessionReset()
+        {
+            Fixture fixture = CreateFixture(PartyMode.RelayCopy);
+            fixture.Coordinator.ApplyView(View("old-session", 2, 4, 10, PartyTransitionPhase.LoadingGame, PartyMode.RelayCopy));
+            fixture.Runner.CompleteNext();
+            fixture.Callbacks.Events.Clear();
+            bool? completed = null;
+
+            fixture.Coordinator.ShutdownSceneBoundary(success => completed = success);
+
+            CollectionAssert.AreEqual(new[] { "disable", "unbind" }, fixture.Callbacks.Events);
+            Assert.That(fixture.Loader.UnloadCalls, Is.EqualTo(1));
+            Assert.That(fixture.Callbacks.LobbyReadyCalls, Is.Zero);
+            Assert.That(completed, Is.Null);
+
+            fixture.Runner.CompleteNext();
+
+            Assert.That(completed, Is.True);
+            CollectionAssert.AreEqual(new[] { "disable", "unbind", "activate-lobby", "rebase-lobby" }, fixture.Callbacks.Events);
+            Assert.That(fixture.Callbacks.LobbyReadyCalls, Is.Zero);
+            Assert.DoesNotThrow(() => fixture.Coordinator.ResetForSession("new-session"));
+            fixture.Coordinator.ApplyView(View("new-session", 1, 1, 1, PartyTransitionPhase.LoadingGame, PartyMode.RelayCopy));
+            Assert.That(fixture.Loader.LoadCalls, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ShutdownQueuedDuringLoadWaitsForLateLoadThenUnloadsWithoutReadyOrFailure()
+        {
+            Fixture fixture = CreateFixture(PartyMode.RelayCopy);
+            fixture.Coordinator.ApplyView(View("old-session", 2, 4, 10,
+                PartyTransitionPhase.LoadingGame, PartyMode.RelayCopy));
+            int callbackCount = 0;
+            bool? result = null;
+
+            fixture.Coordinator.ShutdownSceneBoundary(success => { callbackCount++; result = success; });
+            Assert.That(callbackCount, Is.Zero);
+            fixture.Runner.CompleteNext();
+
+            Assert.That(fixture.Loader.UnloadCalls, Is.EqualTo(1));
+            Assert.That(fixture.Callbacks.Events, Is.Empty,
+                "a late load must not bind, rebase, acknowledge, or report stale presentation");
+            fixture.Runner.CompleteNext();
+
+            Assert.That(result, Is.True);
+            Assert.That(callbackCount, Is.EqualTo(1));
+            Assert.That(fixture.Callbacks.SceneReadyCalls, Is.Zero);
+            Assert.That(fixture.Callbacks.LobbyReadyCalls, Is.Zero);
+            Assert.That(fixture.Callbacks.FailureCalls, Is.Zero);
+            Assert.DoesNotThrow(() => fixture.Coordinator.ResetForSession("new-session"));
+        }
+
+        [Test]
+        public void ShutdownQueuedDuringReturnUnloadSuppressesLobbyReadyAndCompletesOnce()
+        {
+            Fixture fixture = CreateFixture(PartyMode.MemoryCopy);
+            fixture.Coordinator.ApplyView(View("old-session", 2, 4, 10,
+                PartyTransitionPhase.LoadingGame, PartyMode.MemoryCopy));
+            fixture.Runner.CompleteNext();
+            fixture.Callbacks.Events.Clear();
+            fixture.Coordinator.ApplyView(View("old-session", 2, 5, 11,
+                PartyTransitionPhase.ReturningToLobby, PartyMode.MemoryCopy));
+            int callbackCount = 0;
+            bool? result = null;
+
+            fixture.Coordinator.ShutdownSceneBoundary(success => { callbackCount++; result = success; });
+            fixture.Runner.CompleteNext();
+
+            Assert.That(result, Is.True);
+            Assert.That(callbackCount, Is.EqualTo(1));
+            Assert.That(fixture.Callbacks.SceneReadyCalls, Is.EqualTo(1));
+            Assert.That(fixture.Callbacks.LobbyReadyCalls, Is.Zero);
+            Assert.That(fixture.Callbacks.FailureCalls, Is.Zero);
+            CollectionAssert.AreEqual(
+                new[] { "disable", "unbind", "activate-lobby", "rebase-lobby" }, fixture.Callbacks.Events);
+            Assert.DoesNotThrow(() => fixture.Coordinator.ResetForSession("new-session"));
+        }
+
+        [Test]
+        public void DisposeBeforeQueuedOperationCompletesDrainsShutdownCallbackExactlyOnce()
+        {
+            Fixture fixture = CreateFixture(PartyMode.CoopMural);
+            fixture.Coordinator.ApplyView(View("old-session", 2, 4, 10,
+                PartyTransitionPhase.LoadingGame, PartyMode.CoopMural));
+            int callbackCount = 0;
+            bool? result = null;
+            fixture.Coordinator.ShutdownSceneBoundary(success => { callbackCount++; result = success; });
+
+            fixture.Coordinator.Dispose();
+
+            Assert.That(result, Is.False);
+            Assert.That(callbackCount, Is.EqualTo(1));
+            fixture.Runner.CompleteNext();
+            Assert.That(callbackCount, Is.EqualTo(1), "late completion must not re-fire drained teardown callbacks");
+            Assert.That(fixture.Callbacks.SceneReadyCalls, Is.Zero);
+            Assert.That(fixture.Callbacks.LobbyReadyCalls, Is.Zero);
+            Assert.That(fixture.Callbacks.FailureCalls, Is.Zero);
+        }
+
         private Fixture CreateFixture(PartyMode adapterMode)
         {
             GameObject coordinatorObject = CreateObject("Coordinator");
@@ -247,9 +346,26 @@ namespace CameraCoop.Tests
             GameObject lobbyPortObject = CreateObject("Lobby port");
             PartyLobbyScenePort lobbyPort = lobbyPortObject.AddComponent<PartyLobbyScenePort>();
             var spawns = new Transform[PartyRoster.Capacity];
+            var practiceRoots = new GameObject[PartyRoster.Capacity];
+            var practicePresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
+            var practiceSurfaces = new CanvasSurface[PartyRoster.Capacity];
+            var avatarRoots = new GameObject[PartyRoster.Capacity];
+            var avatarPresenters = new RemoteAvatarPresenter[PartyRoster.Capacity - 1];
             for (int slot = 0; slot < spawns.Length; slot++)
+            {
                 spawns[slot] = CreateObject("Lobby spawn " + slot, lobbyRoot.transform).transform;
-            lobbyPort.Configure(lobbyRoot, spawns);
+                practiceRoots[slot] = CreateObject("Practice root " + slot, lobbyRoot.transform);
+                practicePresenters[slot] = CreateObject("Practice presenter " + slot, lobbyRoot.transform)
+                    .AddComponent<CanvasDrawingPresenter>();
+                practiceSurfaces[slot] = CreateObject("Practice surface " + slot, lobbyRoot.transform)
+                    .AddComponent<CanvasSurface>();
+                avatarRoots[slot] = CreateObject("Avatar root " + slot, lobbyRoot.transform);
+                if (slot < avatarPresenters.Length)
+                    avatarPresenters[slot] = CreateObject("Avatar presenter " + slot, lobbyRoot.transform)
+                        .AddComponent<RemoteAvatarPresenter>();
+            }
+            lobbyPort.Configure(lobbyRoot, spawns, practiceRoots, practicePresenters, practiceSurfaces,
+                avatarRoots, avatarPresenters);
 
             var loader = new FakeLoader();
             var resolver = new FakeResolver();

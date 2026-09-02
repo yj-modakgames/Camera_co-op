@@ -24,11 +24,20 @@ namespace CameraCoop
         private PersonalCanvasPlacementState state;
         private string holderPlayerId;
         private uint revision;
+        private Transform canvasTarget;
 
         public PersonalCanvasPlacementState State => state;
         public string OwnerPlayerId => ownerPlayerId;
         public string HolderPlayerId => holderPlayerId;
         public uint Revision => revision;
+        public Transform CanvasTarget => canvasTarget != null ? canvasTarget : transform;
+
+        public void RebindCanvasTarget(Transform target)
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            CancelInteraction();
+            canvasTarget = target;
+        }
 
         private void Awake()
         {
@@ -82,7 +91,7 @@ namespace CameraCoop
         public bool TryDock(string requesterPlayerId)
         {
             if (!IsOwner(requesterPlayerId) || state != PersonalCanvasPlacementState.Carried || dockAnchor == null ||
-                !IsFinite(transform.position) || (transform.position - dockAnchor.position).sqrMagnitude > dockRadius * dockRadius)
+                !IsFinite(CanvasTarget.position) || (CanvasTarget.position - dockAnchor.position).sqrMagnitude > dockRadius * dockRadius)
             {
                 return false;
             }
@@ -97,7 +106,7 @@ namespace CameraCoop
         public void ResetForAbortOrDisconnect()
         {
             CancelInteraction();
-            bool changed = state != PersonalCanvasPlacementState.Docked || holderPlayerId != null || transform.parent != dockAnchor;
+            bool changed = state != PersonalCanvasPlacementState.Docked || holderPlayerId != null || CanvasTarget.parent != dockAnchor;
             state = PersonalCanvasPlacementState.Docked;
             holderPlayerId = null;
             if (changed) unchecked { revision++; }
@@ -119,16 +128,18 @@ namespace CameraCoop
 
         private void AttachDocked()
         {
-            transform.SetParent(dockAnchor, false);
-            transform.localPosition = Vector3.zero;
-            transform.localRotation = Quaternion.identity;
+            Transform target = CanvasTarget;
+            target.SetParent(dockAnchor, false);
+            target.localPosition = Vector3.zero;
+            target.localRotation = Quaternion.identity;
         }
 
         private void AttachCarried()
         {
-            transform.SetParent(avatarAnchor, false);
-            transform.localPosition = carriedLocalPosition;
-            transform.localRotation = Quaternion.Euler(carriedLocalEulerAngles);
+            Transform target = CanvasTarget;
+            target.SetParent(avatarAnchor, false);
+            target.localPosition = carriedLocalPosition;
+            target.localRotation = Quaternion.Euler(carriedLocalEulerAngles);
         }
 
         private static bool IsFinite(float value)

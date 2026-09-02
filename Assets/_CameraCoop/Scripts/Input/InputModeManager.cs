@@ -35,6 +35,7 @@ namespace CameraCoop
         private bool cameraControlAvailable;
         private bool cameraPreparing;
         private bool drawingMovementAllowed;
+        private bool practiceDrawingAllowed;
         private static readonly Type TmpInputFieldType = Type.GetType("TMPro.TMP_InputField, Unity.TextMeshPro");
 
         public InputContext CurrentContext => context;
@@ -45,7 +46,9 @@ namespace CameraCoop
                 || context == InputContext.Drawing && drawingMovementAllowed);
         public bool CanLook => CanMove;
         public bool CanUseHandUi => hasFocus && !IsCameraPreparing && context != InputContext.Blocked && CurrentMode == InputMode.Interact;
-        public bool CanDraw => hasFocus && !IsCameraPreparing && context == InputContext.Drawing && !InputFocus.IsTyping;
+        public bool CanDraw => hasFocus && !IsCameraPreparing && !InputFocus.IsTyping
+            && (context == InputContext.Drawing || practiceDrawingAllowed
+                && context == InputContext.Explore && CurrentMode == InputMode.Interact);
         public bool CanToggleMode => hasFocus && !IsCameraPreparing && context == InputContext.Explore && !InputFocus.IsTyping;
         // Blocked에서도 캠이 수신 중이 아니면 재시도만은 허용한다. 차폐 중 캠이 끊기면
         // 이 경로 말고는 복구 수단이 없다 (docs/06 §9, docs/09 §7).
@@ -101,6 +104,11 @@ namespace CameraCoop
             if (drawingMovementAllowed == allowed) return;
             drawingMovementAllowed = allowed;
             NotifyModeChanged();
+        }
+
+        public void SetPracticeDrawingAllowed(bool allowed)
+        {
+            practiceDrawingAllowed = allowed;
         }
 
         public void SetContext(InputContext nextContext)

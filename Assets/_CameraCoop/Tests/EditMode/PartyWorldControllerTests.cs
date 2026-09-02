@@ -70,12 +70,22 @@ namespace CameraCoop.Tests
         {
             var gateway = new FakeGateway { Host = true };
             gateway.View = ReadySetup();
+            gateway.View.hasSelectedMode = false;
+            gateway.View.connected = true;
             gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
             PartyWorldController controller = CreateController(gateway);
+            GameObject selectorRoot = CreateObject("mode selector");
+            selectorRoot.SetActive(false);
+            controller.ConfigureModeSelectorRoot(selectorRoot);
 
+            Assert.That(gateway.View.hasSelectedMode, Is.False);
+            Assert.That(selectorRoot.activeSelf, Is.False);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectRelayCopy), Is.False);
             Assert.That(controller.TryExecute(PartyWorldAction.StartSelectedMode), Is.True);
-            gateway.View.transitionPhase = PartyTransitionPhase.SelectingMode;
+            Assert.That(gateway.View.transitionPhase, Is.EqualTo(PartyTransitionPhase.SelectingMode),
+                "START opens the mode selector before any catalog mode exists.");
+            controller.TickRuntime(0f);
+            Assert.That(selectorRoot.activeSelf, Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectRelayCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectMemoryCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectCoopMural), Is.True);
@@ -83,6 +93,199 @@ namespace CameraCoop.Tests
                 new[] { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural },
                 gateway.SelectedModes);
             Assert.That(gateway.StartCalls, Is.EqualTo(1));
+            gateway.View.transitionPhase = PartyTransitionPhase.LoadingGame;
+            controller.TickRuntime(1f);
+            Assert.That(selectorRoot.activeSelf, Is.False);
+            gateway.View.transitionPhase = PartyTransitionPhase.InGame;
+            controller.TickRuntime(2f);
+            Assert.That(selectorRoot.activeSelf, Is.False);
+            gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
+            controller.TickRuntime(3f);
+            Assert.That(selectorRoot.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void GameScenePortsCanRebindWithoutDisposingPersistentNetworkDomains()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1" };
+            gateway.View = PartialLobbyView();
+            PartyWorldController controller = CreateController(gateway);
+            var transport = new TrackingTransport(true, "p1");
+            using var relay = new OnlineRelayQuizSession(transport, "p1", () => "camera",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            controller.BindNetwork(relay, transport, 3);
+            controller.TickRuntime(0f);
+            object poseBefore = GetField(controller, "poseSession");
+            object practiceBefore = GetField(controller, "practiceSession");
+
+            FakeGamePort relayPort = CreateGamePort(PartyMode.RelayCopy);
+            FakeGamePort memoryPort = CreateGamePort(PartyMode.MemoryCopy);
+            controller.BindGamePort(relayPort);
+            controller.UnbindScenePort(relayPort);
+            controller.BindGamePort(memoryPort);
+
+            Assert.That(GetField(controller, "poseSession"), Is.SameAs(poseBefore));
+            Assert.That(GetField(controller, "practiceSession"), Is.SameAs(practiceBefore));
+            Assert.That(controller.ActiveSceneMode, Is.EqualTo(PartyMode.MemoryCopy));
+            Assert.That(transport.ShutdownCalls, Is.Zero);
+        }
+
+        [Test]
+        public void GamePortRebindMovesPersistentDrawingAndPlacementTargetThenRestoresLobby()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1", View = PartialLobbyView() };
+            GameObject runtime = CreateObject("persistent drawing runtime");
+            runtime.SetActive(false);
+            ToolState tools = runtime.AddComponent<ToolState>();
+            InputModeManager modes = runtime.AddComponent<InputModeManager>();
+            GameObject lobbyPaper = CreateObject("lobby paper");
+            CanvasSurface lobbySurface = CreateObject("lobby surface", lobbyPaper.transform).AddComponent<CanvasSurface>();
+            HandPointer pointer = runtime.AddComponent<HandPointer>();
+            SetPrivate(pointer, "inputSource", HandPointerInputSource.HandRouter);
+            SetPrivate(pointer, "inputModeManager", modes);
+            SetPrivate(pointer, "canvasSurface", lobbySurface);
+            SetPrivate(pointer, "toolState", tools);
+            DrawingController drawing = runtime.AddComponent<DrawingController>();
+            SetPrivate(drawing, "handPointer", pointer);
+            SetPrivate(drawing, "toolState", tools);
+            SetPrivate(drawing, "canvasSurface", lobbySurface);
+            HandCanvasInteractable lobbyInteractable = lobbySurface.gameObject.AddComponent<HandCanvasInteractable>();
+            SetPrivate(lobbyInteractable, "canvasSurface", lobbySurface);
+            SetPrivate(lobbyInteractable, "handPointer", pointer);
+            runtime.SetActive(true);
+            InputFocus.IsTyping = false;
+            modes.SetContext(InputContext.Drawing);
+
+            Transform carry = CreateObject("lobby carry").transform;
+            var docks = new Transform[PartyRoster.Capacity];
+            for (int slot = 0; slot < docks.Length; slot++) docks[slot] = CreateObject("lobby dock " + slot).transform;
+            PersonalCanvasPlacement placement = lobbyPaper.AddComponent<PersonalCanvasPlacement>();
+            placement.Configure("p1", carry, docks[0], 1f);
+            PartyWorldController controller = CreateController(gateway);
+            SetPrivate(controller, "drawingController", drawing);
+            SetPrivate(controller, "toolState", tools);
+            SetPrivate(controller, "handPointer", pointer);
+            SetPrivate(controller, "localWritableCanvasRoot", lobbyPaper);
+            SetPrivate(controller, "personalCanvas", placement);
+            SetPrivate(controller, "canvasDockAnchorsBySlot", docks);
+            SetPrivate(controller, "carriedCanvasAnchor", carry);
+            FakeGamePort game = CreateGamePort(PartyMode.RelayCopy);
+
+            controller.BindGamePort(game);
+            CanvasSurface gameSurface = game.Bindings.WritableSurface;
+            Assert.That(drawing.Surface, Is.SameAs(gameSurface));
+            Assert.That(placement.CanvasTarget, Is.SameAs(game.Bindings.WritablePaperRoot.transform));
+            Assert.That(GetField(game.Bindings.PhysicalPaintTool, "toolState"), Is.SameAs(tools));
+            Assert.That(pointer.CanUseCanvas(gameSurface), Is.True);
+
+            Assert.That(drawing.TryDrawStrokeForTest(new Vector2(0.1f, 0.1f), new Vector2(0.3f, 0.3f)), Is.True);
+
+            Assert.That(gameSurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.EqualTo(1));
+            Assert.That(lobbySurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.Zero);
+
+            controller.UnbindScenePort(game);
+
+            Assert.That(drawing.Surface, Is.SameAs(lobbySurface));
+            Assert.That(placement.CanvasTarget, Is.SameAs(lobbyPaper.transform));
+            Assert.That(gameSurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.Zero);
+            Assert.That(lobbySurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ReboundLobbyPracticeWritesOnlyToCurrentPort()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1", View = PartialLobbyView() };
+            PartyWorldController controller = CreateController(gateway);
+            LobbyFixture oldLobby = CreateLobbyPort("old lobby");
+            LobbyFixture newLobby = CreateLobbyPort("new lobby");
+            var transport = new TrackingTransport(true, "p1");
+            using var relay = new OnlineRelayQuizSession(transport, "p1", () => "camera",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            controller.BindLobbyPort(oldLobby.Port);
+            controller.BindNetwork(relay, transport, 3);
+            controller.TickRuntime(0f);
+            var practice = (PartyPracticeDrawingSession)GetField(controller, "practiceSession");
+
+            controller.BindLobbyPort(newLobby.Port);
+            var drawing = new CanvasDrawingData
+            {
+                strokes = new[]
+                {
+                    new CanvasStrokeData
+                    {
+                        strokeId = 1, order = 0, brushId = 0, widthNormalized = 0.05f,
+                        colorArgb = unchecked((int)0xff00ff00), xy = new[] { 0.1f, 0.1f, 0.9f, 0.9f }
+                    }
+                }
+            };
+            Assert.That(practice.View.Apply(0, 1, drawing), Is.True);
+            var changed = (Action<PartyPracticeDrawingView>)typeof(PartyPracticeDrawingSession)
+                .GetField("ViewChanged", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(practice);
+            changed(practice.View);
+
+            Assert.That(oldLobby.PracticeRoots[0].activeSelf, Is.False);
+            Assert.That(oldLobby.PracticePresenters[0].transform.childCount, Is.Zero,
+                "the unbound port must retain its cleared write revision");
+            Assert.That(newLobby.PracticeRoots[0].activeSelf, Is.True);
+            Assert.That(newLobby.PracticePresenters[0].transform.childCount, Is.EqualTo(1),
+                "the later drawing revision must render on the current port only");
+        }
+
+        [Test]
+        public void PartialPoseRebindsLobbyAvatarPresentersAndEpochWithoutWritingOldPort()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1", View = TwoPlayerLobbyView() };
+            PartyWorldController controller = CreateController(gateway);
+            LobbyFixture oldLobby = CreateLobbyPort("old lobby");
+            LobbyFixture newLobby = CreateLobbyPort("new lobby");
+            var transport = new TrackingTransport(true, "p1");
+            transport.AddFakePeer("p2", "P2");
+            using var relay = new OnlineRelayQuizSession(transport, "p1", () => "camera",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            controller.BindLobbyPort(oldLobby.Port);
+            controller.BindNetwork(relay, transport, 3);
+            controller.TickRuntime(0f);
+            var pose = (PartyPoseSession)GetField(controller, "poseSession");
+            Assert.That(oldLobby.AvatarRoots[1].activeSelf, Is.True);
+
+            gateway.View.transitionGeneration = 2;
+            controller.BindLobbyPort(newLobby.Port);
+
+            Assert.That(oldLobby.AvatarRoots[1].activeSelf, Is.False);
+            Assert.That(newLobby.AvatarRoots[1].activeSelf, Is.True);
+            Assert.That(pose.TransitionGeneration, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void PracticeAndPartialPoseUseLobbyOnlyAndReconfigureForReturnedLobbyEpoch()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1" };
+            gateway.View = PartialLobbyView();
+            PartyWorldController controller = CreateController(gateway);
+            var transport = new TrackingTransport(true, "p1");
+            using var relay = new OnlineRelayQuizSession(transport, "p1", () => "camera",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            controller.BindNetwork(relay, transport, 3);
+
+            controller.TickRuntime(0f);
+            var practice = (PartyPracticeDrawingSession)GetField(controller, "practiceSession");
+            Assert.That(controller.HasPoseSession, Is.True);
+            Assert.That(practice.View.Configured, Is.True);
+            Assert.That(practice.View.Layers[0].Occupied, Is.True);
+            Assert.That(practice.View.Layers[1].Occupied, Is.False);
+            Assert.That(practice.View.TransitionGeneration, Is.EqualTo(1));
+
+            gateway.View.transitionPhase = PartyTransitionPhase.InGame;
+            gateway.View.transitionGeneration = 2;
+            controller.TickRuntime(1f);
+            Assert.That(practice.View.Configured, Is.False);
+
+            gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
+            gateway.View.transitionGeneration = 3;
+            controller.TickRuntime(2f);
+            Assert.That(practice.View.Configured, Is.True);
+            Assert.That(practice.View.TransitionGeneration, Is.EqualTo(3));
+            Assert.That(transport.ShutdownCalls, Is.Zero);
         }
 
         [Test]
@@ -170,7 +373,7 @@ namespace CameraCoop.Tests
             var muralSession = new CoopMuralSession(transport,
                 () => new CanvasDrawingData { strokes = Array.Empty<CanvasStrokeData>() }, 3);
             muralSession.Configure(new PartyStartSnapshot(PartyMode.CoopMural,
-                new PartyRosterSnapshot("mural", 1, "local-owner", slots)));
+                new PartyRosterSnapshot("mural", 1, "local-owner", slots)), 1);
             typeof(PartyWorldController).GetField("muralSession", BindingFlags.Instance | BindingFlags.NonPublic)
                 .SetValue(controller, muralSession);
 
@@ -708,6 +911,124 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void ReturnToLobby_IsHostOnlyAndResultOnly()
+        {
+            var gateway = new FakeGateway { Host = true };
+            gateway.View = ReadySetup();
+            gateway.View.transitionPhase = PartyTransitionPhase.InGame;
+            PartyWorldController controller = CreateController(gateway);
+            FakeGamePort port = CreateGamePort(PartyMode.RelayCopy);
+            controller.BindGamePort(port);
+
+            Assert.That(controller.TryExecute(PartyWorldAction.ReturnToLobby), Is.False);
+            port.Bindings.ResultRoot.SetActive(true);
+            gateway.Host = false;
+            Assert.That(controller.TryExecute(PartyWorldAction.ReturnToLobby), Is.False);
+            gateway.Host = true;
+            Assert.That(controller.TryExecute(PartyWorldAction.ReturnToLobby), Is.True);
+            Assert.That(gateway.ReturnCalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ConnectedLobbySlot_ShowsPracticePaperUntilGameOrAbort()
+        {
+            var gateway = new FakeGateway { View = PartialLobbyView() };
+            PartyWorldController controller = CreateController(gateway);
+            GameObject writable = CreateObject("lobby writable");
+            controller.ConfigureWritableCanvas(writable);
+
+            controller.TickRuntime(0f);
+            Assert.That(writable.activeSelf, Is.True);
+            gateway.View.transitionPhase = PartyTransitionPhase.InGame;
+            controller.TickRuntime(1f);
+            Assert.That(writable.activeSelf, Is.False);
+            gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
+            gateway.View.aborted = true;
+            controller.TickRuntime(2f);
+            Assert.That(writable.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void FinalMuralCallbackUsesCurrentEpochAndMarksTheAuthoritativeHostOnce()
+        {
+            using (var online = new OnlinePartyFixture())
+            {
+                PartyWorldController controller = CreateObject("mural final host").AddComponent<PartyWorldController>();
+                controller.ConfigureGateway(new SessionGateway(online.Host));
+                controller.BindNetwork(online.Host, online.HostTransport, 3);
+                controller.TickRuntime(1f);
+
+                CoopMuralSession session = (CoopMuralSession)typeof(PartyWorldController)
+                    .GetField("muralSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(controller);
+                Assert.That(session, Is.Not.Null);
+                Assert.That(online.Host.RequestReturnToLobby(), Is.False);
+
+                var murals = new CoopMuralSession[PartyRoster.Capacity - 1];
+                try
+                {
+                    for (int slot = 1; slot < PartyRoster.Capacity; slot++)
+                    {
+                        murals[slot - 1] = new CoopMuralSession(online.ClientTransports[slot - 1],
+                            () => MuralDrawing(), 3);
+                        murals[slot - 1].Configure(MuralStart(online.Host.View), online.Host.View.startSignal);
+                    }
+                    for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+                    {
+                        Assert.That(session.View.Apply(slot, 1, MuralDrawing()), Is.True);
+                        foreach (CoopMuralSession mural in murals)
+                            Assert.That(mural.View.Apply(slot, 1, MuralDrawing()), Is.True);
+                        if (slot == 0)
+                            Assert.That(session.CompleteLocalTurn(1), Is.True);
+                        else
+                        {
+                            CoopMuralSession owner = murals[slot - 1];
+                            Assert.That(owner.View.CanLocalWrite, Is.True);
+                            Assert.That(owner.CompleteLocalTurn(1), Is.True);
+                        }
+                        online.Pump();
+                    }
+                }
+                finally
+                {
+                    foreach (CoopMuralSession mural in murals) mural?.Dispose();
+                }
+
+                Assert.That(session.View.IsFinalDisplay, Is.True);
+                Assert.That(online.Host.MarkCoopMuralFinalDisplay(), Is.False);
+                Assert.That(online.Host.RequestReturnToLobby(), Is.True);
+            }
+        }
+
+        private static PartyStartSnapshot MuralStart(OnlineRelayQuizView view)
+        {
+            var slots = new PartyRosterSlotSnapshot[PartyRoster.Capacity];
+            for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+                slots[slot] = new PartyRosterSlotSnapshot(slot, view.roster[slot], "P" + slot, true);
+            return new PartyStartSnapshot(PartyMode.CoopMural,
+                new PartyRosterSnapshot(view.sessionId, view.rosterGeneration, view.roster[0], slots));
+        }
+
+        private static CanvasDrawingData MuralDrawing()
+        {
+            return new CanvasDrawingData
+            {
+                strokes = new[]
+                {
+                    new CanvasStrokeData
+                    {
+                        strokeId = 1,
+                        order = 0,
+                        xy = new[] { 0.1f, 0.2f, 0.2f, 0.3f },
+                        colorArgb = unchecked((int)0xFFFFFFFF),
+                        widthNormalized = 0.1f,
+                        brushId = 0
+                    }
+                }
+            };
+        }
+
+        [Test]
         public void RuntimeValidationReportsFirstMissingSceneContractReference()
         {
             PartyWorldController controller = CreateController(new FakeGateway());
@@ -723,9 +1044,10 @@ namespace CameraCoop.Tests
             return controller;
         }
 
-        private GameObject CreateObject(string name)
+        private GameObject CreateObject(string name, Transform parent = null)
         {
             var created = new GameObject(name);
+            created.transform.SetParent(parent, false);
             objects.Add(created);
             return created;
         }
@@ -797,6 +1119,101 @@ namespace CameraCoop.Tests
             };
         }
 
+        private static OnlineRelayQuizView PartialLobbyView()
+        {
+            return new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Setup,
+                connected = true,
+                sessionId = "partial-party",
+                rosterGeneration = 1,
+                transitionGeneration = 1,
+                transitionPhase = PartyTransitionPhase.Lobby,
+                localSlot = 0,
+                rosterCount = 1,
+                roster = new[] { "p1", string.Empty, string.Empty, string.Empty }
+            };
+        }
+
+        private static OnlineRelayQuizView TwoPlayerLobbyView()
+        {
+            OnlineRelayQuizView view = PartialLobbyView();
+            view.rosterCount = 2;
+            view.roster[1] = "p2";
+            return view;
+        }
+
+        private LobbyFixture CreateLobbyPort(string name)
+        {
+            GameObject root = CreateObject(name + " root");
+            PartyLobbyScenePort port = CreateObject(name + " port", root.transform).AddComponent<PartyLobbyScenePort>();
+            var spawns = new Transform[PartyRoster.Capacity];
+            var practiceRoots = new GameObject[PartyRoster.Capacity];
+            var practicePresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
+            var practiceSurfaces = new CanvasSurface[PartyRoster.Capacity];
+            var avatarRoots = new GameObject[PartyRoster.Capacity];
+            var avatarPresenters = new RemoteAvatarPresenter[PartyRoster.Capacity - 1];
+            for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+            {
+                spawns[slot] = CreateObject(name + " spawn " + slot, root.transform).transform;
+                practiceRoots[slot] = CreateObject(name + " practice root " + slot, root.transform);
+                practicePresenters[slot] = CreateObject(name + " practice presenter " + slot, root.transform)
+                    .AddComponent<CanvasDrawingPresenter>();
+                typeof(CanvasDrawingPresenter).GetField("brushMaterials", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(practicePresenters[slot], new Material[1]);
+                practiceSurfaces[slot] = CreateObject(name + " practice surface " + slot, root.transform)
+                    .AddComponent<CanvasSurface>();
+                avatarRoots[slot] = CreateObject(name + " avatar root " + slot, root.transform);
+                if (slot < avatarPresenters.Length)
+                    avatarPresenters[slot] = CreateObject(name + " avatar presenter " + slot, root.transform)
+                        .AddComponent<RemoteAvatarPresenter>();
+            }
+            port.Configure(root, spawns, practiceRoots, practicePresenters, practiceSurfaces,
+                avatarRoots, avatarPresenters);
+            Assert.That(port.ValidateBindings(out string error), Is.True, error);
+            return new LobbyFixture(port, practiceRoots, practicePresenters, avatarRoots);
+        }
+
+        private FakeGamePort CreateGamePort(PartyMode mode)
+        {
+            GameObject root = CreateObject(mode + " scene root");
+            GameObject writable = CreateObject(mode + " writable", root.transform);
+            CanvasSurface surface = CreateObject(mode + " surface", writable.transform).AddComponent<CanvasSurface>();
+            HandCanvasInteractable interactable = surface.gameObject.AddComponent<HandCanvasInteractable>();
+            return new FakeGamePort(mode, new PartySceneBindings
+            {
+                Mode = mode,
+                SceneRoot = root,
+                WritablePaperRoot = writable,
+                WritableSurface = surface,
+                WritableInteractable = interactable,
+                PhysicalPaintTool = CreateObject(mode + " paint tool", root.transform).AddComponent<PhysicalPaintTool>(),
+                ResultRoot = CreateObject(mode + " result root", root.transform)
+            });
+        }
+
+        private static object GetField(Component component, string name)
+        {
+            FieldInfo field = component.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, component.GetType().Name + " must own " + name + ".");
+            return field.GetValue(component);
+        }
+
+        private static void SetPrivate(Component component, string name, object value)
+        {
+            FieldInfo field = component.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, component.GetType().Name + " must own " + name + ".");
+            field.SetValue(component, value);
+        }
+
+        private static void InvokePrivate(Component component, string name, params object[] arguments)
+        {
+            MethodInfo method = component.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, component.GetType().Name + " must own " + name + ".");
+            method.Invoke(component, arguments);
+        }
+
+
         private static OnlineRelayQuizView ActiveCoopMural()
         {
             return new OnlineRelayQuizView
@@ -822,6 +1239,7 @@ namespace CameraCoop.Tests
             internal readonly List<PartyMode> SelectedModes = new List<PartyMode>();
             internal int StartCalls;
             internal int HostCalls;
+            internal int ReturnCalls;
             internal bool Host;
             internal bool CameraConnected;
             internal bool FreshHand;
@@ -835,12 +1253,57 @@ namespace CameraCoop.Tests
             public OnlineRelayQuizView PartyView => View;
             public void SetReady(bool ready) => ReadyChanges.Add(ready);
             public bool SelectMode(PartyMode mode) { SelectedModes.Add(mode); return true; }
-            public bool StartSelectedMode() { StartCalls++; return true; }
+            public bool StartSelectedMode()
+            {
+                StartCalls++;
+                View.transitionPhase = PartyTransitionPhase.SelectingMode;
+                return true;
+            }
             public void RequestHost() { HostCalls++; }
             public void RequestInvite() { }
             public void RequestLeave() { }
             public void RequestCamera(PartyWorldAction action) { }
+            public bool RequestReturnToLobby() { ReturnCalls++; return true; }
         }
+
+        private sealed class FakeGamePort : IPartyGameScenePort
+        {
+            internal FakeGamePort(PartyMode mode, PartySceneBindings bindings)
+            {
+                Mode = mode;
+                Bindings = bindings;
+            }
+
+            public PartyMode Mode { get; }
+            public PartySceneBindings Bindings { get; }
+            public bool IsRegistered { get; private set; }
+            public bool ValidateBindings(out string error) { error = string.Empty; return true; }
+            public bool Register(PartyMode expectedMode, PartyTransitionKey transitionKey, out string error)
+            {
+                IsRegistered = expectedMode == Mode;
+                error = IsRegistered ? string.Empty : "mode mismatch";
+                return IsRegistered;
+            }
+            public void Unregister() => IsRegistered = false;
+        }
+
+        private sealed class LobbyFixture
+        {
+            internal LobbyFixture(PartyLobbyScenePort port, GameObject[] practiceRoots,
+                CanvasDrawingPresenter[] practicePresenters, GameObject[] avatarRoots)
+            {
+                Port = port;
+                PracticeRoots = practiceRoots;
+                PracticePresenters = practicePresenters;
+                AvatarRoots = avatarRoots;
+            }
+
+            internal PartyLobbyScenePort Port { get; }
+            internal GameObject[] PracticeRoots { get; }
+            internal CanvasDrawingPresenter[] PracticePresenters { get; }
+            internal GameObject[] AvatarRoots { get; }
+        }
+
 
         private sealed class SessionGateway : IPartyWorldGateway
         {
@@ -863,6 +1326,7 @@ namespace CameraCoop.Tests
             public void RequestInvite() { }
             public void RequestLeave() { }
             public void RequestCamera(PartyWorldAction action) { }
+            public bool RequestReturnToLobby() => session.RequestReturnToLobby();
         }
 
         private sealed class OnlinePartyFixture : IDisposable
@@ -877,6 +1341,7 @@ namespace CameraCoop.Tests
 
             internal readonly TrackingTransport HostTransport;
             internal readonly OnlineRelayQuizSession Host;
+            internal IReadOnlyList<LoopbackTransport> ClientTransports => clientTransports;
 
             internal OnlinePartyFixture()
             {
@@ -924,7 +1389,7 @@ namespace CameraCoop.Tests
                     () => new CanvasDrawingData(), () => identity, 3);
             }
 
-            private void Pump(int cycles = 24)
+            internal void Pump(int cycles = 24)
             {
                 for (int cycle = 0; cycle < cycles; cycle++)
                 {

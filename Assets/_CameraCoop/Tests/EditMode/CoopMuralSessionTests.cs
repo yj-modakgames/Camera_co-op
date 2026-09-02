@@ -13,6 +13,7 @@ namespace CameraCoop.Tests
     {
         private const string SessionId = "mural-session";
         private const int Generation = 17;
+        private const int StartSignal = 8;
 
         [Test]
         public void OnlyP1CanPublishAtRoundStart()
@@ -99,6 +100,71 @@ namespace CameraCoop.Tests
                         Assert.That(layer.Drawing.strokes[0].xy[0], Is.EqualTo(0.1f + owner * 0.2f).Within(0.0001f));
                     }
                 }
+            }
+        }
+
+        [Test]
+        public void HostSignalsFinalDisplayExactlyOnceWhenP4Completes()
+        {
+            using (var fixture = new Fixture())
+            {
+                int finalDisplaySignals = 0;
+                fixture.Sessions[0].FinalDisplayReached += () => finalDisplaySignals++;
+
+                for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+                {
+                    fixture.Sessions[slot].Tick(slot, 1);
+                    fixture.Pump(slot);
+                    Assert.That(fixture.Sessions[slot].CompleteLocalTurn(1), Is.True);
+                    fixture.Pump(slot + 0.1f);
+                }
+
+                Assert.That(fixture.Sessions[0].View.IsFinalDisplay, Is.True);
+                Assert.That(finalDisplaySignals, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void PriorEpochRelayIsRejectedEvenWhenItsSequenceAndRevisionAreHigher()
+        {
+            using (var fixture = new Fixture())
+            {
+                int serial = fixture.Sessions[2].View.Serial;
+                fixture.Network.Inject("p0", "p2", SnapshotPacket(
+                    CoopMuralProtocol.KindRelay, 100, 0, 99, Drawing(0.9f), StartSignal - 1));
+
+                fixture.Sessions[2].Tick(0f, 0);
+
+                Assert.That(fixture.Sessions[2].View.Serial, Is.EqualTo(serial));
+                Assert.That(fixture.Sessions[2].View.TryGetLayer(0, out CoopMuralLayerSnapshot layer), Is.True);
+                Assert.That(layer.Revision, Is.Zero);
+                Assert.That(fixture.Transports[2].Sent, Is.Empty);
+            }
+        }
+
+        [Test]
+        public void PriorEpochTurnCompleteIsRejectedEvenWhenItsSequenceAndRevisionAreHigher()
+        {
+            using (var fixture = new Fixture())
+            {
+                int serial = fixture.Sessions[0].View.Serial;
+                fixture.Network.Inject("p1", "p0", CoopMuralProtocol.Encode(new CoopMuralPacket
+                {
+                    sessionId = SessionId,
+                    rosterGeneration = Generation,
+                    startSignal = StartSignal - 1,
+                    sequence = 100,
+                    kind = CoopMuralProtocol.KindTurnComplete,
+                    ownerSlot = 1,
+                    revision = 99,
+                    payload = "{}"
+                }));
+
+                fixture.Sessions[0].Tick(0f, 0);
+
+                Assert.That(fixture.Sessions[0].View.Serial, Is.EqualTo(serial));
+                Assert.That(fixture.Sessions[0].View.ActiveSlot, Is.Zero);
+                Assert.That(fixture.Transports[0].Sent, Is.Empty);
             }
         }
 
@@ -284,12 +350,38 @@ namespace CameraCoop.Tests
             var transport = network.Add("p0", true);
             using (var session = new CoopMuralSession(transport, () => Drawing(0.2f), 3))
             {
-                Assert.Throws<ArgumentException>(() => session.Configure(Start(PartyMode.RelayCopy)));
-                session.Configure(Start(PartyMode.CoopMural));
+                Assert.Throws<ArgumentException>(() => session.Configure(Start(PartyMode.RelayCopy), StartSignal));
+                Assert.Throws<ArgumentOutOfRangeException>(() => session.Configure(Start(PartyMode.CoopMural), 0));
+                session.Configure(Start(PartyMode.CoopMural), StartSignal);
                 Assert.That(session.View.Configured, Is.True);
                 Assert.That(session.View.LocalSlot, Is.Zero);
                 Assert.That(session.View.Layers.Count, Is.EqualTo(PartyRoster.Capacity));
             }
+        }
+
+        [Test]
+        public void ProtocolRejectsPacketsWithOmittedOrZeroStartSignal()
+        {
+            var omitted = new CoopMuralPacket
+            {
+                sessionId = SessionId,
+                rosterGeneration = Generation,
+                sequence = 1,
+                kind = CoopMuralProtocol.KindAbort,
+                payload = "{}"
+            };
+            var zero = new CoopMuralPacket
+            {
+                sessionId = SessionId,
+                rosterGeneration = Generation,
+                startSignal = 0,
+                sequence = 2,
+                kind = CoopMuralProtocol.KindAbort,
+                payload = "{}"
+            };
+
+            Assert.That(CoopMuralProtocol.TryDecode(CoopMuralProtocol.Encode(omitted), out _), Is.False);
+            Assert.That(CoopMuralProtocol.TryDecode(CoopMuralProtocol.Encode(zero), out _), Is.False);
         }
 
         [Test]
@@ -309,7 +401,13 @@ namespace CameraCoop.Tests
             }
         }
 
-        private static byte[] SnapshotPacket(string kind, long sequence, int ownerSlot, int revision, CanvasDrawingData drawing)
+        private static byte[] SnapshotPacket(
+            string kind,
+            long sequence,
+            int ownerSlot,
+            int revision,
+            CanvasDrawingData drawing,
+            int startSignal = StartSignal)
         {
             Assert.That(CoopMuralProtocol.TryDrawingBytes(drawing, 3, out byte[] bytes), Is.True);
             return PacketWithChunk(kind, sequence, ownerSlot, revision, new CoopMuralChunk
@@ -319,15 +417,22 @@ namespace CameraCoop.Tests
                 count = 1,
                 total = bytes.Length,
                 data = Convert.ToBase64String(bytes)
-            });
+            }, startSignal);
         }
 
-        private static byte[] PacketWithChunk(string kind, long sequence, int ownerSlot, int revision, CoopMuralChunk chunk)
+        private static byte[] PacketWithChunk(
+            string kind,
+            long sequence,
+            int ownerSlot,
+            int revision,
+            CoopMuralChunk chunk,
+            int startSignal = StartSignal)
         {
             return CoopMuralProtocol.Encode(new CoopMuralPacket
             {
                 sessionId = SessionId,
                 rosterGeneration = Generation,
+                startSignal = startSignal,
                 sequence = sequence,
                 kind = kind,
                 ownerSlot = ownerSlot,
@@ -404,7 +509,7 @@ namespace CameraCoop.Tests
                         Captures[sourceSlot]++;
                         return Drawings[sourceSlot];
                     }, 3);
-                    Sessions[slot].Configure(Start(PartyMode.CoopMural));
+                    Sessions[slot].Configure(Start(PartyMode.CoopMural), StartSignal);
                 }
             }
 

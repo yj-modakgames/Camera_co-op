@@ -17,7 +17,8 @@ namespace CameraCoop.Party
         CameraRefresh = 9,
         CameraPrevious = 10,
         CameraNext = 11,
-        CameraPreview = 12
+        CameraPreview = 12,
+        ReturnToLobby = 13
     }
 
     public sealed class WorldActionInteractable : HandInteractable

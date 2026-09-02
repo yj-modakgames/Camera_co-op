@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using CameraCoop.Party;
@@ -191,7 +192,7 @@ namespace CameraCoop.Tests
             SetProperty(bindings, "Actions", oversized);
 
             Assert.That(Validate(CreateAdapter(bindings), out string error), Is.False);
-            Assert.That(error, Is.EqualTo("actions[2] is required."));
+            Assert.That(error, Is.EqualTo("actions[3] is required."));
         }
 
         [Test]
@@ -223,6 +224,16 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void PrivateModeRejectsAnyGallerySlotCountOtherThanThree()
+        {
+            PartySceneBindings bindings = CreateValidBindings(PartyMode.RelayCopy);
+            bindings.GalleryRoots = bindings.GalleryRoots.Take(2).ToArray();
+
+            Assert.That(Validate(CreateAdapter(bindings), out string error), Is.False);
+            Assert.That(error, Is.EqualTo("galleryRoots[3] is required."));
+        }
+
+        [Test]
         public void LobbyPortTogglesOnlyItsConfiguredLobbyWorldRoot()
         {
             Type portType = RequireRuntimeType("CameraCoop.Party.PartyLobbyScenePort");
@@ -230,10 +241,27 @@ namespace CameraCoop.Tests
             GameObject lobbyRoot = CreateObject("Lobby world root");
             Component port = runtimeRoot.AddComponent(portType);
             var spawns = new Transform[PartyRoster.Capacity];
+            var practiceRoots = new GameObject[PartyRoster.Capacity];
+            var practicePresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
+            var practiceSurfaces = new CanvasSurface[PartyRoster.Capacity];
+            var avatarRoots = new GameObject[PartyRoster.Capacity];
+            var avatarPresenters = new RemoteAvatarPresenter[PartyRoster.Capacity - 1];
             for (int slot = 0; slot < spawns.Length; slot++)
+            {
                 spawns[slot] = CreateObject("Lobby spawn " + slot, lobbyRoot.transform).transform;
+                practiceRoots[slot] = CreateObject("Practice root " + slot, lobbyRoot.transform);
+                practicePresenters[slot] = CreateObject("Practice presenter " + slot, lobbyRoot.transform)
+                    .AddComponent<CanvasDrawingPresenter>();
+                practiceSurfaces[slot] = CreateObject("Practice surface " + slot, lobbyRoot.transform)
+                    .AddComponent<CanvasSurface>();
+                avatarRoots[slot] = CreateObject("Avatar root " + slot, lobbyRoot.transform);
+                if (slot < avatarPresenters.Length)
+                    avatarPresenters[slot] = CreateObject("Avatar presenter " + slot, lobbyRoot.transform)
+                        .AddComponent<RemoteAvatarPresenter>();
+            }
 
-            Invoke(port, "Configure", lobbyRoot, spawns);
+            Invoke(port, "Configure", lobbyRoot, spawns, practiceRoots, practicePresenters,
+                practiceSurfaces, avatarRoots, avatarPresenters);
             Assert.That(InvokeBoolWithError(port, "ValidateBindings", out string error), Is.True, error);
 
             Invoke(port, "SetLobbyVisible", false);
@@ -265,8 +293,9 @@ namespace CameraCoop.Tests
             bindings.CarryAnchor = CreateObject("Carry anchor", sceneRoot.transform).transform;
             bindings.Actions = new[]
             {
-                CreateObject("Carry action", sceneRoot.transform).AddComponent<WorldActionInteractable>(),
-                CreateObject("Dock action", sceneRoot.transform).AddComponent<WorldActionInteractable>()
+                CreateAction("Carry action", sceneRoot.transform, PartyWorldAction.CarryCanvas),
+                CreateAction("Dock action", sceneRoot.transform, PartyWorldAction.DockCanvas),
+                CreateAction("Return action", sceneRoot.transform, PartyWorldAction.ReturnToLobby)
             };
             bindings.AvatarRoots = avatars;
             bindings.AvatarPresenters = new[]
@@ -277,11 +306,22 @@ namespace CameraCoop.Tests
             };
             bindings.WritablePaperRoot = CreateObject("Writable paper", sceneRoot.transform);
             bindings.WritableSurface = CreateObject("Writable surface", sceneRoot.transform).AddComponent<CanvasSurface>();
+            bindings.WritableInteractable = bindings.WritableSurface.gameObject.AddComponent<HandCanvasInteractable>();
             bindings.ReferencePresenter = CreateObject("Reference presenter", sceneRoot.transform).AddComponent<CanvasDrawingPresenter>();
             bindings.ReferenceSurface = CreateObject("Reference surface", sceneRoot.transform).AddComponent<CanvasSurface>();
             bindings.ResultRoot = CreateObject("Result root", sceneRoot.transform);
-            bindings.GalleryPresenter = CreateObject("Gallery presenter", sceneRoot.transform).AddComponent<CanvasDrawingPresenter>();
-            bindings.GallerySurface = CreateObject("Gallery surface", sceneRoot.transform).AddComponent<CanvasSurface>();
+            bindings.ResultViewPose = CreateObject("Result view pose", sceneRoot.transform).transform;
+            bindings.GalleryRoots = new GameObject[PartyRoster.Capacity - 1];
+            bindings.GalleryPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity - 1];
+            bindings.GallerySurfaces = new CanvasSurface[PartyRoster.Capacity - 1];
+            for (int slot = 0; slot < bindings.GalleryRoots.Length; slot++)
+            {
+                bindings.GalleryRoots[slot] = CreateObject("Gallery root " + slot, bindings.ResultRoot.transform);
+                bindings.GalleryPresenters[slot] = CreateObject("Gallery presenter " + slot,
+                    bindings.GalleryRoots[slot].transform).AddComponent<CanvasDrawingPresenter>();
+                bindings.GallerySurfaces[slot] = CreateObject("Gallery surface " + slot,
+                    bindings.GalleryRoots[slot].transform).AddComponent<CanvasSurface>();
+            }
             bindings.ToolRack = CreateObject("Tool rack", sceneRoot.transform).transform;
             bindings.PhysicalPaintTool = CreateObject("Physical paint tool", sceneRoot.transform).AddComponent<PhysicalPaintTool>();
             bindings.Brushes = new[] { CreateObject("Brush", sceneRoot.transform).AddComponent<PhysicalBrush>() };
@@ -294,9 +334,11 @@ namespace CameraCoop.Tests
             {
                 bindings.ReferencePresenter = null;
                 bindings.ReferenceSurface = null;
-                bindings.ResultRoot = null;
-                bindings.GalleryPresenter = null;
-                bindings.GallerySurface = null;
+                bindings.ResultRoot = CreateObject("Mural final result", sceneRoot.transform);
+                bindings.ResultViewPose = null;
+                bindings.GalleryRoots = null;
+                bindings.GalleryPresenters = null;
+                bindings.GallerySurfaces = null;
                 var layerRoots = new GameObject[PartyRoster.Capacity];
                 var layerPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
                 var layerSurfaces = new CanvasSurface[PartyRoster.Capacity];
@@ -312,6 +354,14 @@ namespace CameraCoop.Tests
             }
 
             return bindings;
+        }
+
+        private WorldActionInteractable CreateAction(string name, Transform parent, PartyWorldAction action)
+        {
+            WorldActionInteractable result = CreateObject(name, parent).AddComponent<WorldActionInteractable>();
+            typeof(WorldActionInteractable).GetField("action", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(result, action);
+            return result;
         }
 
         private PartyGameSceneAdapter CreateAdapter(PartySceneBindings bindings)

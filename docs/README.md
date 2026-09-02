@@ -1,6 +1,6 @@
 # Camera Co-op 문서 지도
 
-> 갱신: 2026-08-31 · 이 문서는 `docs/`의 진입점이다.
+> 갱신: 2026-09-02 · 이 문서는 `docs/`의 진입점이다.
 
 ## 먼저 읽을 문서
 
@@ -13,6 +13,7 @@
 | local player·손·drawing | [06_player_controller.md](06_player_controller.md)~[09_relay_quiz_mode.md](09_relay_quiz_mode.md) | 현재 local 구현 reference |
 | Steam·3D·게임 framework | [08_netplay.md](08_netplay.md), [10_phase3d_world_canvas.md](10_phase3d_world_canvas.md), [11_phase3e_paint_tools.md](11_phase3e_paint_tools.md), [12_phase3b_guess_game.md](12_phase3b_guess_game.md) | 기존 공유 online 게임 reference |
 | 실제 플레이 순서 | [17_player_game_guide.md](17_player_game_guide.md) | 현재 `RelayQuizOnline` build의 camera·손·Steam·Relay Copy 순서 |
+| Task 14/15/16 현재 runtime 계약 | [05_test_plan.md](05_test_plan.md) §11-5 | manual camera, lobby practice/gallery defer, controller/Scene validation 및 잔여 real-device 범위 |
 | build | [10_build.md](10_build.md) | build 조건 reference. 동시 작업 변경 보존 |
 
 ## 문서 우선순위
@@ -45,6 +46,8 @@
 old commit, session 재개 명령, 당시 작업 tree 상태는 제품 reference로 옮기지 않았다. 기능 삭제나 source 삭제는 수행하지 않았다.
 
 ## 확인이 남은 항목
+
+- Task 14 four-Scene additive flow는 Scene artifact·validator·EditMode test 기준으로 완료했다. 실제 player의 camera button, Host/Invite, ReadyPad, START, mode Scene 진입, RETURN TO LOBBY를 한 Steam party에서 끝까지 수행한 결과는 아직 없다.
 
 - [15](15_3d_party_game_design.md)의 D1은 완료됐다. 개인 canvas는 `Docked`로 시작하고 owner가 `Carried`로 들고 이동하거나 자기 zone 중앙에 다시 dock할 수 있다.
 - fist drawing, world tool interaction, 4p lobby, mode selection, private relay는 구현 및 자동 검증이 완료됐다. 실제 손 입력·Steam 4계정 실기는 대기 중이다.

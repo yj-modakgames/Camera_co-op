@@ -16,11 +16,14 @@ namespace CameraCoop.Party
         [SerializeField] private RemoteAvatarPresenter[] avatarPresenters;
         [SerializeField] private GameObject writablePaperRoot;
         [SerializeField] private CanvasSurface writableSurface;
+        [SerializeField] private HandCanvasInteractable writableInteractable;
         [SerializeField] private CanvasDrawingPresenter referencePresenter;
         [SerializeField] private CanvasSurface referenceSurface;
         [SerializeField] private GameObject resultRoot;
-        [SerializeField] private CanvasDrawingPresenter galleryPresenter;
-        [SerializeField] private CanvasSurface gallerySurface;
+        [SerializeField] private Transform resultViewPose;
+        [SerializeField] private GameObject[] galleryRoots;
+        [SerializeField] private CanvasDrawingPresenter[] galleryPresenters;
+        [SerializeField] private CanvasSurface[] gallerySurfaces;
         [SerializeField] private Transform toolRack;
         [SerializeField] private PhysicalPaintTool physicalPaintTool;
         [SerializeField] private PhysicalBrush[] brushes;
@@ -40,11 +43,14 @@ namespace CameraCoop.Party
         public RemoteAvatarPresenter[] AvatarPresenters { get => avatarPresenters; set => avatarPresenters = value; }
         public GameObject WritablePaperRoot { get => writablePaperRoot; set => writablePaperRoot = value; }
         public CanvasSurface WritableSurface { get => writableSurface; set => writableSurface = value; }
+        public HandCanvasInteractable WritableInteractable { get => writableInteractable; set => writableInteractable = value; }
         public CanvasDrawingPresenter ReferencePresenter { get => referencePresenter; set => referencePresenter = value; }
         public CanvasSurface ReferenceSurface { get => referenceSurface; set => referenceSurface = value; }
         public GameObject ResultRoot { get => resultRoot; set => resultRoot = value; }
-        public CanvasDrawingPresenter GalleryPresenter { get => galleryPresenter; set => galleryPresenter = value; }
-        public CanvasSurface GallerySurface { get => gallerySurface; set => gallerySurface = value; }
+        public Transform ResultViewPose { get => resultViewPose; set => resultViewPose = value; }
+        public GameObject[] GalleryRoots { get => galleryRoots; set => galleryRoots = value; }
+        public CanvasDrawingPresenter[] GalleryPresenters { get => galleryPresenters; set => galleryPresenters = value; }
+        public CanvasSurface[] GallerySurfaces { get => gallerySurfaces; set => gallerySurfaces = value; }
         public Transform ToolRack { get => toolRack; set => toolRack = value; }
         public PhysicalPaintTool PhysicalPaintTool { get => physicalPaintTool; set => physicalPaintTool = value; }
         public PhysicalBrush[] Brushes { get => brushes; set => brushes = value; }

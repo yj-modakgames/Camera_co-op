@@ -35,7 +35,9 @@ namespace CameraCoop
             for (int i = 0; i < brushReferences.Length; i++) RegisterBrush(brushReferences[i]);
         }
 
-        public void SetToolStateForTests(ToolState value) => toolState = value;
+        public void SetToolState(ToolState value) => toolState = value != null
+            ? value : throw new ArgumentNullException(nameof(value));
+        public void SetToolStateForTests(ToolState value) => SetToolState(value);
         public void SetLocalPlayerId(string value) => localPlayerId = value;
         public void SetCarryAnchor(string hand, Transform anchor)
         {

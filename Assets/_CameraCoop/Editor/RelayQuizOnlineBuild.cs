@@ -1,4 +1,6 @@
 using System.IO;
+using System.Linq;
+using CameraCoop.Party;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -41,9 +43,10 @@ namespace CameraCoop.EditorTools
                     + ": its Build Support module is unavailable in Unity " + Application.unityVersion
                     + ". Installing a module requires separate approval; no installation was attempted.");
             }
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) == null)
+            foreach (string scenePath in PartySceneCatalog.BuildScenePaths)
             {
-                throw new BuildFailedException("Required RelayQuiz Online scene is missing: " + ScenePath);
+                if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) == null)
+                    throw new BuildFailedException("Required party Scene is missing: " + scenePath);
             }
             for (int index = 0; index < SceneManager.sceneCount; index++)
             {
@@ -73,7 +76,7 @@ namespace CameraCoop.EditorTools
 
                 BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
-                    scenes = new[] { ScenePath },
+                    scenes = PartySceneCatalog.BuildScenePaths.ToArray(),
                     target = target,
                     targetGroup = BuildTargetGroup.Standalone,
                     subtarget = (int)StandaloneBuildSubtarget.Player,

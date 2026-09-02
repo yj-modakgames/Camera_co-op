@@ -38,6 +38,13 @@ namespace CameraCoop
 
         public HandPointerInputSource InputSource => inputSource;
 
+        public void RebindCanvasSurface(CanvasSurface surface)
+        {
+            if (surface == null) throw new ArgumentNullException(nameof(surface));
+            EndLocalStrokes();
+            canvasSurface = surface;
+        }
+
         private bool strokesEnabled = true;
 
         // 기본 true. false 설정 순간 진행 중 스트로크 전부 End 발행 — 도구 클릭은 계속 허용 (docs/12 §2).

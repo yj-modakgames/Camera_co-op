@@ -48,6 +48,32 @@ namespace CameraCoop
         private uint drawingRevision;
 
         public uint DrawingRevision => drawingRevision;
+        public CanvasSurface Surface => canvasSurface;
+        public HandPointer Pointer => handPointer;
+
+        public void RebindSurface(CanvasSurface target)
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            if (canvasSurface == target) return;
+            FinalizeActiveStrokes();
+            canvasSurface = target;
+            for (int index = 0; index < finishedStrokes.Count; index++)
+            {
+                FinishedStroke stroke = finishedStrokes[index];
+                if (stroke.go == null || stroke.data == null) continue;
+                MakeSurfaceRelative(stroke.go.GetComponent<LineRenderer>(), stroke.data);
+                RefreshWorldPoints(stroke);
+            }
+        }
+
+        internal bool TryDrawStrokeForTest(Vector2 start, Vector2 end)
+        {
+            uint before = drawingRevision;
+            HandleStrokeStart("Test", start, Vector3.zero);
+            HandleStrokeMove("Test", end, Vector3.zero);
+            HandleStrokeEnd("Test");
+            return drawingRevision != before;
+        }
 
         private bool IsLocalDrawing { get { return handPointer != null && handPointer.InputSource == HandPointerInputSource.HandRouter; } }
 

@@ -22,12 +22,14 @@ namespace CameraCoop.Party
         private string sessionId;
         private string hostIdentity;
         private int rosterGeneration;
+        private int startSignal;
         private long outgoingSequence;
         private int lastSentLocalRevision;
         private float lastLocalSendAt = float.NegativeInfinity;
         private float currentTime;
         private bool configured;
         private bool turnCompletionPending;
+        private bool finalDisplaySignaled;
         private bool disposed;
 
         public CoopMuralSession(
@@ -49,15 +51,18 @@ namespace CameraCoop.Party
         }
 
         public event Action<CoopMuralView> ViewChanged;
+        public event Action FinalDisplayReached;
 
         public CoopMuralView View { get; }
 
-        public void Configure(PartyStartSnapshot start)
+        public void Configure(PartyStartSnapshot start, int currentStartSignal)
         {
             ThrowIfDisposed();
             if (start == null) throw new ArgumentNullException(nameof(start));
             if (start.Mode != PartyMode.CoopMural)
                 throw new ArgumentException("Coop mural requires a CoopMural party start snapshot.", nameof(start));
+            if (currentStartSignal <= 0)
+                throw new ArgumentOutOfRangeException(nameof(currentStartSignal));
             PartyRosterSnapshot roster = start.Roster;
             if (roster == null || string.IsNullOrEmpty(roster.SessionId) || roster.SessionId.Length > 64
                 || roster.Generation <= 0 || string.IsNullOrEmpty(roster.HostIdentity)
@@ -89,11 +94,13 @@ namespace CameraCoop.Party
             sessionId = roster.SessionId;
             hostIdentity = roster.HostIdentity;
             rosterGeneration = roster.Generation;
+            startSignal = currentStartSignal;
             outgoingSequence = 0;
             lastSentLocalRevision = 0;
             lastLocalSendAt = float.NegativeInfinity;
             currentTime = 0f;
             turnCompletionPending = false;
+            finalDisplaySignaled = false;
             configured = true;
             View.Configure(sessionId, rosterGeneration, localSlot);
             ViewChanged?.Invoke(View);
@@ -136,6 +143,7 @@ namespace CameraCoop.Party
             if (transport.IsHost)
             {
                 if (!View.CompleteTurn(completedSlot, localRevision)) return false;
+                NotifyFinalDisplayReached();
                 SendTurnAdvancedToClients(completedSlot, localRevision);
                 ViewChanged?.Invoke(View);
                 return true;
@@ -159,7 +167,9 @@ namespace CameraCoop.Party
             sessionId = null;
             hostIdentity = null;
             rosterGeneration = 0;
+            startSignal = 0;
             turnCompletionPending = false;
+            finalDisplaySignaled = false;
             lastSentLocalRevision = 0;
             lastLocalSendAt = float.NegativeInfinity;
             View.Reset();
@@ -180,7 +190,8 @@ namespace CameraCoop.Party
         {
             if (!configured || View.Aborted || string.IsNullOrEmpty(peerIdentity)
                 || !CoopMuralProtocol.TryDecode(bytes, out CoopMuralPacket packet)
-                || packet.sessionId != sessionId || packet.rosterGeneration != rosterGeneration)
+                || packet.sessionId != sessionId || packet.rosterGeneration != rosterGeneration
+                || packet.startSignal != startSignal)
                 return;
 
             if (transport.IsHost) HandleHostPacket(peerIdentity, packet);
@@ -200,6 +211,7 @@ namespace CameraCoop.Party
                     || !View.CompleteTurn(senderSlot, packet.revision)) return;
                 lastIncomingSequence[senderSlot] = packet.sequence;
                 incoming[senderSlot] = null;
+                NotifyFinalDisplayReached();
                 SendTurnAdvancedToClients(senderSlot, packet.revision);
                 ViewChanged?.Invoke(View);
                 return;
@@ -308,6 +320,13 @@ namespace CameraCoop.Party
             ViewChanged?.Invoke(View);
         }
 
+        private void NotifyFinalDisplayReached()
+        {
+            if (!transport.IsHost || !View.IsFinalDisplay || finalDisplaySignaled) return;
+            finalDisplaySignaled = true;
+            FinalDisplayReached?.Invoke();
+        }
+
         private void SendSnapshotToHost(int ownerSlot, int revision, byte[] bytes)
         {
             int count = ChunkCount(bytes.Length);
@@ -378,6 +397,7 @@ namespace CameraCoop.Party
             {
                 sessionId = sessionId,
                 rosterGeneration = rosterGeneration,
+                startSignal = startSignal,
                 sequence = outgoingSequence,
                 kind = kind,
                 ownerSlot = ownerSlot,
@@ -388,7 +408,7 @@ namespace CameraCoop.Party
 
         private string TransferId(int ownerSlot, int revision)
         {
-            return sessionId + ":" + rosterGeneration + ":" + ownerSlot + ":" + revision;
+            return sessionId + ":" + rosterGeneration + ":" + startSignal + ":" + ownerSlot + ":" + revision;
         }
 
         private static int ChunkCount(int total)

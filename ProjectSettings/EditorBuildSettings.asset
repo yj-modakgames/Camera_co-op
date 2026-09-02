@@ -9,6 +9,15 @@ EditorBuildSettings:
     path: Assets/_CameraCoop/Scenes/RelayQuizOnline.unity
     guid: bf035780e4c2ada4c9b89e8f5df474cb
   - enabled: 1
+    path: Assets/_CameraCoop/Scenes/RelayCopy.unity
+    guid: 0491eba4f3fcd404198952c1f67999fd
+  - enabled: 1
+    path: Assets/_CameraCoop/Scenes/MemoryCopy.unity
+    guid: d8991ff932ca4bc4b93d7a44101280e2
+  - enabled: 1
+    path: Assets/_CameraCoop/Scenes/CoopMural.unity
+    guid: 5a6a6964614cd30409097438b3db0ede
+  - enabled: 1
     path: Assets/_CameraCoop/Scenes/NetplayTest.unity
     guid: c627199d6b6f048478c88143d588a21f
   - enabled: 1

@@ -1,6 +1,6 @@
 # 05. 검증 계획
 
-> 갱신: 2026-08-31 · §1~5와 §7~10은 historical Phase/local 기록이다. **현재 `RelayQuizOnline` 4p 검증 결과는 §11-3에 기록한다.**
+> 갱신: 2026-09-02 · §1~5와 §7~10은 historical Phase/local 기록이다. **현재 `RelayQuizOnline` 4p 검증 결과는 §11-5에 기록한다.**
 > 기존 Phase 1 채점 프로토콜: `QUALITY_CHECKLIST.md` 기준 총점 ≥9.0. 과거 기록을 현재 릴레이 검증 통과로 재사용하지 않는다.
 
 ## 1. Step별 완료 판정 기준 (Definition of Done)
@@ -100,7 +100,7 @@ Editor Play 모드, 5분 연속 8843 패킷, 통계 window 88개 기준.
 
 ## 6. 로컬 릴레이 검증 절차와 책임
 
-대상 설계: [06_player_controller](06_player_controller.md), [07_hand_interaction](07_hand_interaction.md), [08_drawing_canvas](08_drawing_canvas.md), [09_relay_quiz_mode](09_relay_quiz_mode.md). 로컬 씬과 Phase 기록은 historical 범위다. 현재 4p online 결과는 §11-3을 우선한다.
+대상 설계: [06_player_controller](06_player_controller.md), [07_hand_interaction](07_hand_interaction.md), [08_drawing_canvas](08_drawing_canvas.md), [09_relay_quiz_mode](09_relay_quiz_mode.md). 로컬 씬과 Phase 기록은 historical 범위다. 현재 4p online 결과는 §11-5를 우선한다.
 
 | 순서 | 담당·절차 | 완료 판정 |
 |---|---|---|
@@ -302,7 +302,7 @@ Unity.exe -batchmode -quit -projectPath "C:\git\Camera_co-op" -logFile "C:\git\C
 
 ## 11. Historical Steam online RelayQuiz 2인 실기 검증
 
-이 절차는 이전 2p 승인 범위의 historical 기록이다. 현재 4p online 검증은 아래 §11-3을 따른다. synthetic packet이나 synthetic webcam은 real-device equivalence로 기록하지 않는다.
+이 절차는 이전 2p 승인 범위의 historical 기록이다. 현재 4p online 검증은 §11-5를 따른다. synthetic packet이나 synthetic webcam은 real-device equivalence로 기록하지 않는다.
 
 ### 11-1. 실행 전제와 build evidence
 
@@ -314,7 +314,7 @@ Windows 예정 output은 `C:/git/Camera_co-op/Builds/RelayQuizOnline/CameraCoopR
 
 | ID | 확인 동작 | 기대 결과·기록 |
 |---|---|---|
-| ON-01 | 각 device에서 scene 진입 후 camera auto-start 관찰 | 신규 scene에서 한 번만 시도한다. missing `.venv`, dependency 오류, OS camera permission, occupied camera를 각각 표시하고 stderr/exit 원인을 기록한다. 자동 반복은 없다. |
+| ON-01 | 각 device에서 scene 진입 후 manual `CameraToggle` 관찰 | 신규 scene은 camera auto-start를 하지 않는다. mouse로 `CameraToggle`을 눌러 시작하고 missing `.venv`, dependency 오류, OS camera permission, occupied camera를 표시하며 stderr/exit 원인을 기록한다. |
 | ON-02 | camera 실패 뒤 retry, permission 허용 뒤 재시도 | continued recovery가 가능하고, 새 시도 뒤 fresh hand 수신을 기록한다. local `RelayQuiz`의 manual start와 혼동하지 않는다. |
 | ON-03 | host invite, guest accept, 두 player ready | 두 peer만 연결되고 ready 이후 round가 시작된다. 세 번째 peer·stale session은 허용하지 않는다. |
 | ON-04 | WordReveal/Drawing에서 host와 guest의 화면 확인 | 제시어·완료 그림이 recipient별로 비공개다. camera raw video와 hand landmarks가 network payload에 없다. 각 recipient screenshot을 남긴다. |
@@ -329,13 +329,13 @@ Windows 예정 output은 `C:/git/Camera_co-op/Builds/RelayQuizOnline/CameraCoopR
 
 각 항목에는 날짜, commit/code state, Unity·OS·build version, device/account 식별자(비밀값 제외), 실제 입력 방식, PASS/FAIL/미실행, log·screenshot 경로를 남긴다. synthetic packet/webcam 또는 Editor-only 결과는 ON-04~ON-12의 real-device PASS를 대신하지 않는다.
 
-## 11-3. Current RelayQuizOnline 4p verification — 2026-08-31
+## 11-3. Historical RelayQuizOnline 4p verification — 2026-08-31
 
 > 이 절의 `724/724`, `734/734` 및 cyan `CAMERA ON / OFF` 수치는 당시 camera/setup regression의 historical 결과다. 최종 label·jump 기준과 현재 수치는 §11-4의 fresh `744/744` 기록을 우선한다.
 
-#### 11-3-1. Current Canvas camera and transient RelaySetupRoot contract
+#### 11-3-1. Historical Canvas camera and transient RelaySetupRoot contract
 
-기존 §11-3에 남아 있는 cyan 3D `CAMERA ON / OFF`와 `CameraStartStop` 기록은 historical regression evidence이며 현재 계약으로 사용하지 않는다. 현재 camera 시작·종료는 오른쪽 위 Canvas `CameraToggle`의 mouse press/release만 담당한다. 버튼 상태는 `캠 켜기`·`시작 중…`·`캠 끄기`이고, 나머지 13개 world action은 hand-only다. `CameraStation`의 `Refresh`·`Prev`·`Next`·`Preview`는 세부 설정용으로 유지한다.
+이 historical section에 남아 있는 cyan 3D `CAMERA ON / OFF`와 `CameraStartStop` 기록은 historical regression evidence이며 현재 계약으로 사용하지 않는다. 현재 camera 시작·종료는 오른쪽 위 Canvas `CameraToggle`의 mouse press/release만 담당한다. 버튼 상태는 `캠 켜기`·`시작 중…`·`캠 끄기`이고, 나머지 13개 world action은 hand-only다. `CameraStation`의 `Refresh`·`Prev`·`Next`·`Preview`는 세부 설정용으로 유지한다.
 
 `RelaySetupRoot`는 Scene load 시 inactive이며 안정된 lobby에서 계속 숨겨진다. join/leave와 game start 때만 notice를 2.5 unscaled seconds 동안 표시하고, 표시 중 phase overlay를 억제한 뒤 timeout 시 가장 최신으로 수신한 online view를 복원한다. setup error는 persistent 상태로 남긴다.
 
@@ -375,6 +375,23 @@ Windows x64 build는 `Succeeded`, errors 0, warnings 1이며 warning은 Pipeline
 | QA-01 | Play scoped console error, build, smoke | PASS, scoped errors 0 |
 
 Play 측정값은 draw calls `129`, setPass `14`, triangles `8654`다. GC/CPU/GPU per-frame 측정은 이 QA surface에서 제공되지 않아 미실행으로 남긴다. `dotnet build Camera_co-op.slnx --no-restore`는 warnings/errors 0이며 Windows x64 build와 smoke가 성공했다. 기존 Pipeline tooling warning은 알려진 잔여 warning으로 기록한다. code review와 visual review는 모두 **APPROVE**다. 실제 Steam 4 account, webcam/phone camera, physical hand gesture, Intel Mac은 미검증이며 authored mural의 rear backface는 반대편에서 mirror처럼 보일 수 있다. 상세 guide는 [플레이어 게임 방법](17_player_game_guide.md)을 따른다.
+
+## 11-5. Task 14 four-Scene transition verification — 2026-09-02
+
+현재 기준의 사용자 순서는 `CameraToggle` mouse press/release → 손으로 `Host` 또는 `Invite` → lobby 자유 연습(brush pickup, paint·width·eraser, fist draw, jump) → 네 `ReadyPad` dwell → Host `START` → `ModeSelectorRoot` 표시 → Host mode 선택(`SelectModeAndBeginLoad`, `startSignal` 증가) → 선택한 `RelayCopy`/`MemoryCopy`/`CoopMural` additive Scene → Host `RETURN TO LOBBY`이다. mode Scene은 persistent camera·input·network owner를 중복 생성하지 않는다.
+
+| 확인 항목 | 결과·증거 | 범위 한계 |
+|---|---|---|
+| 네 Scene path/order 및 build catalog | PASS, Task 19 Unity full EditMode `868/868`, empty-startup `PartySceneValidator PASS`, Build Settings exact four ([receipt](../.omo/evidence/party-scene-split/task-19-final-gate/receipt.md)) | 실제 4 peer 전환은 미실행 |
+| private paper shell·CoopMural 4 layer·adapter ownership | PASS, Task 19 full EditMode `868/868`, failed/skipped/inconclusive `0` ([receipt](../.omo/evidence/party-scene-split/task-19-final-gate/receipt.md)) | 실제 privacy 관찰은 미실행 |
+| four-scene Editor determinism | PASS, Task 19 empty-startup validator exit `0`과 exact four Build Settings order ([validator summary](../.omo/evidence/party-scene-split/task-19-final-gate/party-scenes-validator-summary.txt), [order](../.omo/evidence/party-scene-split/task-19-final-gate/build-settings-order.txt)) | long profile 미실행 |
+| protocol v4 transition fields | source contract 확인: `startSignal`, `transitionGeneration`, `transitionPhase`, `sceneReadyMask`; `CoopMural`은 `startSignal`을 mural epoch로 사용하고 layer `revision`으로 중복을 막음 | Steam transport 실기 미실행 |
+
+Scene load failure와 timeout은 round를 정상 완료로 처리하지 않고 private render/input을 정리한 뒤 lobby 복귀 안내를 표시해야 한다. disconnect는 정상 lobby return이 아니라 `Abort`이며 새 invite가 필요하다. 실제 Steam 4 account/4 machine, webcam/phone camera, physical gesture, long profile, Intel Mac은 미검증이며 이 표의 PASS를 대체하지 않는다.
+
+현재 runtime 보완 계약: `CameraControlPanel.autoStartCamera=false`이며 camera는 오른쪽 위 `CameraToggle`의 manual mouse 입력으로만 시작한다. lobby는 `Explore/Move`에서 자유 이동하고, `Explore/Interact`에서는 active registered lobby paper에 fist drawing을 할 수 있다. camera 연결과 fresh hand 수신 후에는 owner handover가 자동으로 진행된다. lobby gallery는 결과를 즉시 렌더링하지 않고 deferred 상태를 허용한다. game Scene 결과는 3개 read-only gallery slot이며, `RETURN TO LOBBY` world action은 Host만 수행한다. `CoopMural`은 final root와 Host-only Return action을 갖는다. Task 19 fresh Windows Player smoke는 exact PID가 18초 생존했고 this-run Player error-like count가 0이었으며, 종료 후 Unity/Player/tracker process가 0이었다. 세 game Scene은 별도 additive asset이다. 최신 full 결과는 Unity EditMode `868/868`, `dotnet build` `0 warnings/0 errors`, Python `2/2`이다. 실제 Steam 4 account, webcam/phone, physical gesture, long profile, Intel Mac은 미검증이다.
+
+Task 17의 이전 validator 실패 기록은 Task 19의 empty-startup validator exit `0`/PASS와 full EditMode `868/868` 재실행으로 대체되었으며, 최신 판정에는 사용하지 않는다. 전체 gate 상세와 개별 로그는 [Task 19 final gate receipt](../.omo/evidence/party-scene-split/task-19-final-gate/receipt.md)를 기준으로 한다.
 
 실패 수정이 설계 변경을 요구하면 **문서 수정 → 사용자 승인 → 코드 반영** 순서를 따른다. 다음 Step 승인은 이전 Step의 실행 결과 보고와 별개로 명시적으로 받는다.
 

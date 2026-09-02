@@ -11,6 +11,7 @@ namespace CameraCoop.Party
         public int version = CoopMuralProtocol.Version;
         public string sessionId;
         public int rosterGeneration;
+        public int startSignal;
         public long sequence;
         public string kind;
         public int ownerSlot = -1;
@@ -63,7 +64,7 @@ namespace CameraCoop.Party
                 packet = JsonUtility.FromJson<CoopMuralPacket>(Utf8.GetString(bytes));
                 if (packet == null || packet.game != GameId || packet.version != Version
                     || string.IsNullOrEmpty(packet.sessionId) || packet.sessionId.Length > 64
-                    || packet.rosterGeneration <= 0 || packet.sequence <= 0
+                    || packet.rosterGeneration <= 0 || packet.startSignal <= 0 || packet.sequence <= 0
                     || packet.payload == null)
                 {
                     packet = null;

@@ -4,15 +4,17 @@ using System.Threading.Tasks;
 using CameraCoop.Game;
 using CameraCoop.Netplay;
 using CameraCoop.Party;
+using CameraCoop.Party.SceneFlow;
 using Steamworks;
 using Steamworks.Data;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 
 namespace CameraCoop
 {
     [DefaultExecutionOrder(200)]
-    public sealed class OnlineRelayQuizController : MonoBehaviour, IPartyWorldGateway
+    public sealed class OnlineRelayQuizController : MonoBehaviour, IPartyWorldGateway, IPartySceneCoordinatorCallbacks
     {
         [Header("Input")]
         [SerializeField] private InputModeManager inputModeManager;
@@ -35,7 +37,10 @@ namespace CameraCoop
         [SerializeField] private RelayQuizWordList wordList;
         [SerializeField] private int wordDeckSeed;
         [SerializeField] private PartyWorldController partyWorldController;
+        [SerializeField] private PartyLobbyScenePort lobbyScenePort;
+        [SerializeField] private PartySceneCoordinator sceneCoordinator;
 
+        private bool sceneCoordinatorConfigured;
         private SynchronizationContext unityContext;
         private OnlineRelayQuizSession session;
         private OnlineRelayQuizSession appliedSession;
@@ -50,6 +55,10 @@ namespace CameraCoop
         private float retrySteamAt;
         private string status = "Steam 연결을 준비하는 중";
         private string confirmedAnswer = string.Empty;
+        private GameObject resultRoot;
+        private Transform lobbyGalleryPose;
+        private OnlineRelayQuizSession autoReadySession;
+        private int autoReadyGeneration = -1;
 
         private bool CameraReady => cameraControlPanel != null
             && (cameraControlPanel.State == CameraConnectionState.Receiving || cameraControlPanel.State == CameraConnectionState.External);
@@ -71,6 +80,13 @@ namespace CameraCoop
                 enabled = false;
                 return;
             }
+            if (!TryInitializeSceneCoordinator(out error))
+            {
+                status = "Scene 전환 설정 오류: " + error;
+                relayQuizUI.ShowSetupError(status);
+                enabled = false;
+                return;
+            }
             wordBank = new WordBank(error, wordDeckSeed != 0 ? wordDeckSeed : Environment.TickCount);
             initialized = true;
             SubscribeSteam();
@@ -82,13 +98,12 @@ namespace CameraCoop
             result = "필수 참조를 모두 할당해주세요";
             if (inputModeManager == null || handInputRouter == null || playerController == null
                 || lobbyPose == null || galleryPose == null || cameraControlPanel == null || drawingController == null
-                || toolState == null || toolState.BrushCount == 0 || workCanvasRoot == null || previewPresenter == null
-                || previewSurface == null || relayQuizUI == null || relayQuizGallery == null || wordList == null
+                || toolState == null || toolState.BrushCount == 0
+                || relayQuizUI == null || relayQuizGallery == null || wordList == null
                 )
                 return false;
             if (partyWorldController != null && !partyWorldController.ValidateRuntimeConfiguration(out result)) return false;
-            if (!relayQuizGallery.ValidateRuntimeConfiguration(out result) || relayQuizGallery.SlotCount != 3)
-                return SetError("RelayQuizGallery requires exactly three read-only drawing slots.", out result);
+            if (!relayQuizGallery.ValidateRuntimeConfiguration(out result)) return false;
             return wordList.TryBuildDeckText(out result, out string wordError) || SetError(wordError, out result);
         }
 
@@ -121,9 +136,16 @@ namespace CameraCoop
             busy = false;
             if (subscribed) SteamFriends.OnGameLobbyJoinRequested -= HandleJoinRequested;
             subscribed = false;
-            ReleaseSession();
+            if (sceneCoordinatorConfigured)
+                sceneCoordinator.ShutdownSceneBoundary(_ => ReleaseSession());
+            else ReleaseSession();
             HidePrivateContent();
             if (relayQuizUI != null) relayQuizUI.HideAll();
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseSession();
         }
 
         private void OnApplicationFocus(bool focused)
@@ -144,6 +166,7 @@ namespace CameraCoop
                 {
                     if (!session.View.transferPending) confirmedAnswer = relayQuizUI.ConfirmedAnswer;
                     session.UpdateLocalConditions(hasFocus, handInputRouter.HasFreshHand);
+                    TryAutoReadyHandover();
                     DrainActions();
                     session.Tick(Time.unscaledDeltaTime);
                 }
@@ -184,6 +207,29 @@ namespace CameraCoop
             }
         }
 
+        private void TryAutoReadyHandover()
+        {
+            if (session == null) return;
+            if (!ReferenceEquals(autoReadySession, session))
+            {
+                autoReadySession = session;
+                autoReadyGeneration = -1;
+            }
+            OnlineRelayQuizView view = session.View;
+            if (!ShouldAutoReadyHandover(view, CameraReady, handInputRouter.HasFreshHand,
+                    hasFocus, autoReadyGeneration)) return;
+            autoReadyGeneration = view.generation;
+            session.Execute(RelayQuizAction.Ready, view.generation);
+        }
+
+        internal static bool ShouldAutoReadyHandover(OnlineRelayQuizView view, bool cameraReady,
+            bool freshHand, bool focused, int completedGeneration)
+        {
+            return view != null && view.active && view.state == RelayQuizState.Handover
+                && view.generation != completedGeneration && cameraReady && freshHand && focused
+                && !view.aborted && !view.paused && !view.transferPending;
+        }
+
         private RelayQuizPauseStage PauseStage(OnlineRelayQuizView view)
         {
             if (!view.paused) return RelayQuizPauseStage.None;
@@ -194,6 +240,7 @@ namespace CameraCoop
         private void SyncView(bool force)
         {
             OnlineRelayQuizView view = session == null ? new OnlineRelayQuizView() : session.View;
+            if (sceneCoordinatorConfigured) sceneCoordinator.ApplyView(view);
             bool hidden = !hasFocus && view.state != RelayQuizState.Setup;
             RelayQuizPauseStage stage = PauseStage(view);
             int flags = (hidden ? 1 : 0) | (view.paused ? 2 : 0) | (view.transferPending ? 4 : 0)
@@ -227,17 +274,16 @@ namespace CameraCoop
             bool coopDrawing = visible && view.connected && view.modeStarted && view.hasSelectedMode
                 && view.selectedMode == PartyMode.CoopMural && view.startSignal > 0;
             bool drawing = relayDrawing || coopDrawing;
-            workCanvasRoot.SetActive(relayDrawing);
+            if (workCanvasRoot != null) workCanvasRoot.SetActive(relayDrawing);
             drawingController.SetStrokesVisible(drawing);
             bool referencePreview = visible && PartyWorldController.IsReferenceVisible(view);
             bool guessingPreview = visible && view.state == RelayQuizState.Guessing && view.active && view.drawing != null;
             bool preview = referencePreview || guessingPreview;
-            previewSurface.gameObject.SetActive(preview);
-            if (preview) previewPresenter.Show(referencePreview ? view.referenceDrawing : view.drawing, previewSurface);
-            else previewPresenter.ClearPresentation();
-            if (visible && view.state == RelayQuizState.Gallery)
-                relayQuizGallery.Show(BuildGalleryRecords(view.gallery));
-            else relayQuizGallery.Clear();
+            if (previewSurface != null) previewSurface.gameObject.SetActive(preview);
+            if (preview && previewPresenter != null && previewSurface != null)
+                previewPresenter.Show(referencePreview ? view.referenceDrawing : view.drawing, previewSurface);
+            else if (previewPresenter != null) previewPresenter.ClearPresentation();
+            ApplyGallery(view, visible);
             relayQuizUI.ApplyOnlineView(view, stage, hidden, CameraReady);
             ApplyNavigation(view, session == null, newSession, appliedSerial == 0, hidden, stage, drawing, stateChanged);
             if (steamTransport != null && steamTransport.IsHost)
@@ -283,6 +329,19 @@ namespace CameraCoop
             ApplyNavigation(view, noSession, newSession, firstApplication, hidden, stage, drawing, stateChanged);
         }
 
+        private void ApplyGallery(OnlineRelayQuizView view, bool visible)
+        {
+            bool show = visible && view.state == RelayQuizState.Gallery && relayQuizGallery.IsReady;
+            if (resultRoot != null) resultRoot.SetActive(show);
+            if (show) relayQuizGallery.Show(BuildGalleryRecords(view.gallery));
+            else relayQuizGallery.Clear();
+        }
+
+        internal void ApplyGalleryForTests(OnlineRelayQuizView view, bool visible)
+        {
+            ApplyGallery(view, visible);
+        }
+
         private CanvasDrawingData CaptureDrawing()
         {
             handInputRouter.CancelCanvasCaptures(HandCancelReason.ViewChanged);
@@ -323,6 +382,7 @@ namespace CameraCoop
             if (previewPresenter != null) previewPresenter.ClearPresentation();
             if (previewSurface != null) previewSurface.gameObject.SetActive(false);
             if (relayQuizGallery != null) relayQuizGallery.Clear();
+            if (resultRoot != null) resultRoot.SetActive(false);
         }
 
         private void ProcessMouse()
@@ -434,6 +494,15 @@ namespace CameraCoop
         private void Bind(SteamTransport transport, string expectedHost)
         {
             session = new OnlineRelayQuizSession(transport, expectedHost, () => wordBank.Next(), CaptureDrawing, CaptureAnswer, toolState.BrushCount);
+            if (sceneCoordinatorConfigured)
+            {
+                try { sceneCoordinator.ResetForSession(session.View.sessionId); }
+                catch (InvalidOperationException exception)
+                {
+                    status = "Scene 전환 초기화 실패: " + exception.Message;
+                    session.ReportSceneLoadFailure(session.View.transitionGeneration, PartySceneLoadFailure.InvalidTransition);
+                }
+            }
             steamTransport = transport;
             transportClosed = false;
             appliedSerial = 0;
@@ -452,9 +521,24 @@ namespace CameraCoop
         {
             if (!initialized) return;
             operationGeneration++;
+            busy = true;
+            status = "Lobby로 돌아가는 중";
+            if (sceneCoordinatorConfigured)
+            {
+                sceneCoordinator.ShutdownSceneBoundary(CompleteLocalLeave);
+                return;
+            }
+            CompleteLocalLeave(true);
+        }
+
+        private void CompleteLocalLeave(bool sceneBoundaryClosed)
+        {
+            if (this == null) return;
             busy = false;
             ReleaseSession();
-            status = "세션을 나갔습니다 · 새로 Host를 만들거나 친구 초대를 받아주세요";
+            status = sceneBoundaryClosed
+                ? "세션을 나갔습니다 · 새로 Host를 만들거나 친구 초대를 받아주세요"
+                : "Scene 정리에 실패했지만 세션 연결은 종료했습니다";
             SyncView(true);
         }
 
@@ -471,6 +555,8 @@ namespace CameraCoop
         {
             CloseTransport();
             session = null;
+            autoReadySession = null;
+            autoReadyGeneration = -1;
         }
 
         public void SetReady(bool ready) => session?.SetReady(ready);
@@ -479,6 +565,7 @@ namespace CameraCoop
         public void RequestHost() => OnClickHostSteam();
         public void RequestInvite() => OnClickInvite();
         public void RequestLeave() => OnClickLeave();
+        public bool RequestReturnToLobby() => session != null && session.RequestReturnToLobby();
 
         public void RequestCamera(PartyWorldAction action)
         {
@@ -497,6 +584,105 @@ namespace CameraCoop
                 case PartyWorldAction.CameraNext: cameraControlPanel.CycleCamera(1); break;
                 case PartyWorldAction.CameraPreview: cameraControlPanel.SelectPreview(!cameraControlPanel.PreviewEnabled); break;
             }
+        }
+
+        private bool TryInitializeSceneCoordinator(out string error)
+        {
+            if (lobbyScenePort == null)
+            {
+                if (sceneCoordinator != null)
+                {
+                    error = "lobbyScenePort가 필요합니다";
+                    return false;
+                }
+                error = string.Empty;
+                return true;
+            }
+            if (sceneCoordinator == null) sceneCoordinator = gameObject.AddComponent<PartySceneCoordinator>();
+            if (!sceneCoordinatorConfigured)
+            {
+                sceneCoordinator.Configure(new UnityPartySceneLoader(), new UnityPartyGameSceneResolver(),
+                    lobbyScenePort, this);
+                sceneCoordinatorConfigured = true;
+            }
+            error = string.Empty;
+            return true;
+        }
+
+        public void BindGameScene(IPartyGameScenePort adapter)
+        {
+            if (adapter == null) throw new ArgumentNullException(nameof(adapter));
+            PartySceneBindings bindings = adapter.Bindings ?? throw new ArgumentException("Scene bindings are required.", nameof(adapter));
+            partyWorldController?.BindGamePort(adapter);
+            workCanvasRoot = bindings.WritablePaperRoot;
+            previewPresenter = bindings.ReferencePresenter;
+            previewSurface = bindings.ReferenceSurface;
+            resultRoot = adapter.Mode != PartyMode.CoopMural ? bindings.ResultRoot : null;
+            if (resultRoot != null) resultRoot.SetActive(false);
+            if (adapter.Mode != PartyMode.CoopMural)
+            {
+                relayQuizGallery?.Configure(bindings.GalleryRoots, bindings.GalleryPresenters,
+                    bindings.GallerySurfaces);
+                if (lobbyGalleryPose == null) lobbyGalleryPose = galleryPose;
+                galleryPose = bindings.ResultViewPose;
+            }
+        }
+
+        public void DisableGameSceneInteractions(IPartyGameScenePort adapter)
+        {
+            WorldActionInteractable[] actions = adapter?.Bindings?.Actions;
+            if (actions == null) return;
+            for (int index = 0; index < actions.Length; index++)
+                if (actions[index] != null) actions[index].enabled = false;
+        }
+
+        public void UnbindGameScene(IPartyGameScenePort adapter)
+        {
+            if (previewPresenter != null) previewPresenter.ClearPresentation();
+            if (previewSurface != null) previewSurface.gameObject.SetActive(false);
+            if (workCanvasRoot != null) workCanvasRoot.SetActive(false);
+            if (resultRoot != null) resultRoot.SetActive(false);
+            relayQuizGallery?.Release();
+            if (lobbyGalleryPose != null) galleryPose = lobbyGalleryPose;
+            partyWorldController?.UnbindScenePort(adapter);
+            workCanvasRoot = null;
+            previewPresenter = null;
+            previewSurface = null;
+            resultRoot = null;
+        }
+
+        public bool ActivateLobbyScene()
+        {
+            Scene lobbyScene = lobbyScenePort != null ? lobbyScenePort.gameObject.scene : default;
+            return lobbyScene.IsValid() && lobbyScene.isLoaded && SceneManager.SetActiveScene(lobbyScene);
+        }
+
+        public void RebaseToGame(IPartyGameScenePort adapter)
+        {
+            OnlineRelayQuizView view = session?.View;
+            if (view == null || view.localSlot < 0) return;
+            partyWorldController?.ConfigureAssignedSlot(view.localSlot, LocalIdentity);
+        }
+
+        public void RebaseToLobby(PartyLobbyScenePort lobby)
+        {
+            partyWorldController?.BindLobbyPort(lobby);
+            OnlineRelayQuizView view = session?.View;
+            if (view != null && view.localSlot >= 0)
+                partyWorldController?.ConfigureAssignedSlot(view.localSlot, LocalIdentity);
+        }
+
+        public bool MarkLocalSceneReady(int generation)
+            => session != null && session.MarkLocalSceneReady(generation);
+
+        public bool MarkLocalLobbyReady(int generation)
+            => session != null && session.MarkLocalLobbyReady(generation);
+
+        public void ReportSceneLoadFailure(int generation, PartySceneLoadFailure failure)
+        {
+            status = "Scene 전환 실패: " + failure;
+            session?.ReportSceneLoadFailure(generation, failure);
+            if (relayQuizUI != null) relayQuizUI.ShowSetupError(status);
         }
     }
 }

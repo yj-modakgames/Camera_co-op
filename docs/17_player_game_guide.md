@@ -3,18 +3,22 @@
 > 대상: `RelayQuizOnline` 현재 build
 > 기준: 2026-08-31 source와 문서 계약. 실제 Steam 4계정, physical webcam/phone camera, 실제 hand gesture는 별도 확인이 필요하다.
 
+현재 한 판의 전체 순서는 `CameraToggle` mouse 클릭 → Host가 `Host` 또는 `Invite`를 손으로 실행 → lobby에서 brush·paint·width·eraser·fist draw·jump를 자유 연습 → 네 player가 자기 `ReadyPad`에서 준비 → Host `START` → `ModeSelectorRoot` 표시 → Host mode 선택(`SelectModeAndBeginLoad`, `startSignal` 증가) → `RelayCopy`/`MemoryCopy`/`CoopMural` additive Scene 플레이 → Host가 `RETURN TO LOBBY` 실행이다. 정상적인 mode return에서는 같은 Steam party/session과 camera 연결을 유지한다.
+
+Scene load failure, timeout, disconnect가 보이면 해당 round는 완료로 처리되지 않는다. disconnect는 `Abort`로 처리되며 private 화면과 입력을 정리한 뒤 새 Steam invite가 필요하다. disconnect를 같은 party/session의 정상 lobby return으로 간주하지 않는다. 실제 Steam 4 account/4 machine, webcam·phone camera, physical gesture, long profile, Intel Mac은 아직 검증되지 않았다.
+
 ## 1. 시작 전 준비
 
 1. Steam client를 실행하고 로그인한다.
 2. `RelayQuizOnline` build를 실행한다. Steam이 실행 중이 아니거나 로그인되지 않으면 lobby 연결을 재시도할 수 없다.
 3. webcam을 PC에 연결한다. webcam이 없으면 phone camera를 PC가 camera 장치로 인식하도록 연결한다. phone 연결 방식과 장치 선택은 [phone camera 안내](13_phone_camera_input.md)를 따른다.
 4. camera toggle을 누르기 전에 HUD가 `손 조작 · Tab: 이동`인지 확인한다. `이동 · Tab: 손 조작`이면 `Tab`으로 Interact mode에 들어간다. 앱에 focus가 있고 답변 input을 편집 중이 아니어야 한다.
-5. 게임 화면 오른쪽 위의 `캠 켜기` 버튼을 **mouse 왼쪽 버튼으로 누른다**.
+5. camera는 자동으로 시작되지 않는다. 게임 화면 오른쪽 위의 `캠 켜기` 버튼을 **mouse 왼쪽 버튼으로 누른다**.
 6. 버튼이 `시작 중…`으로 바뀌면 tracker 시작을 요청한 상태다. 실제 입력 사용은 첫 fresh packet을 받아 `송신 수신 중`이 된 뒤 가능하다.
 7. 상태가 `송신 수신 중`으로 바뀌고 손 안내가 사라지면 camera 입력을 사용할 수 있다. 버튼은 `캠 끄기`로 바뀐다.
 8. 종료할 때는 같은 위치의 `캠 끄기`를 mouse 왼쪽 버튼으로 누른다. `CameraToggle`은 현재 build에서 camera를 시작·종료하는 유일한 mouse control이다.
 
-`Host`, `Invite`, `Leave`, game 선택, `START`, `ReadyPad`, drawing 도구와 relay 진행 버튼은 mouse로 누르지 않는다. camera toggle을 제외한 3D action은 손으로 조작한다.
+`Host`, `Invite`, `Leave`, game 선택, `START`, `ReadyPad`, drawing 도구와 relay 진행 버튼은 mouse로 누르지 않는다. camera toggle을 제외한 3D action은 손으로 조작한다. lobby에서는 `Explore/Move`로 자유 이동하고 `Explore/Interact`로 등록된 lobby paper에 fist drawing을 할 수 있다. game Scene의 Drawing context에서는 `Carried`일 때만 canvas와 함께 이동한다.
 
 ## 2. 이동과 시점
 
@@ -23,7 +27,7 @@
 3. 이동 중 mouse를 움직여 시점을 회전한다. 벽, 바닥, 버튼과 구조물에는 collider가 있으므로 통과할 수 없다.
 4. **Space**는 바닥에 닿아 있을 때만 점프한다. 공중에서 다시 누른 Space는 무시한다. 점프의 목표 최고점은 약 1.5m이며, 실제 height와 조작감은 Player QA에서 확인할 항목이다.
 5. `Tab`을 다시 누르면 `손 조작 · Tab: 이동`으로 바뀐다. 이때 cursor가 표시되고 손으로 3D 물체를 겨냥할 수 있다.
-6. relay의 `Setup`, `Handover`, `WordReveal`, `ObservePrevious`, `Guessing`, `Reveal`에서는 game context가 이동을 잠근다. Drawing에서도 canvas가 `Docked`인 동안은 이동이 잠기지만, 자기 canvas를 `Carried`로 든 동안에는 `WASD`와 mouse look으로 이동·회전할 수 있다. `Gallery`에서는 다시 이동하며 결과를 둘러볼 수 있다.
+6. relay의 `Setup`, `Handover`, `WordReveal`, `ObservePrevious`, `Guessing`, `Reveal`에서는 game context가 이동을 잠근다. Drawing에서 `Docked` canvas는 dock에 고정되어 player 이동을 따라가지 않으며, 자기 canvas를 `Carried`로 든 동안에만 `WASD`와 mouse look으로 canvas와 함께 이동·회전할 수 있다. `Gallery`에서는 다시 이동하며 결과를 둘러볼 수 있다.
 7. 답변 input이 선택되어 글자를 입력하는 동안에는 `WASD`, mouse look, `Tab`, drawing이 차단된다. 답변은 keyboard로 입력한다.
 
 ### 조작 도구 요약
@@ -89,9 +93,9 @@ ReadyPad는 pinch/release 버튼이 아니라 손 presence dwell로 동작한다
 2. 각자 자기 zone 중앙의 `ReadyPad` 위에 손을 올려 hover한다.
 3. camera가 연결되고 fresh hand가 감지된 상태로 약 1초 동안 Pad 위에 손을 유지한다.
 4. Pad가 준비 완료로 바뀌면 다음 player도 자기 Pad에서 같은 동작을 한다.
-5. 4명 모두 ready가 되면 Host의 mode 전시대가 열린다.
-6. Host가 `Relay Copy`, `Memory Copy`, `Coop Mural` 중 하나를 손으로 선택한다.
-7. Host가 중앙의 `START` 물체를 손 pinch 후 release한다.
+5. 4명 모두 ready가 되면 Host가 중앙의 `START` 물체를 손 pinch 후 release한다.
+6. `START`가 승인되면 `ModeSelectorRoot`와 mode 전시대가 표시된다.
+7. Host가 `Relay Copy`, `Memory Copy`, `Coop Mural` 중 하나를 손으로 선택한다. 선택은 `SelectModeAndBeginLoad`를 호출해 `startSignal`을 증가시키고 선택한 Scene의 additive load를 시작한다.
 
 | mode | 현재 동작 | 검증 상태 |
 |---|---|---|
@@ -101,7 +105,7 @@ ReadyPad는 pinch/release 버튼이 아니라 손 presence dwell로 동작한다
 
 ## 6. Relay Copy 한 판 진행
 
-Host가 `Relay Copy`를 선택하고 `START`를 실행하면 player 0부터 한 줄 순서로 진행한다. setup notice는 약 2.5초 뒤 사라지고, 안정된 lobby에서 계속 떠 있지 않는다.
+Host가 `START`를 실행한 뒤 selector에서 `Relay Copy`를 선택하면 player 0부터 한 줄 순서로 진행한다. setup notice는 약 2.5초 뒤 사라지고, 안정된 lobby에서 계속 떠 있지 않는다.
 
 ### 첫 번째 player
 
@@ -143,7 +147,7 @@ Host가 `Relay Copy`를 선택하고 `START`를 실행하면 player 0부터 한 
 6. `Reveal`에서 전원에게 정답, 입력값, 정오가 공개된다.
 7. `갤러리`를 손으로 선택하면 P1, P2, P3 그림이 순서대로 공개된다.
 8. Gallery에서는 `WASD`와 mouse look으로 전시물을 둘러본다.
-9. Host가 `다시 시작`을 손으로 선택하면 이전 그림·답·제시어·timer·capture를 reset하고 새 setup으로 돌아간다.
+9. 결과 확인 뒤 Host가 `RETURN TO LOBBY`를 손으로 선택하면 game Scene을 종료하고 lobby로 돌아간다. 다음 round 재시작 조작은 현재 범위의 결과 화면 계약에 포함하지 않는다.
 
 ## 7. camera 문제 해결
 
@@ -155,6 +159,6 @@ Host가 `Relay Copy`를 선택하고 `START`를 실행하면 player 0부터 한 
 
 ## 8. 검증 범위
 
-자동 test와 Editor runtime에서 camera 상태 전환, relay private visibility, canvas `Carried`/`Docked`, ReadyPad·mode·phase 전이를 확인했다. `실제 Steam 4인 대기`라고 표시한 항목은 source contract와 자동 test는 있지만 실제 webcam hand gesture, phone camera, Steam 4 account/4 machine 결과를 의미하지 않는다.
+source contract와 focused EditMode tests에서 camera 상태 전환, relay private visibility, canvas `Carried`/`Docked`, ReadyPad·mode·phase 경계를 확인했다. Play에서는 controller/gallery validity와 lobby visual presence만 확인했으며, production 4-peer interaction은 실행하지 않았다. `실제 Steam 4인 대기`라고 표시한 항목은 실제 webcam hand gesture, phone camera, Steam 4 account/4 machine 결과를 의미하지 않는다.
 
 관련 source: `PlayerController`, `InputModeManager`, `HandInputRouter`, `PartyWorldController`, `WorldReadyPadInteractable`, `PhysicalPaintTool`, `PersonalCanvasPlacement`, `OnlineRelayQuizController`.

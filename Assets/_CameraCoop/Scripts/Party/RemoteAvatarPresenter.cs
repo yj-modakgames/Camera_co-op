@@ -53,6 +53,12 @@ namespace CameraCoop.Party
             session.SlotOccupancyChanged += HandleSlotOccupancyChanged;
         }
 
+        public void Unbind()
+        {
+            HideAvatar();
+            Unsubscribe();
+        }
+
         public void Render(float nowSeconds)
         {
             if (avatarRoot == null || session == null || !hasPose) return;

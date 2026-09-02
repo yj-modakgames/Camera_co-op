@@ -2,7 +2,7 @@
 
 > 대상: Camera_co-op (웹캠 손동작 기반 3D 협동 드로잉 게임, Steam 출시 목표)
 > Phase 1 범위: Python MediaPipe → UDP → Unity 손 커서 + 핀치 감지. 게임 로직 없음.
-> 갱신: 2026-08-28. §1~3은 현재 손 입력 경로, §5는 **Phase D 설계 초안**이다. 기존 온라인 구현과 새 로컬 릴레이를 구분한다.
+> 갱신: 2026-09-02. §1~3은 현재 손 입력 경로이며, §6은 Task 14의 현재 4인 Scene 전환 계약이다. 기존 온라인 구현·local RelayQuiz와 구분한다.
 
 ## 1. 전체 데이터 흐름
 
@@ -81,3 +81,13 @@ main thread:  Update()에서 슬롯 확인 → JsonUtility 파싱 → seq 검사
 - 기존 06~09 번호 문서도 보존한다. 문서 참조는 숫자 약칭 대신 전체 파일명으로 구분한다.
 
 Phase D 문서 승인 후 Step 1부터 구현하고, 각 Step 보고·승인 뒤에만 다음 단계로 진행한다. 검증 책임과 Play 체크리스트는 [05_test_plan](05_test_plan.md) §6 이후를 따른다.
+
+## 6. 현재 4인 Scene 전환 아키텍처 (Task 14)
+
+현재 실행 순서는 `CameraToggle`을 mouse로 눌러 camera를 연결한 뒤, 손으로 `Host` 또는 `Invite`를 선택하고 lobby의 자유 연습 상호작용을 거치는 방식이다. 네 player가 각자의 `ReadyPad`에서 준비되면 Host가 `START`를 실행해 `ModeSelectorRoot`를 표시하고, Host가 mode를 선택하면 `SelectModeAndBeginLoad`가 `startSignal`을 증가시켜 additive load를 시작한다.
+
+`PartySceneCoordinator`는 persistent `RelayQuizOnline` lobby owner를 유지하고 선택된 game Scene만 additive load한다. `ModeSelectorRoot`는 lobby에만 있으며, mode Scene에는 Camera, EventSystem, `HandInputRouter`, network owner, `OnlineRelayQuizController`, `TrackerLauncher`를 중복 소유하지 않는다. 선택 가능한 Scene은 `RelayCopy`, `MemoryCopy`, `CoopMural`이다. Host의 `RETURN TO LOBBY`는 game Scene을 unbind·unload한 뒤 lobby를 다시 activate한다.
+
+각 mode의 paper와 tool은 additive adapter에 bind 시 주입한다. `RelayCopy`와 `MemoryCopy`는 owner별 private paper/reference를 사용하며 `CoopMural`은 P1→P2→P3→P4의 공개 mural layer를 순차적으로 freeze한다. paper는 `Docked`로 시작하고 owner가 handle을 들어 `Carried`로 이동한 뒤 자기 zone 중앙에만 다시 dock할 수 있다. paint·width·eraser station과 brush 선택은 pinch, 실제 선은 fist 유지로 처리한다.
+
+camera는 `autoStartCamera=false`인 manual `CameraToggle` 경로다. lobby의 `Explore/Move`는 자유 이동을 유지하고 `Explore/Interact`에서는 active registered lobby paper에 fist drawing을 허용한다. game Drawing context의 이동은 `Carried` canvas일 때만 허용한다. camera와 fresh hand가 준비되면 owner handover가 자동 진행되고, lobby gallery는 deferred 결과 상태를 허용한다.

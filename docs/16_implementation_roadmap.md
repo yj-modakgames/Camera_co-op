@@ -137,3 +137,11 @@
 메인 session은 요구 정리·계획·agent 작업 경계와 품질 기준을 맡는다. 실제 구현·검증은 하위 agent에 위임한다. 단순 작업은 `gpt-5.6-luna + medium`, 권한·상태 전이·network 경계 등 어려운 작업은 `gpt-5.6-sol + high`로 배정한다. 각 agent에게 소유 파일과 관련 skill 지침을 주고 기존 변경 보존을 명시한다.
 
 이번 문서 작업에서는 Unity build·Play·camera·Steam 실기를 실행하지 않았다. 기존 문서의 과거 검증 결과는 그 당시 범위의 기록이며 새 목표의 통과 증거가 아니다.
+
+## 6. Task 14 — four-Scene additive split 완료 (2026-09-02)
+
+`PartySceneCatalog`가 build와 runtime의 단일 source of truth다. 정확한 Scene 순서는 `RelayQuizOnline` lobby, `RelayCopy`, `MemoryCopy`, `CoopMural`이며 각 경로는 [10_build.md](10_build.md)에 고정한다. 최신 `PartyGameSceneTests` 15/15와 `PartySceneValidator PASS`로 Scene 존재·순서·private shell·mural layer·persistent owner 중복 금지를 확인했다. BuildAll 재생성 결과도 evidence에 남아 있다.
+
+완료된 사용자 흐름은 camera button → Host/Invite → 자유 연습 → four ReadyPads → Host START → `ModeSelectorRoot` 표시 → Host mode 선택(`SelectModeAndBeginLoad`, `startSignal` 증가) → 세 mode 중 하나 additive load → Host RETURN TO LOBBY다. `PartySceneCoordinator`가 bind/unbind와 load failure/timeout 경계를 담당하며, 실패 시 private render/input을 정리하고 lobby 복귀를 안내한다. disconnect는 `Abort` 후 새 invite가 필요하다. 정상적인 mode return에서만 Steam party/session과 camera process를 유지하고, mode Scene은 별도 camera·input·network owner를 만들지 않는다.
+
+Task 14 자동·Editor 결과는 실제 Steam 4 account/4 machine, webcam/phone, physical gesture, long profile, Intel Mac 검증을 포함하지 않는다. 이 항목들은 M6 외부 QA로 유지한다.

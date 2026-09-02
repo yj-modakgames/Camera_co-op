@@ -70,6 +70,8 @@ namespace CameraCoop.Party.SceneFlow
         private PartyTransitionKey failureKey;
         private bool failureReported;
         private string trustedSessionId;
+        private bool shutdownRequested;
+        private readonly List<Action<bool>> shutdownCallbacks = new List<Action<bool>>();
 
         public bool IsOperationInFlight => operationInFlight;
         public PartyTransitionKey AppliedTransitionKey => hasAppliedView ? appliedKey : default;
@@ -146,6 +148,76 @@ namespace CameraCoop.Party.SceneFlow
             failureKey = default;
         }
 
+        public void ShutdownSceneBoundary(Action<bool> completed = null)
+        {
+            if (disposed || !configured)
+            {
+                completed?.Invoke(false);
+                return;
+            }
+            if (completed != null) shutdownCallbacks.Add(completed);
+            shutdownRequested = true;
+            hasPending = false;
+            pending = default;
+            if (operationInFlight) return;
+
+            ContinueBoundaryShutdown();
+        }
+
+        private void ContinueBoundaryShutdown()
+        {
+            UnbindCurrentAdapter();
+            if (loadedScene == null)
+            {
+                CompleteBoundaryShutdown();
+                return;
+            }
+
+            PartySceneDefinition target = loadedScene;
+            PartySceneLoadResult result = loader.Unload(target);
+            if (!result.IsSuccess || result.Operation == null)
+            {
+                CompleteShutdownCallbacks(false);
+                return;
+            }
+
+            operationInFlight = true;
+            runner.Run(result.Operation, () =>
+            {
+                if (disposed) return;
+                operationInFlight = false;
+                loadedScene = null;
+                CompleteBoundaryShutdown();
+            });
+        }
+
+        private void CompleteBoundaryShutdown()
+        {
+            bool activated = callbacks.ActivateLobbyScene();
+            if (activated)
+            {
+                lobby.SetLobbyVisible(true);
+                callbacks.RebaseToLobby(lobby);
+            }
+            hasAppliedView = false;
+            appliedKey = default;
+            appliedPhase = default;
+            appliedSerial = 0;
+            trustedSessionId = null;
+            failureReported = false;
+            failureKey = default;
+            CompleteShutdownCallbacks(activated);
+        }
+
+        private void CompleteShutdownCallbacks(bool success)
+        {
+            shutdownRequested = false;
+            Action<bool>[] callbacksToInvoke = shutdownCallbacks.ToArray();
+            shutdownCallbacks.Clear();
+            for (int index = 0; index < callbacksToInvoke.Length; index++)
+                callbacksToInvoke[index](success);
+        }
+
         public void Dispose()
         {
             if (disposed) return;
@@ -158,6 +230,7 @@ namespace CameraCoop.Party.SceneFlow
                 boundAdapter.Unregister();
                 boundAdapter = null;
             }
+            CompleteShutdownCallbacks(false);
             if (ownsLoader) loader?.Dispose();
         }
 
@@ -210,6 +283,12 @@ namespace CameraCoop.Party.SceneFlow
             if (disposed) return;
             operationInFlight = false;
             loadedScene = target;
+
+            if (shutdownRequested)
+            {
+                ContinueBoundaryShutdown();
+                return;
+            }
 
             if (TryConsumePending(out PendingTransition next) && next.Phase == PartyTransitionPhase.ReturningToLobby)
             {
@@ -291,6 +370,11 @@ namespace CameraCoop.Party.SceneFlow
                 if (disposed) return;
                 operationInFlight = false;
                 loadedScene = null;
+                if (shutdownRequested)
+                {
+                    ContinueBoundaryShutdown();
+                    return;
+                }
                 CompleteReturn(transition);
                 ApplyPending();
             });

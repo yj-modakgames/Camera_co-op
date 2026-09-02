@@ -40,6 +40,10 @@ namespace CameraCoop.Tests
             }
             if (eventSystemRoot != null)
             {
+                EventSystem eventSystem = eventSystemRoot.GetComponent<EventSystem>();
+                MethodInfo onDisable = typeof(EventSystem).GetMethod("OnDisable", InstanceFlags);
+                Assert.IsNotNull(onDisable, "EventSystem teardown must clear its registered current instance.");
+                onDisable.Invoke(eventSystem, null);
                 Object.DestroyImmediate(eventSystemRoot);
             }
         }
@@ -130,6 +134,7 @@ namespace CameraCoop.Tests
             MethodInfo onEnable = typeof(EventSystem).GetMethod("OnEnable", InstanceFlags);
             Assert.IsNotNull(onEnable, "EventSystem must initialize its current instance for the selected input test.");
             onEnable.Invoke(eventSystem, null);
+            EventSystem.current = eventSystem;
             Assert.AreSame(eventSystem, EventSystem.current);
             eventSystem.SetSelectedGameObject(inputRoot);
 
@@ -165,6 +170,20 @@ namespace CameraCoop.Tests
             Assert.That(manager.CanLook, Is.False);
             Assert.That(manager.CanDraw, Is.False);
             Assert.That(manager.CanUseHandUi, Is.True);
+        }
+
+        [Test]
+        public void LobbyExplore_OnlyInteractModeAllowsPracticeDrawing()
+        {
+            manager.SetContext(InputContext.Explore);
+            manager.SetPracticeDrawingAllowed(true);
+
+            Assert.That(manager.CurrentMode, Is.EqualTo(InputMode.Move));
+            Assert.That(manager.CanDraw, Is.False);
+            Assert.That(manager.RequestMode(InputMode.Interact), Is.True);
+            Assert.That(manager.CanDraw, Is.True);
+            Assert.That(manager.RequestMode(InputMode.Move), Is.True);
+            Assert.That(manager.CanDraw, Is.False);
         }
 
         [Test]

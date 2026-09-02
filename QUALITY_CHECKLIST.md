@@ -331,3 +331,30 @@ physical OS mouse click과 실제 hand gesture, Steam 4 account/4 machine, webca
 ### 감점 요인 및 개선 방안
 
 GC/CPU/GPU per-frame, 장시간 target profiling, 실제 Steam 4 account/4 machine, webcam/phone camera와 physical hand gesture, Intel Mac build는 미검증이다. authored mural rear backface는 반대편에서 mirror처럼 보일 수 있다. 다음 QA에서 실제 장치와 4인 Steam session을 확인하고, rear-facing 안내가 필요한 표지만 별도 front mount 또는 양면 asset으로 개선한다. 점수 이력은 `8.80 → 9.40 → 9.43 → 9.33 → 9.34`다.
+
+## 2026-09-02 — Task 14 four-Scene additive implementation
+
+이번 점수는 이전 Task 14 평가의 초기 8.6에서 9.2로 개선된 결과를 현재 17-row 형식으로 세분화한 것이다. Task 19 final gate의 full EditMode, validator, Windows Player smoke, solution/Python build evidence를 반영했으며, 실제 4-peer roundtrip은 제외했다.
+
+| 구분 | 항목 | 배점 | 획득 | 근거·감점 |
+|---|---|---:|---:|---|
+| 기능 | 1-1 요구사항·사용 흐름 충족 | 0.80 | 0.76 | 네 catalog Scene과 additive 흐름 계약 확인; 실제 4 account 전환 미실행 |
+| 기능 | 1-2 경계 조건 | 0.60 | 0.58 | private shell·mural 4 layer·owner 중복 금지 validator/test 통과; failure 실기 미실행 |
+| 기능 | 1-3 오류 처리 | 0.60 | 0.56 | load failure/timeout 경계와 session `Abort`/새 invite disconnect 경로를 확인; Player 관찰 미실행 |
+| 성능 | 2-1 hot path GC | 0.70 | 0.60 | additive Scene에 runtime owner/Update/LINQ 추가 없음; Player profiler 미측정 |
+| 성능 | 2-2 고비용 호출 | 0.70 | 0.60 | bind 시 reference 주입·정적 geometry 사용; target profiling 미실행 |
+| 성능 | 2-3 메모리·자원 수명 | 0.60 | 0.60 | ownership 검사·determinism 통과; long profile 미실행 |
+| 검증 | 3-1 tests 작성 | 0.70 | 0.62 | `PartyGameSceneTests`에 catalog, private shell, duplicate owner negative coverage 포함 |
+| 검증 | 3-2 tests 실행 | 0.70 | 0.67 | Task 19 Unity full EditMode `868/868`, failed/skipped/inconclusive `0`, validator PASS; focused suite도 green |
+| 검증 | 3-3 artifact·build 증거 | 0.60 | 0.51 | Task 19 exact four Scene order, empty-startup validator, fresh Windows x64 build `Succeeded`/errors 0, exact PID 18초 smoke와 this-run Player error-like 0; 실제 Steam/hand 전환 미실행 |
+| 코드 품질 | 4-1 네이밍·가독성 | 0.50 | 0.48 | `PartySceneCatalog`, `PartySceneCoordinator`, mode별 adapter 책임 명확 |
+| 코드 품질 | 4-2 책임 분리 | 0.50 | 0.48 | persistent lobby와 additive presentation 경계 분리 |
+| 코드 품질 | 4-3 계약·매직넘버 | 0.50 | 0.47 | exact catalog와 validator 메시지로 path/order 고정 |
+| 코드 품질 | 4-4 구조·dead code | 0.50 | 0.47 | mode Scene의 중복 owner를 negative test로 차단; legacy 문서는 historical로 보존 |
+| 최적화 | 5-1 object pooling | 0.50 | 0.45 | static Scene 생성·runtime 반복 생성 없음; 실제 frame 측정 미실행 |
+| 최적화 | 5-2 caching | 0.50 | 0.45 | persistent reference bind와 단일 catalog 사용 |
+| 최적화 | 5-3 batching·draw call | 0.50 | 0.45 | shared material/static geometry 확인; draw call 미측정 |
+| 최적화 | 5-4 불필요한 연산 | 0.50 | 0.45 | additive adapter가 presentation만 소유; long runtime 미실행 |
+| **합계** | | **10.00** | **9.20** | 기존 프로젝트 17-row rubric 기준. Scene·test·build evidence 사용; Steam 4 account, webcam/phone, physical gesture, long profile, Intel Mac은 미검증 |
+
+판정 근거는 [Task 19 final gate receipt](.omo/evidence/party-scene-split/task-19-final-gate/receipt.md)와 그 첨부 evidence다. Unity full EditMode `868/868`, validator PASS, exact four Scene order, `dotnet build` warnings/errors `0/0`, Python `2/2`, fresh Windows x64 build `Succeeded`/errors `0`, exact PID `10296`의 18초 생존 및 this-run Player error-like `0`, final process `0`을 확인했다. 단일 Unity Pipeline warning은 receipt에 기록된 known warning이다. 이 점수는 실제 4-account Steam/webcam/phone production roundtrip 완료를 의미하지 않는다. 점수 이력은 `8.60 → 9.20`이다.

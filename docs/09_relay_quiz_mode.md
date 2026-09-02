@@ -2,6 +2,8 @@
 
 > 작성: 2026-08-28 · Phase D 설계 초안 · **구현 승인 대기**
 > 대상: 한 화면을 차례로 사용하는 로컬 2~4인 · 전용 씬 `Assets/_CameraCoop/Scenes/RelayQuiz.unity`
+
+> 현재 online 4인 entry는 이 local mode와 별개인 `Assets/_CameraCoop/Scenes/RelayQuizOnline.unity`이며, `RelayCopy`/`MemoryCopy`/`CoopMural`은 [15_3d_party_game_design.md](15_3d_party_game_design.md)와 [17_player_game_guide.md](17_player_game_guide.md)의 additive Scene 계약을 따른다.
 > 입력·플레이어·캔버스 공통 계약: [docs/06](./06_player_controller.md), [docs/07](./07_hand_interaction.md), [docs/08](./08_drawing_canvas.md)
 
 ## 1. 목표와 범위

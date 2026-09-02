@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
+using CameraCoop.Party;
+using CameraCoop.Party.SceneFlow;
 using NUnit.Framework;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -17,6 +19,130 @@ namespace CameraCoop.Tests
             for (int index = createdObjects.Count - 1; index >= 0; index--)
                 Object.DestroyImmediate(createdObjects[index]);
             createdObjects.Clear();
+        }
+
+        [Test]
+        public void CoordinatorCallbacksRouteOnlyTheCurrentlyBoundGamePort()
+        {
+            OnlineRelayQuizController controller = CreateObject("persistent online controller")
+                .AddComponent<OnlineRelayQuizController>();
+            PartyWorldController world = CreateObject("persistent party world").AddComponent<PartyWorldController>();
+            SetField(controller, "partyWorldController", world);
+            var first = new FakeGamePort(PartyMode.RelayCopy, CreateObject("relay port root"));
+            var second = new FakeGamePort(PartyMode.MemoryCopy, CreateObject("memory port root"));
+
+            var callbacks = (IPartySceneCoordinatorCallbacks)controller;
+            callbacks.BindGameScene(first);
+            callbacks.UnbindGameScene(first);
+            callbacks.BindGameScene(second);
+
+            Assert.That(world.HasBoundScenePort, Is.True);
+            Assert.That(world.ActiveSceneMode, Is.EqualTo(PartyMode.MemoryCopy));
+            Assert.That(first.Bindings.WritablePaperRoot.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void GalleryWithoutGameSceneBindingIsAValidDeferredState()
+        {
+            RelayQuizGallery gallery = CreateObject("deferred relay gallery").AddComponent<RelayQuizGallery>();
+
+            Assert.That(gallery.ValidateRuntimeConfiguration(out string error), Is.True, error);
+            Assert.That(gallery.IsReady, Is.False);
+            Assert.That(gallery.SlotCount, Is.Zero);
+        }
+
+        [Test]
+        public void BindingPrivateGameSceneConfiguresExactlyThreeGallerySlots()
+        {
+            OnlineRelayQuizController controller = CreateObject("gallery binding controller")
+                .AddComponent<OnlineRelayQuizController>();
+            RelayQuizGallery gallery = CreateObject("persistent gallery").AddComponent<RelayQuizGallery>();
+            SetField(controller, "relayQuizGallery", gallery);
+            var port = new FakeGamePort(PartyMode.RelayCopy, CreateObject("relay gallery port"));
+
+            ((IPartySceneCoordinatorCallbacks)controller).BindGameScene(port);
+
+            Assert.That(gallery.IsReady, Is.True);
+            Assert.That(gallery.SlotCount, Is.EqualTo(PartyRoster.Capacity - 1));
+            Assert.That(port.Bindings.ResultRoot.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void GalleryStateShowsResultRootAndUsesBoundResultViewPose()
+        {
+            OnlineRelayQuizController controller = CreateController(out PlayerController player,
+                out _, out _, out _);
+            RelayQuizGallery gallery = CreateObject("persistent result gallery").AddComponent<RelayQuizGallery>();
+            SetField(controller, "relayQuizGallery", gallery);
+            var port = new FakeGamePort(PartyMode.MemoryCopy, CreateObject("memory gallery port"));
+            ((IPartySceneCoordinatorCallbacks)controller).BindGameScene(port);
+            var view = new OnlineRelayQuizView { state = RelayQuizState.Gallery };
+
+            controller.ApplyGalleryForTests(view, true);
+            controller.ApplyNavigationForTests(view, false, false, false,
+                false, RelayQuizPauseStage.None, false, true);
+
+            Assert.That(port.Bindings.ResultRoot.activeSelf, Is.True);
+            Assert.That(player.transform.position, Is.EqualTo(port.Bindings.ResultViewPose.position));
+            Assert.That(player.transform.eulerAngles.y,
+                Is.EqualTo(port.Bindings.ResultViewPose.eulerAngles.y).Within(0.01f));
+        }
+
+        [Test]
+        public void LeavingGalleryAndUnbindingPrivateSceneHideAndReleaseResults()
+        {
+            OnlineRelayQuizController controller = CreateObject("gallery release controller")
+                .AddComponent<OnlineRelayQuizController>();
+            RelayQuizGallery gallery = CreateObject("releasable gallery").AddComponent<RelayQuizGallery>();
+            SetField(controller, "relayQuizGallery", gallery);
+            var port = new FakeGamePort(PartyMode.RelayCopy, CreateObject("release gallery port"));
+            var callbacks = (IPartySceneCoordinatorCallbacks)controller;
+            callbacks.BindGameScene(port);
+            controller.ApplyGalleryForTests(new OnlineRelayQuizView { state = RelayQuizState.Gallery }, true);
+
+            controller.ApplyGalleryForTests(new OnlineRelayQuizView { state = RelayQuizState.Setup }, true);
+            Assert.That(port.Bindings.ResultRoot.activeSelf, Is.False);
+
+            callbacks.UnbindGameScene(port);
+            Assert.That(gallery.IsReady, Is.False);
+            Assert.That(gallery.SlotCount, Is.Zero);
+            Assert.That(port.Bindings.ResultRoot.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void CoopFinalResultRootRemainsVisibleAfterPrivateGallerySync()
+        {
+            OnlineRelayQuizController controller = CreateObject("coop gallery isolation controller")
+                .AddComponent<OnlineRelayQuizController>();
+            RelayQuizGallery gallery = CreateObject("deferred coop gallery").AddComponent<RelayQuizGallery>();
+            SetField(controller, "relayQuizGallery", gallery);
+            var port = new FakeGamePort(PartyMode.CoopMural, CreateObject("coop result port"));
+            ((IPartySceneCoordinatorCallbacks)controller).BindGameScene(port);
+
+            port.Bindings.ResultRoot.SetActive(true);
+            controller.ApplyGalleryForTests(new OnlineRelayQuizView { state = RelayQuizState.Setup }, true);
+
+            Assert.That(port.Bindings.ResultRoot.activeSelf, Is.True,
+                "PartyWorldController owns the Coop final display; private gallery LateUpdate must not hide it.");
+            Assert.That(gallery.IsReady, Is.False);
+        }
+
+        [Test]
+        public void AutoReadyHandover_RequiresOwnerPreparationAndRunsOncePerGeneration()
+        {
+            var view = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Handover,
+                active = true,
+                generation = 7
+            };
+
+            Assert.That(OnlineRelayQuizController.ShouldAutoReadyHandover(view, true, true, true, -1), Is.True);
+            Assert.That(OnlineRelayQuizController.ShouldAutoReadyHandover(view, true, true, true, 7), Is.False);
+            Assert.That(OnlineRelayQuizController.ShouldAutoReadyHandover(view, false, true, true, -1), Is.False);
+            Assert.That(OnlineRelayQuizController.ShouldAutoReadyHandover(view, true, false, true, -1), Is.False);
+            view.active = false;
+            Assert.That(OnlineRelayQuizController.ShouldAutoReadyHandover(view, true, true, true, -1), Is.False);
         }
 
         [Test]
@@ -158,6 +284,58 @@ namespace CameraCoop.Tests
             SetField(controller, "lobbyPose", lobbyPose);
             SetField(controller, "galleryPose", galleryPose);
             return controller;
+        }
+
+        private sealed class FakeGamePort : IPartyGameScenePort
+        {
+            internal FakeGamePort(PartyMode mode, GameObject root)
+            {
+                Mode = mode;
+                GameObject writableRoot = Child("Writable root", root.transform);
+                CanvasSurface surface = writableRoot.AddComponent<CanvasSurface>();
+                Bindings = new PartySceneBindings
+                {
+                    Mode = mode,
+                    SceneRoot = root,
+                    WritablePaperRoot = writableRoot,
+                    WritableSurface = surface,
+                    WritableInteractable = writableRoot.AddComponent<HandCanvasInteractable>()
+                };
+                Bindings.ResultRoot = Child("Result root", root.transform);
+                Bindings.ResultRoot.SetActive(false);
+                if (mode != PartyMode.CoopMural)
+                {
+                    Bindings.ResultViewPose = Child("Result view pose", root.transform).transform;
+                    Bindings.ResultViewPose.SetPositionAndRotation(new Vector3(6f, 2f, -2f),
+                        Quaternion.Euler(0f, 25f, 0f));
+                    Bindings.GalleryRoots = new GameObject[PartyRoster.Capacity - 1];
+                    Bindings.GalleryPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity - 1];
+                    Bindings.GallerySurfaces = new CanvasSurface[PartyRoster.Capacity - 1];
+                    for (int slot = 0; slot < Bindings.GalleryRoots.Length; slot++)
+                    {
+                        GameObject galleryRoot = Child("Gallery slot " + slot, Bindings.ResultRoot.transform);
+                        GameObject surfaceRoot = Child("Gallery surface " + slot, galleryRoot.transform);
+                        Bindings.GalleryRoots[slot] = galleryRoot;
+                        Bindings.GalleryPresenters[slot] = galleryRoot.AddComponent<CanvasDrawingPresenter>();
+                        Bindings.GallerySurfaces[slot] = surfaceRoot.AddComponent<CanvasSurface>();
+                    }
+                }
+            }
+
+            private static GameObject Child(string name, Transform parent)
+            {
+                var child = new GameObject(name);
+                child.transform.SetParent(parent, false);
+                return child;
+            }
+
+            public PartyMode Mode { get; }
+            public PartySceneBindings Bindings { get; }
+            public bool IsRegistered => true;
+            public bool ValidateBindings(out string error) { error = string.Empty; return true; }
+            public bool Register(PartyMode expectedMode, PartyTransitionKey transitionKey, out string error)
+            { error = string.Empty; return expectedMode == Mode; }
+            public void Unregister() { }
         }
 
         private GameObject CreateObject(string name)

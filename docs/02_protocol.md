@@ -79,3 +79,11 @@ confidence, tracking-valid, pinched boolean은 wire에 없다. MediaPipe의 conf
 
 - 필드 추가·의미 변경·좌표계 변경 시 `v`를 +1 한다.
 - 수신 측(`UdpHandReceiver`)은 `v != 지원 버전`이면 패킷을 버리고 경고를 1회만 로그한다.
+
+## 6. Steam party protocol v4 전환 필드
+
+UDP 손 센서 wire는 v1을 유지한다. Steam party game의 별도 `OnlineRelayQuizProtocol`은 `GameId=camera-coop-relayquiz-4p`, `Version=4`, `PlayerCount=4`, `MaxMessageBytes=64*1024`를 사용한다. 두 버전을 혼용하지 않는다.
+
+v4 packet의 전환 관련 필드는 `sessionId`, `rosterGeneration`, `selectedMode`, `modeGeneration`, `startSignal`, `transitionGeneration`, `transitionPhase`, `sceneReadyMask`이다. `startSignal`은 mode 선택과 additive Scene load를 확정하는 epoch이며, `START` 자체에서는 증가하지 않는다. `SelectModeAndBeginLoad`가 mode 선택을 승인할 때 증가한다. `transitionGeneration`은 additive Scene load/unload의 순서를 나타낸다. `transitionPhase`의 정확한 값은 `Lobby`, `SelectingMode`, `LoadingGame`, `InGame`, `ReturningToLobby`다. `sceneReadyMask`는 네 slot의 Scene 준비 상태를 나타낸다. `CoopMural` wire는 별도 `muralEpoch` 필드를 만들지 않고 `startSignal`을 mural session epoch로 사용하며, layer의 `revision`과 함께 늦은 layer·중복 완료를 거부한다.
+
+v4는 동일 `sessionId`와 최신 generation만 수용한다. Scene load failure와 timeout은 host가 실패 전환을 broadcast하고 private drawing·secret을 공개하지 않은 채 game Scene을 정리해 lobby로 돌아간다. disconnect는 `Abort`를 broadcast하고 round를 폐기하며 새 invite가 필요하다. drawing payload는 별도 reliable chunk로 전송하며 raw camera 영상·hand landmarks를 보내지 않는다.
