@@ -47,6 +47,68 @@ namespace CameraCoop.EditorTools
             return item;
         }
 
+        private const string LumiPropFolder = "Assets/LumiStudio/Painting Tools/Prefabs/";
+        private static readonly string[] BrushPropPaths =
+        {
+            LumiPropFolder + "SM_Brush_01a.prefab",
+            LumiPropFolder + "SM_Brush_02a.prefab",
+            LumiPropFolder + "SM_Brush_03a.prefab"
+        };
+        private const string PalettePropPath = LumiPropFolder + "SM_Palette_02a.prefab";
+        private const float BrushLength = 0.9f;
+        private const float PaletteWidth = 1.1f;
+
+        // 손 raycast는 collider를 맞춰야 한다. 모델 prefab에 collider가 없으면 bounds 기준 box를 붙인다.
+        private static void EnsureCollider(GameObject item)
+        {
+            if (item.GetComponentInChildren<Collider>(true) != null) return;
+            Renderer[] renderers = item.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+            Bounds bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++) bounds.Encapsulate(renderers[index].bounds);
+            var collider = item.AddComponent<BoxCollider>();
+            collider.center = item.transform.InverseTransformPoint(bounds.center);
+            collider.size = item.transform.InverseTransformVector(bounds.size);
+        }
+
+        // LumiStudio Painting Tools prefab을 배치한다. FBX import 배율을 신뢰할 수 없으므로 renderer bounds로
+        // 가장 긴 축을 targetLongestSize에 맞춰 정규화한다. 에셋이 없으면 null을 돌려 호출부가 primitive로 되돌린다.
+        private static GameObject PropInstance(string assetPath, string name, Transform parent, Vector3 position,
+            float targetLongestSize, Quaternion rotation)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning("[RelayQuizOnlineSceneBuilder] prop asset이 없어 primitive를 사용합니다: " + assetPath);
+                return null;
+            }
+            var item = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            PrefabUtility.UnpackPrefabInstance(item, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            item.name = name;
+            item.transform.localScale = Vector3.one;
+            item.transform.rotation = Quaternion.identity;
+            item.transform.position = Vector3.zero;
+
+            Bounds bounds = LocalRenderBounds(item);
+            float longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+            float scale = longest > Mathf.Epsilon ? targetLongestSize / longest : 1f;
+            item.transform.localScale = Vector3.one * scale;
+            item.transform.rotation = rotation;
+            // bounds 중심이 pivot과 다를 수 있다. 요청한 위치가 실제 물체의 중심이 되게 보정한다.
+            item.transform.position = position - item.transform.rotation * (bounds.center * scale);
+            return item;
+        }
+
+        private static Bounds LocalRenderBounds(GameObject item)
+        {
+            Renderer[] renderers = item.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return new Bounds(Vector3.zero, Vector3.one);
+            Bounds bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++) bounds.Encapsulate(renderers[index].bounds);
+            // item이 원점·무회전·단위배율이므로 world bounds가 곧 local bounds다.
+            return bounds;
+        }
+
         private static Transform Group(string name, Transform parent)
         {
             var item = new GameObject(name);
@@ -59,6 +121,16 @@ namespace CameraCoop.EditorTools
             Transform marker = Group(name, parent);
             marker.position = worldPosition;
             marker.rotation = Quaternion.Euler(0f, yaw, 0f);
+            return marker;
+        }
+
+        // 손에 든 물건이 붙는 anchor는 player를 따라다녀야 하므로 부모 기준 offset이어야 한다.
+        // Marker()의 world 좌표를 쓰면 PlayerRig의 spawn 위치만큼 앞쪽 허공에 고정된다.
+        private static Transform LocalMarker(string name, Transform parent, Vector3 localPosition, float yaw)
+        {
+            Transform marker = Group(name, parent);
+            marker.localPosition = localPosition;
+            marker.localRotation = Quaternion.Euler(0f, yaw, 0f);
             return marker;
         }
 

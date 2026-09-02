@@ -79,11 +79,11 @@ namespace CameraCoop.EditorTools
                     new Vector3(0.22f, 3.6f, 6.1f), context.Dark);
             }
 
-            core.PersonalCanvas.Configure("EditorLocalPlayer", Marker("CanvasCarryAnchor", core.PlayerRig,
+            core.PersonalCanvas.Configure("EditorLocalPlayer", LocalMarker("CanvasCarryAnchor", core.PlayerRig,
                 new Vector3(0f, 1.55f, 0.65f), 0f), layout.Docks[0], 2.25f);
             layout.CarryCanvasAnchor = FieldObject<Transform>(core.PersonalCanvas, "avatarAnchor");
-            layout.LeftBrushAnchor = Marker("LeftBrushCarryAnchor", core.PlayerRig, new Vector3(-0.35f, 1.35f, 0.7f), 0f);
-            layout.RightBrushAnchor = Marker("RightBrushCarryAnchor", core.PlayerRig, new Vector3(0.35f, 1.35f, 0.7f), 0f);
+            layout.LeftBrushAnchor = LocalMarker("LeftBrushCarryAnchor", core.PlayerRig, new Vector3(-0.35f, 1.35f, 0.7f), 0f);
+            layout.RightBrushAnchor = LocalMarker("RightBrushCarryAnchor", core.PlayerRig, new Vector3(0.35f, 1.35f, 0.7f), 0f);
 
             Transform lobby = Group("CentralLobby", core.WorldRoot.transform);
             Cube("LobbyDesk", lobby, new Vector3(0f, 0.45f, -0.65f), new Vector3(8.5f, 0.9f, 1.2f), context.Dark);
@@ -130,13 +130,24 @@ namespace CameraCoop.EditorTools
             var brushes = new PhysicalBrush[3];
             for (int index = 0; index < brushes.Length; index++)
             {
-                GameObject brush = Cylinder("PhysicalBrush_" + index, root,
-                    new Vector3(-11.5f + index * 0.9f, 1.55f, -4.85f), new Vector3(0.12f, 0.65f, 0.12f),
-                    index == 0 ? context.Red : index == 1 ? context.Blue : context.Green);
-                brush.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+                var position = new Vector3(-11.5f + index * 0.9f, 1.55f, -4.85f);
+                Quaternion lying = Quaternion.Euler(0f, 90f, 90f);
+                GameObject brush = PropInstance(BrushPropPaths[index], "PhysicalBrush_" + index, root,
+                    position, BrushLength, lying);
+                if (brush == null)
+                {
+                    brush = Cylinder("PhysicalBrush_" + index, root, position, new Vector3(0.12f, 0.65f, 0.12f),
+                        index == 0 ? context.Red : index == 1 ? context.Blue : context.Green);
+                    brush.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+                }
+                EnsureCollider(brush);
                 brushes[index] = brush.AddComponent<PhysicalBrush>();
                 SetField(brushes[index], "paintTool", paintTool);
             }
+
+            // 물감 받침. 상호작용은 아래 PaintPot이 담당하고 palette는 station을 읽히게 하는 소품이다.
+            PropInstance(PalettePropPath, "PaintPalette", root, new Vector3(-12.95f, 0.12f, -2.9f),
+                PaletteWidth, Quaternion.Euler(0f, 20f, 0f));
 
             Material[] paints = { context.Red, context.Blue, context.Green, context.Yellow };
             for (int index = 0; index < paints.Length; index++)
