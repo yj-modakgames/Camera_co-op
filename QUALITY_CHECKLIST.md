@@ -358,3 +358,58 @@ GC/CPU/GPU per-frame, 장시간 target profiling, 실제 Steam 4 account/4 machi
 | **합계** | | **10.00** | **9.20** | 기존 프로젝트 17-row rubric 기준. Scene·test·build evidence 사용; Steam 4 account, webcam/phone, physical gesture, long profile, Intel Mac은 미검증 |
 
 판정 근거는 [Task 19 final gate receipt](.omo/evidence/party-scene-split/task-19-final-gate/receipt.md)와 그 첨부 evidence다. Unity full EditMode `868/868`, validator PASS, exact four Scene order, `dotnet build` warnings/errors `0/0`, Python `2/2`, fresh Windows x64 build `Succeeded`/errors `0`, exact PID `10296`의 18초 생존 및 this-run Player error-like `0`, final process `0`을 확인했다. 단일 Unity Pipeline warning은 receipt에 기록된 known warning이다. 이 점수는 실제 4-account Steam/webcam/phone production roundtrip 완료를 의미하지 않는다. 점수 이력은 `8.60 → 9.20`이다.
+
+## 2026-09-02 축소 party(`-partysize`)와 Scene 경계 결함 수정
+
+### 평가 범위와 상태
+
+host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고, 그 과정에서 드러난 return/abort Scene 경계 결함 두 건과 테스트 isolation 결함 한 건을 고쳤다. 제품 기본 동작은 4인 그대로다.
+
+| 구분 | 항목 | 배점 | 획득 | 근거·감점 |
+|---|---|---:|---:|---|
+| 기능 | 1-1 요구사항·사용 흐름 충족 | 0.80 | 0.74 | `-partysize 2`로 host가 2인 roster를 잠그고 mode 선택·START·game Scene 진입까지 도달 (`PartySizeTests.TwoPlayerPartyLocksRosterAndStartsSelectedMode`); 실제 Steam 2 account 실기 미실행 |
+| 기능 | 1-2 경계 조건 | 0.60 | 0.57 | 2/3/4·범위 밖(1,5)·비수치·인자 없음·값 누락 8 케이스와 정원 초과 peer 거절, 기본값 4인 대기까지 통과 (`PartySizeTests` 12/12) |
+| 기능 | 1-3 오류 처리 | 0.60 | 0.57 | abort 시 로컬 game Scene을 unload하도록 `PartySceneCoordinator.cs:104-112` 추가, `RosterDisconnectClosesTheLoadedProductionSceneBoundary` 통과; Player 실기 관찰 미실행 |
+| 성능 | 2-1 hot path GC | 0.70 | 0.65 | `Publish`는 0.25초마다 peer 수만큼 돈다. roster 문구를 ctor에서 미리 만들어 per-publish 문자열 concat 제거 (`OnlineRelayQuizSession.cs` `rosterStatus`), `PartySizeOption.Resolve()` 결과 캐시. EditMode 전용 경로는 `#if UNITY_EDITOR`로 Player에서 제외; profiler 미측정 |
+| 성능 | 2-2 고비용 호출 | 0.70 | 0.62 | 이미 활성인 로비 Scene에 `SetActiveScene`을 다시 호출하지 않도록 단축 (`OnlineRelayQuizController.ActivateLobbyScene`); target profiling 미실행 |
+| 성능 | 2-3 메모리·자원 수명 | 0.60 | 0.57 | disconnect abort가 additive Scene을 남기지 않는다는 것을 테스트로 고정; long profile 미실행 |
+| 검증 | 3-1 tests 작성 | 0.70 | 0.66 | `PartySizeTests` 12 케이스 신규(파싱 경계, 2인 전체 흐름, 정원 초과 거절, 4인 기본값), 기존 `PartySceneRoundTripPlayTests` 3건 복구 |
+| 검증 | 3-2 tests 실행 | 0.70 | 0.68 | Unity full EditMode **883/883 통과**, failed·skipped·inconclusive 0 |
+| 검증 | 3-3 artifact·build 증거 | 0.60 | 0.55 | `Validate All Party Scenes` PASS, `dotnet build Camera_co-op.slnx` 오류 0·경고 0, Windows x64 build `Succeeded`(errors 0, warnings 1 = 기존 `com.unity.pipeline` known warning), level0~3 4개 Scene packing 확인; 실기 2인 Steam 미실행 |
+| 코드 품질 | 4-1 네이밍·가독성 | 0.50 | 0.48 | `PartySizeOption`, `partySize`, `rosterStatus`가 각각 "실행 인자", "이번 party 정원", "미리 만든 문구"로 읽힌다 |
+| 코드 품질 | 4-2 책임 분리 | 0.50 | 0.48 | 정원은 host만 정하고 client는 host의 `rosterLocked`만 신뢰한다. 배열·packet 크기는 `PlayerCount`(4) 그대로라 protocol 변경이 없다 |
+| 코드 품질 | 4-3 계약·매직넘버 | 0.50 | 0.48 | `RelayQuizLogic.MinPlayers`/`PartyRoster.Capacity`로 범위를 고정하고 하드코딩된 "4명" 문구를 제거 |
+| 코드 품질 | 4-4 구조·dead code | 0.50 | 0.47 | 진단용 임시 probe 코드·파일 제거 확인, Scene을 훼손하는 fixture에 setup/teardown 복원 추가 |
+| 최적화 | 5-1 object pooling | 0.50 | 0.45 | 반복 생성 경로 없음; frame 측정 미실행 |
+| 최적화 | 5-2 caching | 0.50 | 0.48 | 실행 인자 파싱 1회, roster 문구 사전 계산 |
+| 최적화 | 5-3 batching·draw call | 0.50 | 0.45 | 렌더 경로 변경 없음; draw call 미측정 |
+| 최적화 | 5-4 불필요한 연산 | 0.50 | 0.47 | `ApplyView`의 조기 반환을 유지하고 실제 경계가 열려 있는 abort에서만 shutdown |
+| **합계** | | **10.00** | **9.37** | |
+
+총점: **9.37 / 10**
+
+### 판단 근거
+
+- 2인 전체 흐름: `PartySizeTests.TwoPlayerPartyLocksRosterAndStartsSelectedMode`가 roster lock → `OpenModeSelector` → `SelectModeAndBeginLoad` → 양쪽 scene-ready → `InGame`/`Handover`까지 확인한다.
+- 회귀: full EditMode 883/883. 이 변경 전 883개 중 3개(`PartySceneRoundTripPlayTests`)가 실패 상태였다. 그 3건은 commit `fde01cb` 시점부터 red였고 이번에 원인 두 가지를 고쳐 green이 됐다.
+  1. `UnityPartySceneLoader`의 `SceneManager.LoadSceneAsync`는 EditMode에서 null을 돌려준다 → Editor 경로 fallback 추가(`#if UNITY_EDITOR`).
+  2. 활성 Scene을 내리면 Unity가 로비를 자동으로 활성화하고, 그 뒤 `SetActiveScene(이미 활성)`이 false를 반환해 정상 복귀가 `ActivationFailed`로 끊겼다 → 활성 상태를 성공으로 처리.
+- 세 번째 실패는 fixture 간 오염이었다. `PartyGameSceneTests`가 production Scene을 Single로 열고 내부 물체를 지운 뒤 복원하지 않아, 뒤에 오는 roundtrip이 훼손된 Scene을 물려받았다. 양쪽에 scene setup 복원과 빈 Scene 시작을 넣어 순서 의존을 없앴다.
+
+### 구현 방식을 선택한 이유
+
+정원을 packet 필드로 전송하지 않고 host 전용 값으로 둔 것은, client가 이미 host의 `rosterLocked`를 신뢰하는 구조여서 protocol 변경 없이 같은 결과를 얻기 때문이다. `PartyRoster.Capacity`를 낮추는 방식은 87곳(고정 배열, 씬의 4 bay, gallery slot, 기존 테스트)을 건드리는 명세 변경이라 택하지 않았다.
+
+### 감점 요인 및 개선 방안
+
+- 성능 항목은 전부 코드 분석 근거다. Player profiler 측정이 없다. 실기 2인 시험 때 Steam Player에서 `Publish` 주기의 GC를 한 번 재면 2-1/2-2를 올릴 수 있다.
+- 3-3은 실제 Steam 2 account 실행 증거가 없다. 사용자 실기 후 결과를 이 문서에 덧붙인다.
+
+### 점수 이력
+
+`8.60 → 9.20 → 9.37`
+
+### 잔여 검증
+
+- 사용자 실기: host가 `CameraCoopRelayOnline.exe -partysize 2`로 실행, 다른 1명 Steam invite 수락 → mode 선택 → game Scene 진입 → `HOST · RETURN TO LOBBY` 복귀.
+- 실제 webcam/phone camera hand gesture, long profile, Intel Mac은 여전히 미검증이다.

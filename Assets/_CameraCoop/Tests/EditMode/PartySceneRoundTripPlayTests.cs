@@ -6,6 +6,7 @@ using CameraCoop.Netplay;
 using CameraCoop.Party;
 using CameraCoop.Party.SceneFlow;
 using NUnit.Framework;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -33,6 +34,8 @@ namespace CameraCoop.Tests
         [SetUp]
         public void SetUp()
         {
+            // 앞선 Scene 테스트가 production Scene을 열어둔 채 끝날 수 있다. 빈 Scene에서 시작한다.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             for (int slot = 0; slot < PartyRoster.Capacity; slot++)
                 drawings[slot] = Drawing(0.1f + slot * 0.2f);
 

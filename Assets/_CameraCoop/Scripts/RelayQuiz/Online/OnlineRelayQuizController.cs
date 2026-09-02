@@ -406,7 +406,7 @@ namespace CameraCoop
             status = "Steam 방을 만드는 중";
             try
             {
-                SteamTransport created = await SteamTransport.HostAsync(PartyRoster.Capacity).ConfigureAwait(false);
+                SteamTransport created = await SteamTransport.HostAsync(PartySizeOption.Resolve()).ConfigureAwait(false);
                 unityContext.Post(_ => CompleteHost(operation, created), null);
             }
             catch (Exception exception)
@@ -493,7 +493,8 @@ namespace CameraCoop
 
         private void Bind(SteamTransport transport, string expectedHost)
         {
-            session = new OnlineRelayQuizSession(transport, expectedHost, () => wordBank.Next(), CaptureDrawing, CaptureAnswer, toolState.BrushCount);
+            session = new OnlineRelayQuizSession(transport, expectedHost, () => wordBank.Next(), CaptureDrawing,
+                CaptureAnswer, toolState.BrushCount, PartySizeOption.Resolve());
             if (sceneCoordinatorConfigured)
             {
                 try { sceneCoordinator.ResetForSession(session.View.sessionId); }
@@ -654,7 +655,10 @@ namespace CameraCoop
         public bool ActivateLobbyScene()
         {
             Scene lobbyScene = lobbyScenePort != null ? lobbyScenePort.gameObject.scene : default;
-            return lobbyScene.IsValid() && lobbyScene.isLoaded && SceneManager.SetActiveScene(lobbyScene);
+            if (!lobbyScene.IsValid() || !lobbyScene.isLoaded) return false;
+            // 활성 씬을 unload하면 Unity가 남은 씬을 자동으로 활성화한다. 이미 로비가 활성이면 성공으로 본다 —
+            // 그 상태에서 SetActiveScene은 false를 돌려주고, 그대로 두면 정상 복귀가 ActivationFailed로 끊긴다.
+            return SceneManager.GetActiveScene() == lobbyScene || SceneManager.SetActiveScene(lobbyScene);
         }
 
         public void RebaseToGame(IPartyGameScenePort adapter)

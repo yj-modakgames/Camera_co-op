@@ -410,7 +410,8 @@ namespace CameraCoop.Party
                 case PartyWorldAction.SelectCoopMural:
                     return gateway.IsHost && view != null && !view.aborted && view.state == RelayQuizState.Setup
                         && view.transitionPhase == PartyTransitionPhase.SelectingMode
-                        && !view.modeStarted && view.rosterLocked && view.rosterCount == PartyRoster.Capacity;
+                        && !view.modeStarted && view.rosterLocked
+                        && view.rosterCount >= RelayQuizLogic.MinPlayers;
                 case PartyWorldAction.StartSelectedMode:
                     return gateway.IsHost && IsStartReady(view);
                 case PartyWorldAction.CarryCanvas:
@@ -581,7 +582,7 @@ namespace CameraCoop.Party
         {
             return view != null && !view.aborted && view.state == RelayQuizState.Setup && !view.modeStarted
                 && view.transitionPhase == PartyTransitionPhase.Lobby && view.rosterLocked
-                && view.rosterCount == PartyRoster.Capacity && view.allReady;
+                && view.rosterCount >= RelayQuizLogic.MinPlayers && view.allReady;
         }
 
         private void SyncModeSelector(OnlineRelayQuizView view)

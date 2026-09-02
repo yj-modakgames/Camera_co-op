@@ -13,6 +13,28 @@ namespace CameraCoop.Tests
 {
     public sealed class PartyGameSceneTests
     {
+        private SceneSetup[] originalSetup;
+
+        // 이 fixture는 production Scene을 Single로 열고 안에서 물체를 지운다. 되돌리지 않으면
+        // 뒤에 오는 Scene 테스트가 그 열린(그리고 훼손된) Scene을 물려받는다.
+        [SetUp]
+        public void SetUp()
+        {
+            originalSetup = EditorSceneManager.GetSceneManagerSetup();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (originalSetup != null && originalSetup.Length > 0
+                && originalSetup.All(item => !string.IsNullOrEmpty(item.path)))
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(originalSetup);
+                return;
+            }
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        }
+
         [Test]
         public void CatalogScenesExistAndBuildSettingsStartWithExactCatalogOrder()
         {

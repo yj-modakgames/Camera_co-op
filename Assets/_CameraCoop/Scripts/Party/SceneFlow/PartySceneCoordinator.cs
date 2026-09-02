@@ -101,7 +101,14 @@ namespace CameraCoop.Party.SceneFlow
             if (disposed) return;
             if (!configured) throw new InvalidOperationException("PartySceneCoordinator must be configured before applying a view.");
             if (view == null) throw new ArgumentNullException(nameof(view));
-            if (!view.connected) return;
+            if (!view.connected)
+            {
+                // disconnect abort는 host migration 없이 끝나지만, 로컬에 열린 game Scene은 반드시 내린다
+                // (party-scene-split 계획 task 13: "On return/abort: ... unload game, set lobby active").
+                if (view.aborted && (loadedScene != null || boundAdapter != null || operationInFlight))
+                    ShutdownSceneBoundary();
+                return;
+            }
             if (!PartyTransitionKey.TryCreate(view.sessionId, view.rosterGeneration, view.transitionGeneration, out PartyTransitionKey key)
                 || !PartyTransitionPhaseRules.IsDefined(view.transitionPhase))
             {

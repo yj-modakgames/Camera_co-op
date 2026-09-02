@@ -51,6 +51,27 @@
 
 실기 확인에는 서로 다른 Steam account 네 개와 서로 다른 device 네 대가 필요하다. 현재 이 4계정·4device 시험은 실행하지 않았다. 두 build가 이미 실행된 상태에서 host가 invite하고 네 player가 ready인 뒤에만 시작한다. 이 절차는 app cold-start, deployment, store distribution을 보장하지 않는다.
 
+### 5-1. 축소 party 시험 실행 인자 `-partysize`
+
+4계정을 모으기 전에 1~3명으로 확인하려면 **host가** 다음처럼 실행한다.
+
+```
+CameraCoopRelayOnline.exe -partysize 2
+```
+
+- 기본값은 설계 명세대로 4다. 인자를 주지 않거나 1~4 범위 밖이면 4로 되돌아간다.
+- `-partysize 1`은 혼자 손 tracking·그리기만 확인하는 값이다. host가 `HOST`를 누르는 순간 roster가 잠기고 로비 연습 그리기가 열린다. relay는 최소 2인이 필요하므로 이 값에서는 mode 전시대와 `START`가 열리지 않는다.
+- host만 이 인자를 쓴다. client는 host가 잠근 roster를 따르므로 인자가 필요 없다.
+- host는 지정한 인원이 차는 순간 roster를 잠그고, 그 뒤 인원은 admission에서 거절한다. Steam lobby 정원도 같은 값으로 만든다.
+- 배열·packet 크기는 그대로 4 slot이다. 남는 slot은 비어 있고, 씬의 bay·gallery slot도 4개 그대로다.
+- 이 인자는 시험용이다. 제품 기본 동작(4인)은 바뀌지 않는다.
+
+#### 그리기가 되지 않을 때
+
+로비 연습 그리기는 `view.connected`가 참일 때만 열린다 (`PartyWorldController.cs:653-669` → `InputModeManager.CanDraw` → `HandPointer.CanUseCanvas`). 즉 **`HOST`를 누르지 않은 상태에서는 그릴 판이 비활성이고 fist도 먹지 않는다.** 혼자 확인할 때도 `-partysize 1`로 실행한 뒤 `HOST`를 눌러야 한다.
+
+`GestureTutorialStation`은 그림판이 아니다. Scene builder가 이 station의 `CanvasDrawingPresenter`와 `CanvasSurface`를 제거한다 (`RelayQuizOnlineSceneBuilder.LobbyPresentation.cs:105-111`). 손 동작 안내판이므로 여기에는 그릴 수 없다. 연습은 `PUBLIC PRACTICE WALL`의 자기 slot easel에서 한다.
+
 ## 6. 기존 build 후 확인 기록
 
 기존 legacy build의 기존 확인 기록과 미해결 항목은 보존한다. 특히 기존 Steam 2인 실기 검증은 아직 미실시이고, macOS build도 실측되지 않았다. 이 문서의 legacy 기록을 신규 `RelayQuizOnline` build 성공 증거로 재사용하지 않는다.

@@ -18,6 +18,8 @@ namespace CameraCoop
         private readonly Func<CanvasDrawingData> drawingSource;
         private readonly Func<string> answerSource;
         private readonly int brushes;
+        private readonly int partySize;
+        private readonly string[] rosterStatus;
         private readonly RelayQuizLogic logic;
         private readonly object queueLock = new object();
         private readonly Queue<(string kind, string peer, byte[] bytes)> incoming = new Queue<(string, string, byte[])>();
@@ -72,16 +74,29 @@ namespace CameraCoop
         private bool coopMuralFinalDisplay;
         private string transitionStatus = string.Empty;
 
+        // partySize는 host가 정하는 이번 party의 정원이다. 배열·packet 크기는 그대로 PlayerCount(4)를 쓰고,
+        // "몇 명 모이면 roster를 잠그고 시작하는가"만 이 값이 정한다. client는 host의 rosterLocked를 따르므로
+        // 이 값을 알 필요가 없다.
         public OnlineRelayQuizSession(INetTransport transport, string expectedHostId, Func<string> wordSource,
-            Func<CanvasDrawingData> drawingSource, Func<string> answerSource, int brushCount)
+            Func<CanvasDrawingData> drawingSource, Func<string> answerSource, int brushCount,
+            int partySize = OnlineRelayQuizProtocol.PlayerCount)
         {
             this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
             if (string.IsNullOrEmpty(expectedHostId)) throw new ArgumentException("Expected host identity is required.");
             if (brushCount <= 0 || brushCount > 32) throw new ArgumentOutOfRangeException(nameof(brushCount));
+            if (partySize < PartySizeOption.SoloTestSize || partySize > OnlineRelayQuizProtocol.PlayerCount)
+                throw new ArgumentOutOfRangeException(nameof(partySize));
             this.expectedHostId = expectedHostId;
             this.drawingSource = drawingSource;
             this.answerSource = answerSource;
+            this.partySize = partySize;
             brushes = brushCount;
+            // Publish는 0.25초마다 peer 수만큼 돈다. roster 문구를 매번 조립하지 않고 미리 만들어 둔다.
+            rosterStatus = new string[OnlineRelayQuizProtocol.PlayerCount + 1];
+            for (int count = 0; count < rosterStatus.Length; count++)
+                rosterStatus[count] = count == partySize
+                    ? partySize + "명 roster 연결됨"
+                    : count + "/" + partySize + "명 연결됨";
             if (transport.IsHost)
             {
                 sessionId = Guid.NewGuid().ToString("N");
@@ -94,7 +109,9 @@ namespace CameraCoop
                     secretWord = wordSource?.Invoke() ?? string.Empty;
                     return secretWord;
                 }, () => finalDrawing, () => finalAnswer);
-                logic.SetPlayerCount(OnlineRelayQuizProtocol.PlayerCount, logic.PhaseGeneration);
+                logic.SetPlayerCount(Math.Max(partySize, RelayQuizLogic.MinPlayers), logic.PhaseGeneration);
+                // 정원이 1이면 host 혼자로 roster가 이미 찬 상태다. join 경로를 지나지 않으므로 여기서 잠근다.
+                if (RosterCount == partySize) rosterLocked = true;
             }
             View = new OnlineRelayQuizView { isHost = transport.IsHost, localSlot = localSlot };
             transport.OnPeerConnected += OnConnected;
@@ -131,8 +148,8 @@ namespace CameraCoop
         {
             get
             {
-                if (RosterCount != OnlineRelayQuizProtocol.PlayerCount) return false;
-                for (int i = 0; i < OnlineRelayQuizProtocol.PlayerCount; i++)
+                if (RosterCount != partySize) return false;
+                for (int i = 0; i < partySize; i++)
                     if (!cameraReady[i]) return false;
                 return true;
             }
@@ -168,7 +185,7 @@ namespace CameraCoop
             {
                 if (disposed || slotByPeer.ContainsKey(peer)) return true;
                 if (candidates.Contains(peer)) return false;
-                int openSlots = OnlineRelayQuizProtocol.PlayerCount - RosterCount;
+                int openSlots = partySize - RosterCount;
                 if (rosterLocked || logic.State != RelayQuizState.Setup || openSlots <= 0
                     || candidates.Count >= Math.Min(MaxHandshakeCandidates, openSlots)) return false;
                 candidates.Add(peer);
@@ -372,7 +389,7 @@ namespace CameraCoop
                 return;
             }
             if (!IsCandidate(peer) || rosterLocked || logic.State != RelayQuizState.Setup
-                || RosterCount >= OnlineRelayQuizProtocol.PlayerCount)
+                || RosterCount >= partySize)
             {
                 SendReject(peer);
                 return;
@@ -384,7 +401,7 @@ namespace CameraCoop
             incomingSequences[peer] = packet.sequence;
             RemoveCandidate(peer);
             rosterGeneration++;
-            if (RosterCount == OnlineRelayQuizProtocol.PlayerCount) rosterLocked = true;
+            if (RosterCount == partySize) rosterLocked = true;
             AdvanceRevision();
             SendToPeer(peer, "welcome", new OnlineRelayQuizWelcome
             {
@@ -592,7 +609,8 @@ namespace CameraCoop
         {
             if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup
                 || transitionPhase != PartyTransitionPhase.Lobby || modeStarted || hasSelectedMode
-                || !rosterLocked || RosterCount != OnlineRelayQuizProtocol.PlayerCount
+                || !rosterLocked || RosterCount != partySize
+                || partySize < RelayQuizLogic.MinPlayers
                 || !AllPlayersReady) return false;
             modeGeneration++;
             transitionGeneration++;
@@ -609,7 +627,8 @@ namespace CameraCoop
         {
             if (disposed || View.aborted || !IsHost || logic.State != RelayQuizState.Setup
                 || transitionPhase != PartyTransitionPhase.SelectingMode || modeStarted || hasSelectedMode
-                || !rosterLocked || RosterCount != OnlineRelayQuizProtocol.PlayerCount
+                || !rosterLocked || RosterCount != partySize
+                || partySize < RelayQuizLogic.MinPlayers
                 || !AllPlayersReady
                 || !PartyModeCatalog.TryGet(mode, out _)) return false;
             selectedMode = mode;
@@ -712,7 +731,7 @@ namespace CameraCoop
             int bit = 1 << senderSlot;
             if ((sceneReadyMask & bit) != 0) return false;
             sceneReadyMask |= bit;
-            if (sceneReadyMask == (1 << OnlineRelayQuizProtocol.PlayerCount) - 1)
+            if (sceneReadyMask == (1 << partySize) - 1)
             {
                 if (expectedPhase == PartyTransitionPhase.LoadingGame) StartSelectedDomain();
                 else CompleteReturnToLobby();
@@ -730,7 +749,7 @@ namespace CameraCoop
             if (transitionPhase != PartyTransitionPhase.LoadingGame || modeStarted) return;
             if (selectedMode != PartyMode.CoopMural)
             {
-                logic.SetPlayerCount(OnlineRelayQuizProtocol.PlayerCount, logic.PhaseGeneration);
+                logic.SetPlayerCount(partySize, logic.PhaseGeneration);
                 if (!logic.StartGame(logic.PhaseGeneration))
                 {
                     BeginReturningToLobby("Selected mode could not start");
@@ -819,7 +838,7 @@ namespace CameraCoop
                 BeginFinal();
                 return;
             }
-            else if (action == RelayQuizAction.Submit && senderSlot == OnlineRelayQuizProtocol.PlayerCount - 1
+            else if (action == RelayQuizAction.Submit && senderSlot == partySize - 1
                 && senderSlot == owner && logic.State == RelayQuizState.Guessing)
             {
                 BeginFinal();
@@ -970,7 +989,7 @@ namespace CameraCoop
         private void ReceiveFinalAnswer(int senderSlot, OnlineRelayQuizPacket packet)
         {
             if (!finalPending || logic.State != RelayQuizState.Guessing || senderSlot != finalOwnerSlot
-                || senderSlot != OnlineRelayQuizProtocol.PlayerCount - 1) return;
+                || senderSlot != partySize - 1) return;
             OnlineRelayQuizCommand command = OnlineRelayQuizProtocol.Read<OnlineRelayQuizCommand>(packet.payload);
             if (command == null || !command.complete || command.text == null
                 || command.text.Length > OnlineRelayQuizProtocol.MaxAnswerCharacters) return;
@@ -1132,7 +1151,8 @@ namespace CameraCoop
             }
             PurgeUnauthorizedPayloads(next);
             AttachPrivatePayloads(next);
-            next.connected = next.rosterLocked && next.rosterCount == OnlineRelayQuizProtocol.PlayerCount;
+            // client는 정원을 모른다. host가 잠근 roster를 신뢰하되, 정원 하한만 검사한다.
+            next.connected = next.rosterLocked && next.rosterCount >= RelayQuizLogic.MinPlayers;
             View = next;
             rosterGeneration = next.rosterGeneration;
             roundId = next.roundId;
@@ -1201,7 +1221,7 @@ namespace CameraCoop
                 localSlot = recipientSlot,
                 roster = (string[])roster.Clone(),
                 isHost = recipientSlot == 0,
-                connected = rosterLocked && RosterCount == OnlineRelayQuizProtocol.PlayerCount,
+                connected = rosterLocked && RosterCount == partySize,
                 localReady = cameraReady[recipientSlot],
                 remoteReady = OtherPlayersReady(recipientSlot),
                 allReady = AllPlayersReady,
@@ -1218,10 +1238,7 @@ namespace CameraCoop
                 transferPending = Pending,
                 hasTimer = logic.HasTimer && !Pending,
                 remaining = Pending ? 0f : logic.RemainingSeconds,
-                status = string.IsNullOrEmpty(transitionStatus)
-                    ? (RosterCount == OnlineRelayQuizProtocol.PlayerCount
-                        ? "4명 roster 연결됨" : RosterCount + "/4명 연결됨")
-                    : transitionStatus,
+                status = string.IsNullOrEmpty(transitionStatus) ? rosterStatus[RosterCount] : transitionStatus,
                 word = recipientSlot == 0 && (logic.State == RelayQuizState.WordReveal
                     || logic.State == RelayQuizState.Drawing) ? secretWord : string.Empty,
                 answer = logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery
@@ -1242,7 +1259,7 @@ namespace CameraCoop
             if (records.Count == 0 || recipientSlot != logic.PlayerIndex || logic.PlayerIndex <= 0) return null;
             if (logic.State != RelayQuizState.Handover && logic.State != RelayQuizState.ObservePrevious
                 && logic.State != RelayQuizState.Drawing && logic.State != RelayQuizState.Guessing) return null;
-            if (selectedMode == PartyMode.MemoryCopy && logic.PlayerIndex < OnlineRelayQuizProtocol.PlayerCount - 1
+            if (selectedMode == PartyMode.MemoryCopy && logic.PlayerIndex < partySize - 1
                 && logic.State == RelayQuizState.Drawing) return null;
             OnlineRelayQuizGalleryEntry entry = records[records.Count - 1];
             return entry.ownerSlot == recipientSlot - 1 ? entry : null;
@@ -1261,7 +1278,7 @@ namespace CameraCoop
 
         private bool OtherPlayersReady(int recipientSlot)
         {
-            if (RosterCount != OnlineRelayQuizProtocol.PlayerCount) return false;
+            if (RosterCount != partySize) return false;
             for (int i = 0; i < RosterCount; i++)
                 if (i != recipientSlot && !cameraReady[i]) return false;
             return true;

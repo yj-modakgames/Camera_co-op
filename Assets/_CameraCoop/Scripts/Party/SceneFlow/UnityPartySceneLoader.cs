@@ -148,6 +148,20 @@ namespace CameraCoop.Party.SceneFlow
 
             public IPartySceneLoadOperation LoadSceneAsync(string scenePath, LoadSceneMode mode)
             {
+#if UNITY_EDITOR
+                // EditMode에서는 runtime SceneManager가 씬을 열지 못하고 null을 돌려준다.
+                // 같은 Scene asset을 Editor API로 동기 로드해 EditMode 테스트가 실제 씬 경계를 지나가게 한다.
+                if (!Application.isPlaying)
+                {
+                    Scene opened = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(scenePath,
+                        mode == LoadSceneMode.Additive
+                            ? UnityEditor.SceneManagement.OpenSceneMode.Additive
+                            : UnityEditor.SceneManagement.OpenSceneMode.Single);
+                    if (!opened.IsValid()) return null;
+                    SceneLoaded?.Invoke(opened.path, mode);
+                    return CompletedSceneOperation.Instance;
+                }
+#endif
                 AsyncOperation operation = SceneManager.LoadSceneAsync(scenePath, mode);
                 return operation == null ? null : new UnitySceneLoadOperation(operation);
             }
@@ -156,6 +170,15 @@ namespace CameraCoop.Party.SceneFlow
             {
                 Scene scene = SceneManager.GetSceneByPath(scenePath);
                 if (!scene.IsValid() || !scene.isLoaded) return null;
+#if UNITY_EDITOR
+                if (!Application.isPlaying)
+                {
+                    // Editor는 활성 씬을 닫지 못한다. runtime UnloadSceneAsync처럼 다른 씬을 먼저 활성화한다.
+                    if (SceneManager.GetActiveScene() == scene) ActivateAnyOtherScene(scene);
+                    return UnityEditor.SceneManagement.EditorSceneManager.CloseScene(scene, true)
+                        ? CompletedSceneOperation.Instance : null;
+                }
+#endif
                 AsyncOperation operation = SceneManager.UnloadSceneAsync(scene);
                 return operation == null ? null : new UnitySceneLoadOperation(operation);
             }
@@ -165,6 +188,19 @@ namespace CameraCoop.Party.SceneFlow
                 Scene scene = SceneManager.GetSceneByPath(scenePath);
                 return scene.IsValid() && scene.isLoaded;
             }
+
+#if UNITY_EDITOR
+            private static void ActivateAnyOtherScene(Scene closing)
+            {
+                for (int index = 0; index < SceneManager.sceneCount; index++)
+                {
+                    Scene other = SceneManager.GetSceneAt(index);
+                    if (other == closing || !other.IsValid() || !other.isLoaded) continue;
+                    SceneManager.SetActiveScene(other);
+                    return;
+                }
+            }
+#endif
 
             public bool SetActiveScene(string scenePath)
             {
@@ -181,6 +217,13 @@ namespace CameraCoop.Party.SceneFlow
             {
                 SceneLoaded?.Invoke(scene.path, mode);
             }
+        }
+
+        private sealed class CompletedSceneOperation : IPartySceneLoadOperation
+        {
+            public static readonly CompletedSceneOperation Instance = new CompletedSceneOperation();
+
+            public bool IsDone => true;
         }
 
         private sealed class UnitySceneLoadOperation : IPartySceneLoadOperation
