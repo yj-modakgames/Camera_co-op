@@ -114,6 +114,35 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void PutDownWithoutDockAnchor_ReturnsBrushToWhereItWasPlaced()
+        {
+            var state = New("ToolState").AddComponent<ToolState>();
+            var tool = New("PhysicalPaintTool").AddComponent<PhysicalPaintTool>();
+            Transform home = New("PhysicalTools").transform;
+            var brush = New("Brush").AddComponent<PhysicalBrush>();
+            tool.SetToolStateForTests(state);
+            tool.SetLocalPlayerId("left");
+
+            // 배치가 끝난 뒤에 등록된다 — 씬 builder가 붓을 놓고 나서 paintTool이 Awake하는 순서와 같다.
+            var placedPosition = new Vector3(-11.5f, 1.55f, -4.85f);
+            var placedRotation = Quaternion.Euler(0f, 90f, 90f);
+            brush.transform.SetParent(home, false);
+            brush.transform.localPosition = placedPosition;
+            brush.transform.localRotation = placedRotation;
+            tool.RegisterBrush(brush);
+
+            Assert.AreEqual(home, brush.transform.parent, "등록만으로 붓을 옮기면 안 된다");
+            Assert.IsTrue(tool.TryPickupBrush("left", brush, placedPosition));
+            Assert.IsTrue(tool.TryPutDownBrush("left", brush.transform.position));
+
+            Assert.AreEqual(home, brush.transform.parent, "붓은 원래 있던 부모로 돌아가야 한다");
+            Assert.That(brush.transform.localPosition.x, Is.EqualTo(placedPosition.x).Within(0.0001f));
+            Assert.That(brush.transform.localPosition.y, Is.EqualTo(placedPosition.y).Within(0.0001f));
+            Assert.That(brush.transform.localPosition.z, Is.EqualTo(placedPosition.z).Within(0.0001f));
+            Assert.That(Quaternion.Angle(brush.transform.localRotation, placedRotation), Is.LessThan(0.01f));
+        }
+
+        [Test]
         public void Stations_ChangeTheExistingToolStateOnlyWhenOwnedBrushIsHeld()
         {
             PhysicalBrush brush;

@@ -125,7 +125,7 @@ namespace CameraCoop.EditorTools
             PhysicalToolStation rackStation = rack.AddComponent<PhysicalToolStation>();
             rackStation.SetConfiguration(paintTool, PhysicalToolStation.StationKind.Rack, 0);
             SetField(paintTool, "rack", rack.transform);
-            SetField(paintTool, "dockAnchor", rack.transform);
+            // dockAnchor를 지정하면 붓 셋이 그 한 점에 겹쳐 docking된다. 각자 놓인 자리로 돌아가게 비워 둔다.
 
             var brushes = new PhysicalBrush[3];
             for (int index = 0; index < brushes.Length; index++)

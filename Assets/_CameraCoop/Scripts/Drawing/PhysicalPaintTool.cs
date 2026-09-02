@@ -18,6 +18,9 @@ namespace CameraCoop
         [SerializeField] private PhysicalBrush[] brushReferences;
 
         private readonly List<PhysicalBrush> brushes = new List<PhysicalBrush>();
+        // 붓을 놓으면 원래 놓여 있던 자리로 돌아가야 한다. dockAnchor 하나에 모으면 붓이 전부 한 점에
+        // 겹치고, 그 anchor의 배율이 균일하지 않으면 메시까지 찌그러진다.
+        private readonly Dictionary<PhysicalBrush, BrushHome> homes = new Dictionary<PhysicalBrush, BrushHome>();
         private PhysicalBrush heldBrush;
         private string heldOwner;
         private string heldHand;
@@ -51,6 +54,7 @@ namespace CameraCoop
             if (brush != null && !brushes.Contains(brush))
             {
                 brushes.Add(brush);
+                homes[brush] = BrushHome.Capture(brush.transform);
                 brush.Bind(this);
                 DockBrush(brush);
             }
@@ -112,6 +116,32 @@ namespace CameraCoop
 
         private bool Owns(string owner) => heldBrush != null && IsAllowedPlayer(owner) && heldOwner == owner;
         private bool IsAllowedPlayer(string owner) => !string.IsNullOrEmpty(localPlayerId) && owner == localPlayerId;
+        private readonly struct BrushHome
+        {
+            private readonly Transform parent;
+            private readonly Vector3 localPosition;
+            private readonly Quaternion localRotation;
+
+            private BrushHome(Transform parent, Vector3 localPosition, Quaternion localRotation)
+            {
+                this.parent = parent;
+                this.localPosition = localPosition;
+                this.localRotation = localRotation;
+            }
+
+            public static BrushHome Capture(Transform item)
+            {
+                return new BrushHome(item.parent, item.localPosition, item.localRotation);
+            }
+
+            public void Restore(Transform item)
+            {
+                item.SetParent(parent, false);
+                item.localPosition = localPosition;
+                item.localRotation = localRotation;
+            }
+        }
+
         private bool WithinRange(Vector3 a, Vector3 b) => maxInteractionDistance <= 0f || Vector3.Distance(a, b) <= maxInteractionDistance;
 
         private void ReturnHeldBrush()
@@ -128,10 +158,21 @@ namespace CameraCoop
         {
             if (brush == null) return;
             brush.SetHeld(false);
-            Transform target = dockAnchor != null ? dockAnchor : rack;
-            if (target != null)
+            if (dockAnchor != null)
             {
-                brush.transform.SetParent(target, false);
+                brush.transform.SetParent(dockAnchor, false);
+                brush.transform.localPosition = Vector3.zero;
+                brush.transform.localRotation = Quaternion.identity;
+                return;
+            }
+            if (homes.TryGetValue(brush, out BrushHome home))
+            {
+                home.Restore(brush.transform);
+                return;
+            }
+            if (rack != null)
+            {
+                brush.transform.SetParent(rack, false);
                 brush.transform.localPosition = Vector3.zero;
                 brush.transform.localRotation = Quaternion.identity;
             }

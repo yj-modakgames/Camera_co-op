@@ -64,7 +64,8 @@ namespace CameraCoop.EditorTools
             PhysicalBrush brush = brushObject.AddComponent<PhysicalBrush>();
             paintTool.RegisterBrush(brush);
             brushes = new[] { brush };
-            paintTool.SetDockAnchor(rack);
+            // dockAnchor를 지정하면 붓이 rack 중심으로 끌려가고, rack의 비균일 배율까지 상속해 찌그러진다.
+            // 비워 두면 놓았던 자리로 돌아간다.
 
             Material[] paints = { palette.Red, palette.Blue, palette.Green, palette.Yellow };
             for (int index = 0; index < paints.Length; index++)
