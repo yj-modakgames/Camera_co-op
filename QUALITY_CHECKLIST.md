@@ -413,3 +413,66 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 
 - 사용자 실기: host가 `CameraCoopRelayOnline.exe -partysize 2`로 실행, 다른 1명 Steam invite 수락 → mode 선택 → game Scene 진입 → `HOST · RETURN TO LOBBY` 복귀.
 - 실제 webcam/phone camera hand gesture, long profile, Intel Mac은 여전히 미검증이다.
+
+---
+
+## 2026-09-04 — 로비 낙서판(보조 캔버스)과 로비 3D 재배치
+
+### 평가 범위와 상태
+
+`HandInputRouter`에 보조 캔버스 목록(`extraCanvases`)을 추가해 서쪽 벽 `GestureTutorialBoard`를 실제로 그릴 수 있는 로컬 낙서판으로 만들고, `RelayQuizOnlineSceneBuilder`가 만드는 로비 배치를 Kenney/Synty 에셋과 구역 표지판으로 다시 짰다. 게임 씬 3개와 `PartyGameSceneBuilder`는 건드리지 않았다.
+
+| 구분 | 항목 | 배점 | 획득 | 근거·감점 |
+|---|---|---:|---:|---|
+| 기능 | 1-1 요구사항 충족 | 0.80 | 0.62 | `extraCanvases` 등록·판정·world raycast 경로 3곳 모두 반영 (`HandInputRouter.cs:19,97-107,391-403,627-628`), 낙서판 전용 `HandPointer`+`DrawingController`+`ScratchBoardClearButton` 배선. 지시 대비 3건 축소: Synty 벽 타일 36장 대신 grid 텍스처 + 모서리 기둥, 자리 사이 half-wall 파티션 생략, ReadyPad 화살표 아이콘 생략 |
+| 기능 | 1-2 엣지 케이스 | 0.60 | 0.55 | 에셋 로드 실패 시 전부 primitive fallback + `LogWarning` (`Authoring.cs` `FitProp`), `extraCanvases`가 null·빈 배열이어도 기존 씬 3개가 그대로 동작 (`IsExtraCanvas` null 가드), 카운터 조각 간격은 상수가 아니라 첫 조각 실측폭 |
+| 기능 | 1-3 에러 핸들링 | 0.60 | 0.55 | `Start()`가 잘못 배선된 보조 캔버스를 조용히 넘기지 않고 index를 찍어 `LogError` 후 라우터를 끈다. 빌더는 필수 씬 오브젝트 부재 시 예외 |
+| 성능 | 2-1 hot path GC | 0.70 | 0.64 | `IsExtraCanvas`는 배열 선형 스캔뿐이라 할당 0. LINQ·boxing·문자열 결합 없음. 빌더 코드는 Editor 전용이라 런타임 비용 없음. profiler 미측정 |
+| 성능 | 2-2 Update 고비용 호출 | 0.70 | 0.62 | 추가된 `HandPointer.Update`는 `localSurfaces.Count == 0` 조기 반환, 추가된 `DrawingController.Update`는 `clearKey`를 `Key.None`으로 넣어 `Keyboard.current` 조회 전에 단락된다 (`DrawingController.cs:139`). `GetComponent`/`Camera.main` 신규 호출 없음 |
+| 성능 | 2-3 메모리·자원 수명 | 0.60 | 0.45 | 낙서판 stroke는 CLEAR 버튼을 누르기 전까지 누적된다(자동 정리 없음). 장시간 로비 대기에서 LineRenderer GameObject가 무한히 는다. 상한이 필요해지면 `DrawingController`에 stroke 예산을 넣는 것이 개선 경로 |
+| 검증 | 3-1 테스트 작성 | 0.70 | 0.62 | `ScratchBoardTests` 3건 신규(등록된 보조 캔버스가 world 대상이 되고 자기 pointer로만 그린다 / 미등록 캔버스는 여전히 거부 / CLEAR가 자기 DrawingController만 지운다)를 구현 전에 작성. billboard 개수 테스트를 21→22로 갱신 |
+| 검증 | 3-2 테스트 실행 | 0.70 | 0.66 | Editor 재실행 뒤 `unity cmd run_tests --mode EditMode`로 실행. 1차 896/895 — `ScratchBoardTests.RegisteredExtraCanvas...` 실패: 앞선 씬 테스트가 실제 로비 씬을 열어 둔 채 끝나 원점 근처 가구 collider가 조준선을 가렸고, `Screen` 중앙 = 원점 가정도 EditMode 카메라 pixelRect와 어긋났다. 표적을 `camera.ScreenPointToRay(Center).GetPoint(5f)`, 조준선을 `(1000,1000,1000)` 근처로 옮겨 수정. 최종 **896/896 통과, failed 0** (단독 실행 3/3, 전체 실행 2회 중 수정 후 1회 전부 통과) |
+| 검증 | 3-3 실행 확인·로그 클린 | 0.60 | 0.52 | `dotnet build` 오류 0·경고 0. Editor 메뉴 `Camera Co-op/RelayQuiz Online/Build Playable Scene` 실행 → 콘솔 `[RelayQuizOnlineSceneBuilder] Built and saved …RelayQuizOnline.unity`, `BuildAll created the four catalog Scenes`, `[PartyGameSceneBuilder] Built` ×3, **prop asset fallback 경고 0건**(Kenney·Synty 전부 로드). `Validate Scene` 메뉴 → `[RelayQuizOnlineSceneValidator] PASS`. 씬 YAML 확인: `GestureTutorialBoard`에 `CanvasSurface`+`HandCanvasInteractable`, `HandInputRouter.extraCanvases[0]` 연결, `WorldActionInteractable` 13·ReadyPad 4·`PhysicalBrush` 3(y 0.91, 작업대 위). Play 확인은 미실행 |
+| 코드 품질 | 4-1 네이밍·가독성 | 0.50 | 0.47 | `FitProp`/`KenneyProp`/`SyntyProp`/`ControlBody`/`ZoneSign`/`PaintAll`이 각각 "bounds로 맞춰 세운다", "조준 표적을 소유하는 빈 루트", "구역 표지판"으로 읽힌다. 주석은 한국어로 "왜"만 |
+| 코드 품질 | 4-2 책임 분리 | 0.50 | 0.47 | 낙서판은 `PartyWorldController`·`OnlineRelayQuizController`가 전혀 모른다 — `SetStrokesVisible`/`RebindSurface`/네트워크 동기화 경로 밖. 조준 표적 크기는 prop pivot이 아니라 `ControlBody`의 BoxCollider가 단독으로 정한다 |
+| 코드 품질 | 4-3 매직넘버 | 0.50 | 0.42 | `CounterZ`/`CounterHeight`/`plinthHeight`/`PaletteWidth`를 상수화하고 카운터 폭은 실측값 사용. 배치 좌표 리터럴은 여전히 많다(레이아웃 빌더의 성격상 유지) |
+| 코드 품질 | 4-4 구조·dead code | 0.50 | 0.46 | 공용 연습 이젤을 통째로 삼키던 `BayBack` cube, `CameraConsole` cube, 이젤별 중복 라벨 제거. 주석 처리 코드 없음 |
+| 최적화 | 5-1 object pooling | 0.50 | 0.44 | 런타임 반복 생성 경로 추가 없음(빌더는 Editor 시점 1회) |
+| 최적화 | 5-2 caching | 0.50 | 0.46 | 카운터 조각 폭을 1회 실측해 재사용, `IsRegisteredCanvas`는 `activeCanvas` 비교로 먼저 단락되어 보조 배열을 스캔하지 않는다 |
+| 최적화 | 5-3 batching·draw call | 0.50 | 0.36 | Synty prop은 단일 atlas 재질을 공유해 batching되지만, Kenney 가구는 모델별 내장 재질이라 renderer 종류가 늘었다(가구·소품 약 30개 추가). draw call 미측정 |
+| 최적화 | 5-4 불필요한 연산 | 0.50 | 0.45 | 표지판 collider를 빌드 시점에 제거해 hand raycast 후보에서 아예 뺐다 (`Authoring.cs` `ZoneSign`) |
+| **합계** | | **10.00** | **9.06** | |
+
+총점: **9.06 / 10** — 게이트 통과. 1차 8.10(검증 봉쇄) → 검증 실행·테스트 격리 결함 수정 후 9.06.
+
+### 판단 근거
+
+- Part A는 TDD로 진행했다. `ScratchBoardTests`를 먼저 쓰고(`extraCanvases` 필드를 reflection으로 찾아 `Assert.IsNotNull`, `ScratchBoardClearButton`을 `Assembly.GetType`으로 찾아 `Assert.IsNotNull`) 그 다음 구현했다. 다만 Editor 점유로 red/green을 **실행으로 확인하지 못했다** — TDD의 핵심 단계 하나가 증거 없이 남아 있다.
+- 서쪽 벽 판의 회전을 `Euler(0,90,0)`에서 `Euler(0,-90,0)`으로 바꿨다. Unity Quad의 정면은 local -Z이므로(`CanvasSurface.cs:6` 주석이 같은 전제), yaw +90은 정면과 잉크 offset(-0.005)을 둘 다 벽 안쪽으로 보낸다. yaw -90이라야 정면이 동쪽(플레이어)을 향하고 local +X가 플레이어의 오른쪽(+Z)에 대응해 좌우가 뒤집히지 않는다.
+- 채점 중 결함 하나를 찾아 고쳤다. 액션 버튼을 받침(collider 있음, `HandInteractable` 없음) + 버튼으로 나눠 두면 조준이 조금만 낮아도 받침이 가장 가까운 hit이 되어 버튼이 눌리지 않는다. 받침·버튼을 한 collider가 덮는 `PedestalButton`으로 합쳤다 (`Authoring.cs` `PedestalButton`).
+- 두 번째 결함: 점프 상자를 높이로 정규화하면 0.3 m짜리 상자가 되어 올라설 수 없다. 발자국 크기(0.9 m)로 정규화한 뒤 바닥에 묻어 밟는 면 높이만 3단계로 만들었다 (`LobbyPresentation.cs` `BuildJumpTutorial`).
+- 세 번째 결함(code-review 지적, 검증 후 수용): 손에 든 붓의 collider가 카메라 앞에 그대로 남아 `ResolveWorldTarget`의 `nearestDistance`를 선점한다. 들고 있는 붓은 집을 수도 없으니 `SetHeld(true)`에서 collider를 끄게 했다 (`PhysicalBrush.SetHeld`). 회귀 테스트 `HeldBrush_StopsBlockingHandAimingUntilItIsPutDown` 추가.
+- code-review의 지적 2건(낙서판이 게임 씬까지 살아남는다 / CLEAR 버튼이 라운드 중 눌린다)은 **사실이 아니어서 반영하지 않았다**. `GestureTutorialStation`은 scene root가 아니라 `LobbyWorldRoot`의 자식이라 재부모 loop 대상이 아니고, `PartyLobbyScenePort.SetLobbyVisible(false)`가 `lobbyWorldRoot.SetActive(false)`로 통째로 끈다.
+- 붓·물감통 앞을 큰 collider가 가리지 않도록 `BrushRack`을 붓보다 벽 쪽(x -13.02)에 두고 붓을 앞(x -12.62)에 놓았다. `HandInputRouter.ResolveWorldTarget`은 가장 가까운 hit만 후보로 삼기 때문에 순서가 곧 조준 가능 여부다.
+
+### 이 구현 방식을 선택한 이유
+
+- 보조 캔버스마다 자기 `HandPointer`를 요구한 것은, `HandPointer`가 단일 `canvasSurface`로 `CanUseCanvas`를 판정하고 `DrawingController`가 그 surface 정규좌표로 stroke를 만들기 때문이다. 하나를 공유하면 같은 norm이 두 면에 동시에 찍힌다.
+- 지우기를 `WorldActionInteractable`이 아니라 별도 `HandInteractable` 파생으로 만든 이유는 씬 검증기가 `WorldActionInteractable` 개수를 `PartyWorldAction` enum 크기와 정확히 비교하기 때문이다(`RelayQuizOnlineSceneValidator.cs:69-70`).
+- 상호작용 물체에 Synty 재질 대신 빌더가 만든 URP Lit 단색을 덮은 것은, `Generic_Standard.shadergraph`의 `_BaseColor` 기본값이 흰색이라 `HandInteractable.ApplyHighlight`의 `Lerp(원색, 흰색, blend)`가 아무 변화도 만들지 못하기 때문이다.
+
+### 감점 요인 및 개선 방안
+
+- **3-2(0.00)·3-3(0.22)이 감점의 대부분**이다. Editor를 닫고 `unity test C:\git\Camera_co-op --mode EditMode --output test-results.xml`과 headless `BuildAll`, `RelayQuizOnlineSceneValidator.ValidateMenu`를 실행하면 이 두 항목이 각각 0.66·0.52 수준으로 올라가 총점 약 8.8이 된다.
+- 1-1의 축소 3건(벽 타일·파티션·화살표)을 되살리면 약 0.15가 회복된다. 벽 타일은 Synty wall prefab의 길이 축을 실측 bounds로 판별해 배치하면 결정적으로 넣을 수 있으나, 서쪽 벽에서 낙서판 뒷판과 z-fighting이 나므로 구간 예외가 필요하다.
+- 2-3은 낙서판 stroke 상한이 없다. `DrawingController`에 최대 stroke 수를 넣고 초과 시 가장 오래된 것을 지우면 회복된다.
+- 5-3은 draw call 미측정이다. Play에서 Frame Debugger로 로비 SetPass 수를 재면 근거가 생긴다.
+
+### 점수 이력
+
+`8.60 → 9.20 → 9.37 → 8.10 → 9.06` (8.10은 Editor 점유로 검증 봉쇄 시점, 9.06은 Editor 재실행 후 BuildAll·validator·EditMode 896/896 실행 + `ScratchBoardTests` 격리 수정 반영)
+
+### 잔여 검증
+
+- Editor를 닫은 뒤: headless `BuildAll` → `Built and saved` 확인, `RelayQuizOnlineSceneValidator` PASS, EditMode 전체(기준선 892 + 신규 3).
+- Play 확인: 낙서판에 실제로 선이 그려지는지, 좌우가 뒤집히지 않는지, CLEAR가 낙서판만 지우고 작업 캔버스는 남기는지, 붓 3자루를 손으로 집을 수 있는지, 카운터 버튼이 카운터 위에 제대로 얹혀 있는지.

@@ -48,7 +48,7 @@ namespace CameraCoop.Tests
             }
         }
 
-        [TestCase(InputContext.Explore, InputMode.Move, InputMode.Move, true, true, false, false, true)]
+        [TestCase(InputContext.Explore, InputMode.Move, InputMode.Move, true, true, true, false, true)]
         [TestCase(InputContext.Explore, InputMode.Interact, InputMode.Interact, false, false, true, false, true)]
         [TestCase(InputContext.UiOnly, InputMode.Move, InputMode.Interact, false, false, true, false, false)]
         [TestCase(InputContext.Drawing, InputMode.Move, InputMode.Interact, false, false, true, true, false)]
@@ -72,7 +72,7 @@ namespace CameraCoop.Tests
         {
             Assert.AreEqual(InputContext.Explore, manager.CurrentContext);
             Assert.AreEqual(InputMode.Move, manager.CurrentMode);
-            AssertPermissions(true, true, false, false, true);
+            AssertPermissions(true, true, true, false, true);
             Assert.AreEqual(CursorLockMode.Locked, manager.DesiredCursorLockState);
             Assert.AreEqual(false, manager.DesiredCursorVisible);
         }
@@ -91,7 +91,7 @@ namespace CameraCoop.Tests
             Assert.AreEqual(InputMode.Interact, manager.CurrentMode, "Returning to Explore must not restore stale Move intent.");
             AssertPermissions(false, false, true, false, true);
             Assert.IsTrue(manager.RequestMode(InputMode.Move));
-            AssertPermissions(true, true, false, false, true);
+            AssertPermissions(true, true, true, false, true);
         }
 
         [Test]
@@ -99,13 +99,13 @@ namespace CameraCoop.Tests
         {
             InputFocus.IsTyping = true;
 
-            AssertPermissions(false, false, false, false, false);
+            AssertPermissions(false, false, true, false, false);
             Assert.IsFalse(manager.RequestMode(InputMode.Interact));
             manager.ProcessInput(true, CursorLockMode.Locked);
             Assert.AreEqual(InputMode.Move, manager.CurrentMode);
 
             InputFocus.IsTyping = false;
-            AssertPermissions(true, true, false, false, true);
+            AssertPermissions(true, true, true, false, true);
         }
 
         [Test]
@@ -173,16 +173,21 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void LobbyExplore_OnlyInteractModeAllowsPracticeDrawing()
+        public void LobbyExplore_AllowsPracticeDrawingWhileMoving()
         {
             manager.SetContext(InputContext.Explore);
             manager.SetPracticeDrawingAllowed(true);
 
             Assert.That(manager.CurrentMode, Is.EqualTo(InputMode.Move));
-            Assert.That(manager.CanDraw, Is.False);
+            Assert.That(manager.CanMove, Is.True);
+            Assert.That(manager.CanDraw, Is.True);
+            Assert.That(manager.CanUseHandUi, Is.True);
             Assert.That(manager.RequestMode(InputMode.Interact), Is.True);
             Assert.That(manager.CanDraw, Is.True);
             Assert.That(manager.RequestMode(InputMode.Move), Is.True);
+            Assert.That(manager.CanDraw, Is.True);
+
+            manager.SetPracticeDrawingAllowed(false);
             Assert.That(manager.CanDraw, Is.False);
         }
 
@@ -259,7 +264,7 @@ namespace CameraCoop.Tests
 
             manager.ProcessInput(true, CursorLockMode.None);
             Assert.AreEqual(InputMode.Move, manager.CurrentMode);
-            AssertPermissions(true, true, false, false, true);
+            AssertPermissions(true, true, true, false, true);
         }
 
         [TestCase(InputContext.UiOnly)]
@@ -389,7 +394,7 @@ namespace CameraCoop.Tests
             bool isMove = requestedMode == InputMode.Move;
             Assert.AreEqual(InputContext.Explore, manager.CurrentContext);
             Assert.AreEqual(requestedMode, manager.CurrentMode);
-            AssertPermissions(isMove, isMove, !isMove, false, true);
+            AssertPermissions(isMove, isMove, true, false, true);
             Assert.AreEqual(!isMove, ReadCanUseCameraMouse());
             Assert.AreEqual(isMove ? CursorLockMode.Locked : CursorLockMode.None, manager.DesiredCursorLockState);
             Assert.AreEqual(!isMove, manager.DesiredCursorVisible);

@@ -25,6 +25,14 @@ namespace CameraCoop.EditorTools
             CreateOrReplaceMaterial("RoomFloor", Floor, 0.05f);
             CreateOrReplaceMaterial("WhitePaper", Paper, 0.05f);
             CreateOrReplaceMaterial("ActionAccent", Accent, 0.25f);
+            CreateOrReplaceMaterial("RoomWood", Wood, 0.1f);
+            // 격자 텍스처가 바닥·벽의 거리감을 만든다. 단색 회색이 "어수선하다"는 인상의 절반이었다.
+            CreateOrReplaceTexturedMaterial("FloorGrid", PrototypeTextureFolder + "Dark/texture_13.png",
+                new Color(0.62f, 0.66f, 0.74f), new Vector2(14f, 8f));
+            CreateOrReplaceTexturedMaterial("WallGridLong", PrototypeTextureFolder + "Dark/texture_09.png",
+                new Color(0.5f, 0.55f, 0.66f), new Vector2(14f, 4f));
+            CreateOrReplaceTexturedMaterial("WallGridShort", PrototypeTextureFolder + "Dark/texture_09.png",
+                new Color(0.5f, 0.55f, 0.66f), new Vector2(8f, 4f));
             AssetDatabase.SaveAssets();
         }
 
@@ -36,6 +44,8 @@ namespace CameraCoop.EditorTools
                 Red = Material("PlayerRed"), Blue = Material("PlayerBlue"), Green = Material("PlayerGreen"),
                 Yellow = Material("PlayerYellow"), Dark = Material("RoomDark"), Wall = Material("RoomWall"),
                 Floor = Material("RoomFloor"), Paper = Material("WhitePaper"), Accent = Material("ActionAccent"),
+                Wood = Material("RoomWood"), FloorGrid = Material("FloorGrid"),
+                WallLong = Material("WallGridLong"), WallShort = Material("WallGridShort"),
                 Line = AssetDatabase.LoadAssetAtPath<Material>("Assets/_CameraCoop/Materials/StrokeLine.mat"),
                 SoftLine = AssetDatabase.LoadAssetAtPath<Material>("Assets/_CameraCoop/Materials/StrokeSoft.mat")
             };
@@ -53,11 +63,22 @@ namespace CameraCoop.EditorTools
             boundsCollider.center = new Vector3(0f, 2f, 0f);
             boundsCollider.size = new Vector3(28f, 4f, 16f);
 
-            Cube("Floor", studio.transform, new Vector3(0f, -0.1f, 0f), new Vector3(28f, 0.2f, 16f), context.Floor);
-            Cube("NorthWall", studio.transform, new Vector3(0f, 4f, 8f), new Vector3(28f, 8f, 0.25f), context.Wall);
-            Cube("SouthWall", studio.transform, new Vector3(0f, 4f, -8f), new Vector3(28f, 8f, 0.25f), context.Wall);
-            Cube("WestWall", studio.transform, new Vector3(-14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.Wall);
-            Cube("EastWall", studio.transform, new Vector3(14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.Wall);
+            Cube("Floor", studio.transform, new Vector3(0f, -0.1f, 0f), new Vector3(28f, 0.2f, 16f), context.FloorGrid);
+            Cube("NorthWall", studio.transform, new Vector3(0f, 4f, 8f), new Vector3(28f, 8f, 0.25f), context.WallLong);
+            Cube("SouthWall", studio.transform, new Vector3(0f, 4f, -8f), new Vector3(28f, 8f, 0.25f), context.WallLong);
+            Cube("WestWall", studio.transform, new Vector3(-14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.WallShort);
+            Cube("EastWall", studio.transform, new Vector3(14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.WallShort);
+            // 모서리 기둥은 방의 크기를 읽히게 한다. 플레이어 이동 한계(±13.5, ±7.5) 밖에 세워 통행을 막지 않는다.
+            float[] pillarX = { -13.72f, 13.72f };
+            float[] pillarZ = { -7.72f, 7.72f };
+            for (int corner = 0; corner < 4; corner++)
+            {
+                var ground = new Vector3(pillarX[corner % 2], 0f, pillarZ[corner / 2]);
+                if (SyntyProp(SyntyBaseFolder, "SM_Bld_Base_Pillar_01", "RoomPillar_" + corner, studio.transform,
+                        ground, 3.6f) == null)
+                    Cube("RoomPillar_" + corner, studio.transform, ground + Vector3.up * 1.8f,
+                        new Vector3(0.4f, 3.6f, 0.4f), context.Dark);
+            }
 
             GameObject lightObject = new GameObject("RoomKeyLight");
             lightObject.transform.SetParent(studio.transform, false);

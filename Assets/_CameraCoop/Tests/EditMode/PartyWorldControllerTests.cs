@@ -632,7 +632,7 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void RelayQuizOnline_OnlyTwentyOneImmediateControlsReceiveBoundWorldLabelBillboards()
+        public void RelayQuizOnline_OnlyImmediateControlsReceiveBoundWorldLabelBillboards()
         {
             Scene scene = EditorSceneManager.OpenScene("Assets/_CameraCoop/Scenes/RelayQuizOnline.unity",
                 OpenSceneMode.Single);
@@ -646,11 +646,17 @@ namespace CameraCoop.Tests
                 .Where(item => item != null && item.gameObject.scene == scene
                     && item.GetComponentInChildren<TextMesh>(true) != null).ToArray();
 
-            Assert.That(billboards, Has.Length.EqualTo(21));
+            ScratchBoardClearButton[] scratchClears = Resources.FindObjectsOfTypeAll<ScratchBoardClearButton>()
+                .Where(item => item != null && item.gameObject.scene == scene).ToArray();
+
+            // 13 action + 4 ReadyPad + 3 WidthControl + ERASER + CLEAR = 22, 여기에 현재 색 칩 INK 라벨 1개.
+            Assert.That(billboards, Has.Length.EqualTo(23));
             Assert.That(actions, Has.Length.EqualTo(13));
             Assert.That(pads, Has.Length.EqualTo(4));
             Assert.That(labeledStations, Has.Length.EqualTo(4));
-            foreach (Component control in actions.Cast<Component>().Concat(pads).Concat(labeledStations))
+            Assert.That(scratchClears, Has.Length.EqualTo(1));
+            foreach (Component control in actions.Cast<Component>().Concat(pads).Concat(labeledStations)
+                .Concat(scratchClears))
             {
                 TextMesh label = control.GetComponentInChildren<TextMesh>(true);
                 WorldLabelBillboard billboard = control.GetComponentInChildren<WorldLabelBillboard>(true);

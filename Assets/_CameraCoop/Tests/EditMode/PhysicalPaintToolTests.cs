@@ -45,6 +45,48 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void ThinBrushMesh_GetsGrabColliderWideEnoughForHandAiming()
+        {
+            GameObject go = New("thin brush");
+            var mesh = new Mesh
+            {
+                vertices = new[] { new Vector3(-0.0125f, -0.15f, -0.008f), new Vector3(0.0125f, 0.15f, 0.008f) }
+            };
+            mesh.RecalculateBounds();
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.transform.localScale = Vector3.one * 3f;
+            PhysicalBrush brush = go.AddComponent<PhysicalBrush>();
+            // EditMode에서는 MonoBehaviour lifecycle이 안 돈다. Play mode와 같게 Awake를 직접 부른다.
+            typeof(PhysicalBrush).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(brush, null);
+
+            BoxCollider box = go.GetComponent<BoxCollider>();
+            Assert.IsNotNull(box, "A thin brush mesh must gain a grab collider.");
+            Vector3 world = Vector3.Scale(box.size, go.transform.lossyScale);
+            Assert.AreEqual(0.22f, world.x, 0.001f, "Short axes must reach the minimum grab size.");
+            Assert.AreEqual(0.22f, world.z, 0.001f, "Short axes must reach the minimum grab size.");
+            Assert.AreEqual(0.9f, world.y, 0.001f, "The long axis must keep the mesh size.");
+            Object.DestroyImmediate(mesh);
+        }
+
+        [Test]
+        public void HeldBrush_StopsBlockingHandAimingUntilItIsPutDown()
+        {
+            PhysicalBrush brush;
+            ToolState state;
+            PhysicalPaintTool tool = Make(out brush, out state);
+            BoxCollider carried = brush.gameObject.AddComponent<BoxCollider>();
+
+            Assert.IsTrue(tool.TryPickupBrush("left", brush, Vector3.zero));
+            Assert.IsFalse(carried.enabled,
+                "손에 든 붓은 자기 카메라 앞을 가로막는다. HandInputRouter는 가장 가까운 hit만 보므로 "
+                + "붓 collider가 켜져 있으면 그 뒤의 물감통·지우개를 아예 못 누른다.");
+
+            Assert.IsTrue(tool.TryPutDownBrush("left", Vector3.zero));
+            Assert.IsTrue(carried.enabled, "내려놓은 붓은 다시 집을 수 있어야 한다.");
+        }
+
+        [Test]
         public void BrushRelease_DoesNotDockUntilExplicitPutDown()
         {
             PhysicalBrush brush;

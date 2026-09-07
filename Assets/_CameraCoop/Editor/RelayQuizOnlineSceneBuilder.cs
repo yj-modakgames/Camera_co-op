@@ -27,6 +27,7 @@ namespace CameraCoop.EditorTools
         private static readonly Color Floor = Hex("11151D");
         private static readonly Color Paper = Hex("F5F2E9");
         private static readonly Color Accent = Hex("77D6C5");
+        private static readonly Color Wood = Hex("8A6039");
 
         private sealed class Context
         {
@@ -41,6 +42,10 @@ namespace CameraCoop.EditorTools
             public Material Floor;
             public Material Paper;
             public Material Accent;
+            public Material Wood;
+            public Material FloorGrid;
+            public Material WallLong;
+            public Material WallShort;
             public Material Line;
             public Material SoftLine;
         }

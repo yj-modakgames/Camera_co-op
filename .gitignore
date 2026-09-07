@@ -85,3 +85,6 @@ __pycache__/
 
 # 에디터 로컬 설정
 .vscode/
+
+# Unity CLI 테스트 산출물
+test-results.xml

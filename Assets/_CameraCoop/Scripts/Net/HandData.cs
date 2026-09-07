@@ -146,8 +146,10 @@ namespace CameraCoop
             Vector3 thumbTip = hand.GetLandmark(4);
             float thumbPath = Vector3.Distance(thumbA, thumbB) + Vector3.Distance(thumbB, thumbC) +
                 Vector3.Distance(thumbC, thumbTip);
+            // 엄지는 접힘(chord) 조건을 걸지 않는다. 실제 주먹에서 MediaPipe 엄지 landmark 1~4는 거의 일직선이라
+            // chord 비율이 0.98~0.99로 나온다 (2026-09-04 실측: 네 손가락 chord 0.47~0.60인 주먹이 엄지 때문에 전부 탈락).
+            // 엄지는 끝이 손바닥 근처에 있는지(tipPalm)만 본다 — 펼친 손의 엄지는 2.3 배 이상 떨어져 여기서 걸린다.
             if (!IsFinite(thumbPath) || thumbPath <= palmScale * 0.15f ||
-                Vector3.Distance(thumbA, thumbTip) / thumbPath > MaximumFoldedChordRatio ||
                 Vector3.Distance(palmCenter, thumbTip) > palmScale * MaximumTipPalmScale)
             {
                 return false;

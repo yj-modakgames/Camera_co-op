@@ -16,6 +16,9 @@ namespace CameraCoop
         [SerializeField] private GraphicRaycaster[] uiRaycasters;
         [SerializeField] private HandCanvasInteractable activeCanvas;
         [SerializeField] private HandPointer handPointer;
+        // 로비 낙서판처럼 게임 진행과 무관한 보조 캔버스. 각자 자기 HandPointer를 들고 온다 —
+        // 하나를 공유하면 정규좌표가 같아 두 면에 동시에 그려진다.
+        [SerializeField] private HandCanvasInteractable[] extraCanvases;
         [SerializeField] private AudioSource audioSource;
         [SerializeField] private AudioClip hoverClip;
         [SerializeField] private AudioClip clickClip;
@@ -88,6 +91,16 @@ namespace CameraCoop
                  activeCanvas.Surface == null || handPointer.InputSource != HandPointerInputSource.HandRouter))
             {
                 Debug.LogError("HandInputRouter: assign matching activeCanvas and HandRouter handPointer references.", this);
+                enabled = false;
+                return;
+            }
+            for (int index = 0; extraCanvases != null && index < extraCanvases.Length; index++)
+            {
+                HandCanvasInteractable extra = extraCanvases[index];
+                if (extra != null && extra.Surface != null && extra.Pointer != null &&
+                    extra.Pointer.InputSource == HandPointerInputSource.HandRouter) continue;
+                Debug.LogError("HandInputRouter: extraCanvases[" + index +
+                    "] needs its own CanvasSurface and HandRouter HandPointer.", this);
                 enabled = false;
                 return;
             }
@@ -267,11 +280,11 @@ namespace CameraCoop
             hand.wasPinched = sample.isPinched;
             hand.wasFist = sample.isFist;
             hand.revision++;
-            if (sample.isPinched || sample.isFist)
-            {
-                ResetRearm(hand);
-            }
-            else
+            // 손을 쥐면 pinch가 fist보다 한두 sample 먼저 참이 된다 — 손가락이 말리는 도중 엄지·검지 거리가
+            // 먼저 좁아지기 때문이다. 여기서 arm을 지우면 뒤따라 오는 fist edge가 armed=false를 만나
+            // 캔버스에 선이 시작되지 않는다 (화면 녹화 2026-09-07: 24초 내내 "작업 캔버스 · FIST"인데 stroke 0).
+            // arm은 press를 실제로 소비할 때만 지운다. 다시 얻으려면 여전히 손을 펴야 한다(ObserveOpen).
+            if (!sample.isPinched && !sample.isFist)
             {
                 ObserveOpen(hand, sourceTime);
             }
@@ -318,6 +331,7 @@ namespace CameraCoop
                 hand.captureRevision = target.LifecycleRevision;
                 hand.capturePosition = PositionFor(target, sample, hitPosition);
                 hand.pressContext = new HandClickContext(sample.handedness, viewGeneration, sample.sampleId);
+                ResetRearm(hand);
                 target.Press(sample, hand.capturePosition, hand.pressContext);
             }
             UpdateFeedback();
@@ -378,7 +392,16 @@ namespace CameraCoop
         private bool IsRegisteredCanvas(HandInteractable target)
         {
             if (!(target is HandCanvasInteractable canvas)) return true;
-            return canvas == activeCanvas && handPointer != null && canvas.Pointer == handPointer && handPointer.CanUseCanvas(canvas.Surface);
+            if (canvas == activeCanvas)
+                return handPointer != null && canvas.Pointer == handPointer && handPointer.CanUseCanvas(canvas.Surface);
+            return IsExtraCanvas(canvas) && canvas.Pointer != null && canvas.Pointer.CanUseCanvas(canvas.Surface);
+        }
+
+        private bool IsExtraCanvas(HandCanvasInteractable canvas)
+        {
+            for (int index = 0; extraCanvases != null && index < extraCanvases.Length; index++)
+                if (extraCanvases[index] == canvas) return true;
+            return false;
         }
 
         private HandCancelReason CaptureInvalidReason(HandRuntime hand, HandInteractable target)
@@ -603,7 +626,7 @@ namespace CameraCoop
                 HandInteractable candidate = hit.collider.GetComponentInParent<HandInteractable>();
                 if (candidate == null || !candidate.UsesWorldHitPosition || !IsAvailable(candidate)) continue;
                 if (candidate is HandCanvasInteractable &&
-                    (inputModeManager == null || !inputModeManager.CanDraw || candidate != activeCanvas || !IsRegisteredCanvas(candidate))) continue;
+                    (inputModeManager == null || !inputModeManager.CanDraw || !IsRegisteredCanvas(candidate))) continue;
                 hitPosition = hit.point;
                 return candidate;
             }
@@ -664,8 +687,20 @@ namespace CameraCoop
             }
             if (hoverStatusLabel != null)
             {
-                hoverStatusLabel.text = leftHover ? left.hover.DisplayName : rightHover ? right.hover.DisplayName : string.Empty;
+                string hover = leftHover ? left.hover.DisplayName : rightHover ? right.hover.DisplayName : string.Empty;
+                // 주먹은 pinch처럼 커서가 줄어들지 않아 인식됐는지 알 길이 없다 (사용자 보고 2026-09-04).
+                // 현재 제스처를 라벨에 같이 띄워 "안 그려짐"이 인식 문제인지 바로 보이게 한다.
+                string gesture = Gesture(left) ?? Gesture(right);
+                hoverStatusLabel.text = gesture == null ? hover : hover + " · " + gesture;
             }
+        }
+
+        private static string Gesture(HandRuntime hand)
+        {
+            if (!hand.fresh) return null;
+            if (hand.sample.isFist) return "FIST";
+            if (hand.sample.isPinched) return "PINCH";
+            return hand.armed ? "OPEN" : "OPEN…";
         }
 
         private static Vector3 PositionFor(HandInteractable target, HandInputSample sample, Vector3 worldHit)

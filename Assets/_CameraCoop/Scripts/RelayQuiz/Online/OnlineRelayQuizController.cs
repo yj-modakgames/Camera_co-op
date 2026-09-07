@@ -275,7 +275,9 @@ namespace CameraCoop
                 && view.selectedMode == PartyMode.CoopMural && view.startSignal > 0;
             bool drawing = relayDrawing || coopDrawing;
             if (workCanvasRoot != null) workCanvasRoot.SetActive(relayDrawing);
-            drawingController.SetStrokesVisible(drawing);
+            // 로비 연습 획도 보여야 한다. drawing만 보면 Setup 상태의 stroke가 통째로 숨겨진다.
+            bool lobbyPractice = visible && view.state == RelayQuizState.Setup && !view.modeStarted;
+            drawingController.SetStrokesVisible(drawing || lobbyPractice);
             bool referencePreview = visible && PartyWorldController.IsReferenceVisible(view);
             bool guessingPreview = visible && view.state == RelayQuizState.Guessing && view.active && view.drawing != null;
             bool preview = referencePreview || guessingPreview;

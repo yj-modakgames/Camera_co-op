@@ -68,10 +68,12 @@ namespace CameraCoop.EditorTools
                 presentation.GallerySurfaces, null);
         }
 
+        // baseGround는 버튼이 얹히는 면(바닥·카운터 상판)이다. 받침 위 버튼이라 서 있는 면부터 재는 편이 배치가 안 어긋난다.
         private static WorldActionInteractable Action(Context context, Transform parent, string label,
-            PartyWorldAction action, Vector3 position, Material material)
+            PartyWorldAction action, Vector3 baseGround, Material material)
         {
-            GameObject target = Cube("Action_" + action, parent, position, new Vector3(1.15f, 0.45f, 0.85f), material);
+            GameObject target = PedestalButton("Action_" + action, parent, baseGround,
+                "SM_Gen_Prop_Button_01", material, context.Dark);
             WorldActionInteractable interactable = target.AddComponent<WorldActionInteractable>();
             SetField(interactable, "action", action);
             TextMesh actionLabel = Label(label.ToUpperInvariant(), target.transform,

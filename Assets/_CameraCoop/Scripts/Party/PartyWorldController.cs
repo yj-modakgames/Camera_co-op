@@ -651,7 +651,10 @@ namespace CameraCoop.Party
         private void UpdateCanvasMovement(OnlineRelayQuizView view)
         {
             bool onlineGate = view.connected && !view.aborted && !view.paused && !view.transferPending;
-            bool lobbyPractice = onlineGate && view.state == RelayQuizState.Setup && !view.modeStarted
+            // 로비 연습은 내 자리에서 내 종이에 그리는 로컬 동작이다. roster가 다 차기(view.connected)를
+            // 기다리면 혼자 host했을 때 종이 자체가 안 켜진다. 연습만 정원 조건에서 뺀다.
+            bool lobbyGate = !view.aborted && !view.paused && !view.transferPending;
+            bool lobbyPractice = lobbyGate && view.state == RelayQuizState.Setup && !view.modeStarted
                 && view.localSlot >= 0 && view.localSlot < PartyRoster.Capacity
                 && (view.transitionPhase == PartyTransitionPhase.Lobby
                     || view.transitionPhase == PartyTransitionPhase.SelectingMode);

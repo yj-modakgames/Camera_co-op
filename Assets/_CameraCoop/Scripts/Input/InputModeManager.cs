@@ -45,10 +45,11 @@ namespace CameraCoop
             && (context == InputContext.Explore && CurrentMode == InputMode.Move
                 || context == InputContext.Drawing && drawingMovementAllowed);
         public bool CanLook => CanMove;
-        public bool CanUseHandUi => hasFocus && !IsCameraPreparing && context != InputContext.Blocked && CurrentMode == InputMode.Interact;
+        // 손은 mouse·keyboard와 별개 장치다. Move mode에서도 살려 둬야 걸어다니며 그릴 수 있다.
+        // Tab은 이제 WASD 이동·mouse look과 mouse 커서 조작만 가른다 (사용자 요청 2026-09-04).
+        public bool CanUseHandUi => hasFocus && !IsCameraPreparing && context != InputContext.Blocked;
         public bool CanDraw => hasFocus && !IsCameraPreparing && !InputFocus.IsTyping
-            && (context == InputContext.Drawing || practiceDrawingAllowed
-                && context == InputContext.Explore && CurrentMode == InputMode.Interact);
+            && (context == InputContext.Drawing || practiceDrawingAllowed && context == InputContext.Explore);
         public bool CanToggleMode => hasFocus && !IsCameraPreparing && context == InputContext.Explore && !InputFocus.IsTyping;
         // Blocked에서도 캠이 수신 중이 아니면 재시도만은 허용한다. 차폐 중 캠이 끊기면
         // 이 경로 말고는 복구 수단이 없다 (docs/06 §9, docs/09 §7).

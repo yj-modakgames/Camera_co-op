@@ -22,6 +22,14 @@ namespace CameraCoop.Tests
             Assert.IsFalse(IsFist(BuildHand(curled: true, scale: 0.3f, rotation: 37f, thumbCurled: false)));
         }
 
+        // 실제 주먹: 네 손가락은 말리고 엄지는 접히지 않은 채 손가락 위에 걸쳐 있다 (엄지 chord 0.9+, 끝은 손바닥 근처).
+        // 2026-09-04 실측에서 이 형태가 분류기에 전부 탈락해 캔버스에 선이 시작되지 않았다.
+        [Test]
+        public void CurledFingersWithStraightThumbAcrossFingersIsFist()
+        {
+            Assert.IsTrue(IsFist(BuildHand(curled: true, scale: 0.3f, rotation: 37f, thumbAcross: true)));
+        }
+
         [Test]
         public void ClassifierRejectsMalformedNonFiniteAndZeroScaleHands()
         {
@@ -42,15 +50,26 @@ namespace CameraCoop.Tests
             return (bool)method.Invoke(null, new object[] { hand });
         }
 
-        private static HandData BuildHand(bool curled, float scale, float rotation, bool? thumbCurled = null)
+        private static HandData BuildHand(bool curled, float scale, float rotation, bool? thumbCurled = null,
+            bool thumbAcross = false)
         {
             var points = new Vector3[21];
             points[0] = Vector3.zero;
             points[1] = new Vector3(-0.55f, 0.15f);
-            points[2] = new Vector3(-0.75f, 0.35f);
             bool curlThumb = thumbCurled ?? curled;
-            points[3] = curlThumb ? new Vector3(-0.5f, 0.25f) : new Vector3(-0.95f, 0.55f);
-            points[4] = curlThumb ? new Vector3(-0.25f, 0.2f) : new Vector3(-1.15f, 0.75f);
+            if (thumbAcross)
+            {
+                // 거의 일직선(chord ≈ 0.91)이지만 끝이 손바닥 중심에서 palmScale 1배 이내
+                points[2] = new Vector3(-0.6f, 0.35f);
+                points[3] = new Vector3(-0.55f, 0.5f);
+                points[4] = new Vector3(-0.45f, 0.6f);
+            }
+            else
+            {
+                points[2] = new Vector3(-0.75f, 0.35f);
+                points[3] = curlThumb ? new Vector3(-0.5f, 0.25f) : new Vector3(-0.95f, 0.55f);
+                points[4] = curlThumb ? new Vector3(-0.25f, 0.2f) : new Vector3(-1.15f, 0.75f);
+            }
             for (int finger = 0; finger < 4; finger++)
             {
                 int mcp = 5 + finger * 4;
