@@ -41,6 +41,14 @@
 
 ## 4. tracker·payload·운영 전제
 
+### 4-1. Intel Mac 열·전력 설정
+
+- 두 quality level은 `vSyncCount: 1`을 사용한다. frame rate는 display refresh rate를 따르며 고정 60 FPS를 뜻하지 않는다.
+- `macRetinaSupport: 0`으로 Retina backing resolution 렌더링을 끈다.
+- macOS postbuild가 `Info.plist`에 `NSSupportsAutomaticGraphicsSwitching=true`를 기록한다. 이 key는 macOS의 automatic graphics switching opt-in이며, Unity Metal Player가 integrated GPU를 사용한다고 보장하지 않는다.
+- Intel Mac 비교 QA에서는 Unity 실행 인자 `-force-low-power-device`를 별도 case로 시험할 수 있다. 기본 실행 인자로 강제하지 않는다.
+- `runInBackground` 정책은 Steam session 수명과 함께 결정해야 하므로 이 변경에서 유지한다.
+
 - Windows와 Intel Mac은 서로 다른 tracker dependency/setup을 사용한다. Windows `.venv`를 Mac에 복사하지 않으며, 기존 `.venv`를 설치·수정·삭제하지 않는다.
 - 신규 scene에서는 camera auto-start를 수행하지 않는다. 오른쪽 위 `CameraToggle`을 mouse로 눌러 시작하고, `.venv` 누락·dependency 오류·OS camera permission·occupied camera 등 실패 원인을 표시한다. 실패 후 자동 반복하지 않고 retry를 제공한다. local `RelayQuiz` scene은 기존처럼 manual camera start다.
 - Camera raw video와 hand landmarks는 network payload로 보내지 않는다. Drawing은 recipient별 비공개 view 계약에 따라 실시간 전송하지 않는다.

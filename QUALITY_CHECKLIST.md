@@ -9,6 +9,41 @@
 
 ---
 
+## 2026-09-07 — Intel Mac 발열 완화 설정
+
+평가 범위는 두 Quality level의 vSync 활성화, Retina 비활성화, 공통 macOS postbuild의 plist 수정이다. `runInBackground`는 Steam session의 background 처리 정책에 대한 사용자 답변 대기다. 실제 Mac 발열 개선 및 Steam 연결 유지 검증은 미완료다.
+
+| 구분 | 항목 | 배점 | 획득 | 판단 근거·감점 |
+|---|---|---:|---:|---|
+| 기능 | 1-1 요구사항 충족 | 0.80 | 0.50 | 세 설정 반영. background 정책 미결정, Mac 실기 개선 미확인 |
+| 기능 | 1-2 경계 조건 | 0.60 | 0.50 | key 부재·false·재실행·기존 값 보존·Windows 제외 검사 통과. 실제 Mac build 미실행 |
+| 기능 | 1-3 오류 처리 | 0.60 | 0.50 | plist 읽기·저장 오류를 숨기지 않음. Mac 파일 접근 실패 실기 미검증 |
+| 성능 | 2-1 hot path GC | 0.70 | 0.70 | 새 코드는 Editor postbuild에서만 실행. Player frame당 할당 추가 없음 |
+| 성능 | 2-2 Update 고비용 호출 | 0.70 | 0.70 | 새 Update 또는 scene 탐색 없음. 설정으로 불필요한 frame 생성 제한 |
+| 성능 | 2-3 메모리·자원 수명 | 0.60 | 0.40 | 파일 기반 XML 처리 외 새 장기 자원 없음. target Player 장시간 측정 없음 |
+| 검증 | 3-1 tests 작성 | 0.70 | 0.70 | BuildSettingsTests의 plist 경계·Windows 제외·설정 검사 |
+| 검증 | 3-2 tests 실행 | 0.70 | 0.70 | focused 4/4, 전체 EditMode 902/902 통과. 변경 전 helper 부재로 1/1 실패 |
+| 검증 | 3-3 실제 실행·로그 | 0.60 | 0.20 | Unity compile 완료, dotnet warning/error 0. Mac 온도·GPU·Steam 실기 미측정 |
+| 코드 품질 | 4-1 네이밍·가독성 | 0.50 | 0.50 | ApplyMacPlayerSettings로 목적 명시, 기존 C# 형식 유지 |
+| 코드 품질 | 4-2 책임 분리 | 0.50 | 0.50 | 공통 postbuild에 플랫폼 처리를 모음 |
+| 코드 품질 | 4-3 매직넘버 제거 | 0.50 | 0.50 | plist key 상수 사용, Unity 직렬화 설정 사용 |
+| 코드 품질 | 4-4 주석·구조·데드코드 | 0.50 | 0.50 | 기존 callback 재사용, 별도 runtime 계층 추가 없음 |
+| 최적화 | 5-1 object pooling | 0.50 | 0.50 | 해당 없음: Player object 생성·파괴 추가 없음 |
+| 최적화 | 5-2 caching | 0.50 | 0.50 | 해당 없음: build당 XML 파일 한 번 읽기, 반복 Player 계산 없음 |
+| 최적화 | 5-3 batching·draw call | 0.50 | 0.50 | 해당 없음: scene·material·render pipeline 변경 없음 |
+| 최적화 | 5-4 불필요한 연산 | 0.50 | 0.40 | vSync·Retina 설정 반영. background 실행 최적화 미결정 |
+| **합계** | | **10.00** | **8.80** | Mac 실기 및 background 정책 대기 |
+
+**총점: 8.8/10. 점수 이력: 8.8 (최초 평가). 9.0 기준 미달.** 코드 변경 없이 점수를 올리지 않는다. 잔여 요건은 사용자 정책 결정과 Intel Mac 실기 접근이 필요하다.
+
+구현 방식 선택 이유: Unity의 기존 설정과 모든 Mac build가 거치는 `CameraCoopBuildPayload`를 사용해 최소 범위에서 적용한다. XML 구조를 읽어 key를 추가 또는 갱신하므로 기존 값 보존과 재실행을 검증할 수 있다. 별도 package 설치는 없다.
+
+감점 개선 방법: background 정책 확정 후 필요한 변경·검사를 수행한다. Intel Mac에서 동일 scene·화면·tracking 조건으로 변경 전후 FPS, render 해상도, CPU/GPU 사용률, 온도를 비교한다. Windows 11과 Steam session을 연결한 뒤 host/client 각각 다른 창으로 전환하여 진행·연결 유지 여부를 확인한다. plist key는 Metal 내장 GPU 선택을 보장하지 않으므로 Player.log의 실제 device를 확인한다.
+
+실행 증거: [.omo/evidence/thermal-optimization/receipt.md](.omo/evidence/thermal-optimization/receipt.md). 전체 EditMode 902/902, Unity wrapper 보고 시간 22.47초, NUnit XML 내부 실행 시간 17.7001754초. `dotnet build Camera_co-op.slnx --no-restore` exit 0, warning/error 0. Windows x64 build 성공(error 0, 기존 pipeline warning 1), Player 약 15초 응답 유지, working set 291.1 MB, log error-like 0을 확인했다. 실행한 PID는 종료 후 부재를 확인했다. 이 실행 검사는 Mac 온도나 Steam 연결 유지 검증을 대신하지 않는다. 추가 코드 변경 없이 점수는 8.8로 유지한다.
+
+---
+
 ## 총 배점 개요 (10.0)
 
 | # | 카테고리 | 배점 |

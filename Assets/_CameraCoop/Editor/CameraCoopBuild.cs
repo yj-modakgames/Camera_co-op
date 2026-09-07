@@ -1,4 +1,6 @@
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -39,6 +41,8 @@ namespace CameraCoop.EditorTools
     // 메뉴 빌드든 CLI 빌드든 항상 실행되므로, 손으로 복사하는 단계가 없다.
     public class CameraCoopBuildPayload : IPostprocessBuildWithReport
     {
+        private const string AutomaticGraphicsSwitchingKey = "NSSupportsAutomaticGraphicsSwitching";
+
         public int callbackOrder { get { return 0; } }
 
         // 프로젝트 루트 기준 원본 경로
@@ -56,6 +60,8 @@ namespace CameraCoop.EditorTools
             }
             bool mac = report.summary.platform == BuildTarget.StandaloneOSX;
             string root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+
+            ApplyMacPlayerSettings(report.summary.platform, report.summary.outputPath);
 
             Copy(Path.Combine(root, "steam_appid.txt"), Path.Combine(dest, "steam_appid.txt"));
             Copy(Path.Combine(root, TrackerSrc, "fake_hand.py"), Path.Combine(dest, "fake_hand.py"));
@@ -84,6 +90,28 @@ namespace CameraCoop.EditorTools
             }
 
             Debug.Log("[CameraCoopBuild] payload 배치 완료 (" + (mac ? "macOS" : "Windows") + "): " + dest);
+        }
+
+        private static void ApplyMacPlayerSettings(BuildTarget platform, string outputPath)
+        {
+            if (platform != BuildTarget.StandaloneOSX)
+            {
+                return;
+            }
+
+            string plistPath = Path.Combine(outputPath, "Contents", "Info.plist");
+            XDocument plist = XDocument.Load(plistPath, LoadOptions.PreserveWhitespace);
+            XElement dict = plist.Root.Element("dict");
+            XElement key = dict.Elements("key").FirstOrDefault(element => element.Value == AutomaticGraphicsSwitchingKey);
+            if (key == null)
+            {
+                dict.Add(new XElement("key", AutomaticGraphicsSwitchingKey), new XElement("true"));
+            }
+            else
+            {
+                key.ElementsAfterSelf().First().ReplaceWith(new XElement("true"));
+            }
+            plist.Save(plistPath, SaveOptions.DisableFormatting);
         }
 
         private static void Copy(string from, string to)
