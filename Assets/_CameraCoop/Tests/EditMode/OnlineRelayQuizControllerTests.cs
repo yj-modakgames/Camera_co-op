@@ -146,6 +146,13 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void InviteOverlayUnavailable_ExplainsHowToEnableSteamOverlay()
+        {
+            Assert.That(OnlineRelayQuizController.GetInviteAvailabilityError(true, false, 123UL),
+                Is.EqualTo("Steam overlay를 사용할 수 없습니다 · Steam 설정의 게임 내 overlay를 켠 뒤 Steam에서 게임을 실행해주세요"));
+        }
+
+        [Test]
         public void Controller_DoesNotSerializeObsoleteWorkPose()
         {
             FieldInfo legacyWorkPose = typeof(OnlineRelayQuizController).GetField("workPose", InstanceFlags);

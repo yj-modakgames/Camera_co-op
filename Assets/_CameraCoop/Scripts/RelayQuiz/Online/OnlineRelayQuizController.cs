@@ -439,8 +439,25 @@ namespace CameraCoop
         {
             if (!initialized || !isActiveAndEnabled || steamTransport == null || !steamTransport.IsHost
                 || session == null || session.View.aborted || session.View.connected) return;
+            bool steamValid = SteamBootstrap.IsValid;
+            string availabilityError = GetInviteAvailabilityError(steamValid,
+                steamValid && SteamUtils.IsOverlayEnabled, steamTransport.LobbyId);
+            if (!string.IsNullOrEmpty(availabilityError))
+            {
+                status = availabilityError;
+                Debug.LogWarning("[OnlineRelayQuiz] " + status);
+                return;
+            }
             try { SteamFriends.OpenGameInviteOverlay(steamTransport.LobbyId); }
             catch (Exception exception) { status = "초대 표시 실패: " + exception.Message; }
+        }
+
+        internal static string GetInviteAvailabilityError(bool steamValid, bool overlayEnabled, ulong lobbyId)
+        {
+            if (!steamValid) return "Steam 연결이 끊겼습니다 · Steam을 다시 실행한 뒤 재시도해주세요";
+            if (lobbyId == 0UL) return "Steam 방이 준비되지 않았습니다 · Host를 다시 만들어주세요";
+            return overlayEnabled ? string.Empty
+                : "Steam overlay를 사용할 수 없습니다 · Steam 설정의 게임 내 overlay를 켠 뒤 Steam에서 게임을 실행해주세요";
         }
 
         private void HandleJoinRequested(Lobby lobby, SteamId friendId)

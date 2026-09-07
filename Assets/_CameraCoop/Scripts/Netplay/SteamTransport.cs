@@ -13,7 +13,7 @@ namespace CameraCoop.Netplay
         internal const int MaxInboundMessageBytes = 64 * 1024;
 
         public bool IsHost { get; private set; }
-        public string LocalPlayerId { get { return SteamClient.SteamId.ToString(); } }
+        public string LocalPlayerId { get { return SteamBootstrap.IsValid ? SteamClient.SteamId.ToString() : string.Empty; } }
 
         // 초대 overlay에 넘길 로비 Id. 로비가 없으면 0.
         public ulong LobbyId { get { return lobby.HasValue ? lobby.Value.Id.Value : 0UL; } }
@@ -95,7 +95,7 @@ namespace CameraCoop.Netplay
         {
             if (lobby.HasValue)
             {
-                lobby.Value.Leave();
+                if (SteamBootstrap.IsValid) lobby.Value.Leave();
                 lobby = null;
             }
             if (hostSocket != null)

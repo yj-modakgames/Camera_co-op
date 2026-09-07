@@ -21,7 +21,9 @@ namespace CameraCoop.Netplay
             try
             {
                 Steamworks.SteamClient.Init(DevAppId, asyncCallbacks: true);
-                return true;
+                if (Steamworks.SteamClient.IsValid) return true;
+                Debug.LogWarning("[SteamBootstrap] Steam init가 완료됐지만 유효한 client를 만들지 못했습니다");
+                return false;
             }
             catch (Exception e)
             {
