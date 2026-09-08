@@ -185,6 +185,104 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void PickupOnAScaledHandBone_KeepsBrushSizeAndRestoresItOnPutDown()
+        {
+            var state = New("ToolState").AddComponent<ToolState>();
+            var tool = New("PhysicalPaintTool").AddComponent<PhysicalPaintTool>();
+            Transform home = New("PhysicalTools").transform;
+            var brush = New("Brush").AddComponent<PhysicalBrush>();
+            tool.SetToolStateForTests(state);
+            tool.SetLocalPlayerId("left");
+
+            var placedPosition = new Vector3(-12.6f, 0.91f, -6.25f);
+            Quaternion placedRotation = Quaternion.Euler(0f, 90f, 90f);
+            Vector3 placedScale = Vector3.one * 2.7137f;
+            brush.transform.SetParent(home, false);
+            brush.transform.localPosition = placedPosition;
+            brush.transform.localRotation = placedRotation;
+            brush.transform.localScale = placedScale;
+            tool.RegisterBrush(brush);
+            Vector3 sizeOnTheBench = brush.transform.lossyScale;
+
+            // 아바타 손 본. FBX import 배율 0.001을 키 보정이 되돌려 lossyScale이 348까지 올라간다.
+            Transform handBone = New("Arm_2_Right_end").transform;
+            handBone.localScale = Vector3.one * 348.12f;
+            tool.SetCarryAnchor("Right", handBone);
+
+            Assert.IsTrue(tool.TryPickupBrush("left", brush, placedPosition, "Right"));
+            Assert.AreEqual(handBone, brush.transform.parent);
+            Assert.That(brush.transform.lossyScale.x, Is.EqualTo(sizeOnTheBench.x).Within(0.001f),
+                "손 본 배율이 곱해지면 붓이 화면을 가득 채운다");
+            Assert.That(brush.transform.lossyScale.y, Is.EqualTo(sizeOnTheBench.y).Within(0.001f));
+            Assert.That(brush.transform.lossyScale.z, Is.EqualTo(sizeOnTheBench.z).Within(0.001f));
+
+            Assert.IsTrue(tool.TryPutDownBrush("left", brush.transform.position));
+            Assert.AreEqual(home, brush.transform.parent);
+            Assert.That(brush.transform.localPosition.z, Is.EqualTo(placedPosition.z).Within(0.0001f));
+            Assert.That(brush.transform.localScale.x, Is.EqualTo(placedScale.x).Within(0.0001f),
+                "놓은 붓은 원래 배율로 돌아가야 한다");
+            Assert.That(Quaternion.Angle(brush.transform.localRotation, placedRotation), Is.LessThan(0.01f));
+        }
+
+        [Test]
+        public void PickingAnotherBrushWhileHolding_SwapsInsteadOfBeingIgnored()
+        {
+            var state = New("ToolState").AddComponent<ToolState>();
+            var tool = New("PhysicalPaintTool").AddComponent<PhysicalPaintTool>();
+            Transform home = New("PhysicalTools").transform;
+            var held = New("PhysicalBrush_1").AddComponent<PhysicalBrush>();
+            var wanted = New("PhysicalBrush_0").AddComponent<PhysicalBrush>();
+            tool.SetToolStateForTests(state);
+            tool.SetLocalPlayerId("left");
+            held.transform.SetParent(home, false);
+            held.transform.localPosition = new Vector3(-12.6f, 0.91f, -6.25f);
+            wanted.transform.SetParent(home, false);
+            wanted.transform.localPosition = new Vector3(-12.6f, 0.91f, -7.2f);
+            tool.RegisterBrush(held);
+            tool.RegisterBrush(wanted);
+            var anchor = New("carry").transform;
+            tool.SetCarryAnchor("Right", anchor);
+
+            Assert.IsTrue(tool.TryPickupBrush("left", held, held.transform.position, "Right"));
+            Assert.IsTrue(tool.TryPickupBrush("left", wanted, wanted.transform.position, "Right"),
+                "붓을 든 채 다른 붓을 집으면 바꿔 들어야 한다 — 무시하면 나머지 붓이 죽은 표적이 된다");
+            Assert.AreSame(wanted, tool.HeldBrush);
+            Assert.AreEqual(anchor, wanted.transform.parent);
+            Assert.AreEqual(home, held.transform.parent, "들고 있던 붓은 제자리로 돌아가야 한다");
+            Assert.That(held.transform.localPosition.z, Is.EqualTo(-6.25f).Within(0.0001f));
+            Assert.IsFalse(tool.TryPickupBrush("left", wanted, wanted.transform.position, "Right"),
+                "이미 든 붓을 다시 집으면 제자리로 돌아갔다가 다시 잡히는 헛동작이 된다");
+        }
+
+        [Test]
+        public void PickingWithTheOtherHandWhileHolding_IsRejected()
+        {
+            var state = New("ToolState").AddComponent<ToolState>();
+            var tool = New("PhysicalPaintTool").AddComponent<PhysicalPaintTool>();
+            Transform home = New("PhysicalTools").transform;
+            var held = New("PhysicalBrush_1").AddComponent<PhysicalBrush>();
+            var wanted = New("PhysicalBrush_0").AddComponent<PhysicalBrush>();
+            tool.SetToolStateForTests(state);
+            tool.SetLocalPlayerId("left");
+            held.transform.SetParent(home, false);
+            wanted.transform.SetParent(home, false);
+            tool.RegisterBrush(held);
+            tool.RegisterBrush(wanted);
+            tool.SetCarryAnchor("Left", New("left carry").transform);
+            tool.SetCarryAnchor("Right", New("right carry").transform);
+
+            Assert.IsTrue(tool.TryPickupBrush("left", held, Vector3.zero, "Left"));
+            // 왼손이 잡고 있는 붓을 오른손 pickup이 dock해 버리면, HandInputRouter의 왼손 capture가
+            // 놓여 있는 붓을 계속 Hold하는 유령 상태가 된다.
+            Assert.IsFalse(tool.TryPickupBrush("left", wanted, Vector3.zero, "Right"),
+                "다른 손이 든 붓은 교체 대상이 아니다");
+            Assert.AreSame(held, tool.HeldBrush);
+            Assert.AreEqual("Left", tool.HeldHand);
+            Assert.IsTrue(held.IsHeld);
+            Assert.IsFalse(wanted.IsHeld);
+        }
+
+        [Test]
         public void Stations_ChangeTheExistingToolStateOnlyWhenOwnedBrushIsHeld()
         {
             PhysicalBrush brush;

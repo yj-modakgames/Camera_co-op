@@ -136,6 +136,82 @@ namespace CameraCoop.Tests
                 + string.Join("\n", failures));
         }
 
+        // 붓은 손 조준으로 집는다. HandInputRouter는 가장 가까운 hit 하나만 후보로 삼으므로,
+        // 앞을 가리는 소품이 하나만 있어도 그 붓은 죽은 표적이 된다.
+        [Test]
+        public void EveryBrushIsAimableFromThePlayerSide()
+        {
+            PhysicalBrush[] brushes = Find("PhysicalTools").GetComponentsInChildren<PhysicalBrush>(true)
+                .OrderBy(item => item.name, StringComparer.Ordinal).ToArray();
+            Assert.That(brushes, Has.Length.EqualTo(3), "붓 세 자루를 못 찾았다.");
+            Bounds[] grabs = brushes.Select(GrabBounds).ToArray();
+
+            // 붓 자신의 collider는 얇은 mesh다. 런타임에 덧대는 잡기 box(grabs)로 대신 잰다.
+            Collider[] props = lobby.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Collider>(true))
+                .Where(item => item.enabled && !item.isTrigger
+                    && item.GetComponentInParent<PhysicalBrush>() == null)
+                .ToArray();
+
+            var failures = new List<string>();
+            for (int index = 0; index < brushes.Length; index++)
+            {
+                Bounds grab = grabs[index];
+                float minGrab = brushes[index].MinGrabSize;
+                Assert.That(Mathf.Min(grab.size.x, Mathf.Min(grab.size.y, grab.size.z)),
+                    Is.GreaterThan(minGrab - 0.001f),
+                    brushes[index].name + " 잡기 표적이 " + minGrab.ToString("0.00", CultureInfo.InvariantCulture)
+                        + " m보다 얇다.");
+                // 플레이어는 동쪽에서 눈높이 2.4 m로 본다. 정면과 rack 중앙에서 비스듬히 겨눌 때를 모두 본다.
+                foreach (Vector3 eye in new[]
+                {
+                    new Vector3(-10.6f, 2.4f, grab.center.z),
+                    new Vector3(-10.6f, 2.4f, -6.25f),
+                    new Vector3(-11.6f, 2.4f, -6.25f)
+                })
+                {
+                    var ray = new Ray(eye, (grab.center - eye).normalized);
+                    float reach = Vector3.Distance(eye, grab.center);
+                    foreach (Collider blocker in props)
+                        if (blocker.bounds.IntersectRay(ray, out float distance) && distance < reach)
+                            failures.Add(string.Format(CultureInfo.InvariantCulture,
+                                "{0} <- {1} 이 {2:0.00} m 앞을 가린다 (조준 거리 {3:0.00} m, 눈 {4})",
+                                brushes[index].name, Path(blocker.transform, null), distance, reach, eye));
+                    for (int other = 0; other < grabs.Length; other++)
+                        if (other != index && grabs[other].IntersectRay(ray, out float distance) && distance < reach)
+                            failures.Add(string.Format(CultureInfo.InvariantCulture,
+                                "{0} <- {1} 의 잡기 box가 {2:0.00} m 앞을 가린다 (조준 거리 {3:0.00} m, 눈 {4})",
+                                brushes[index].name, brushes[other].name, distance, reach, eye));
+                }
+            }
+            Assert.That(failures, Is.Empty, () => "동쪽에서 조준할 수 없는 붓이 있다:\n" + string.Join("\n", failures));
+        }
+
+        // PhysicalBrush.EnsureGrabCollider가 런타임에 만드는 잡기 box의 world AABB.
+        private static Bounds GrabBounds(PhysicalBrush brush)
+        {
+            MeshFilter filter = brush.GetComponent<MeshFilter>();
+            Mesh mesh = filter != null ? filter.sharedMesh : null;
+            if (mesh == null) return new Bounds(brush.transform.position, Vector3.zero);
+            Bounds local = mesh.bounds;
+            Vector3 lossy = brush.transform.lossyScale;
+            float minGrab = brush.MinGrabSize;
+            var size = new Vector3(
+                Mathf.Max(local.size.x, minGrab / Mathf.Abs(lossy.x)),
+                Mathf.Max(local.size.y, minGrab / Mathf.Abs(lossy.y)),
+                Mathf.Max(local.size.z, minGrab / Mathf.Abs(lossy.z)));
+            Bounds world = new Bounds(brush.transform.TransformPoint(local.center), Vector3.zero);
+            for (int corner = 0; corner < 8; corner++)
+            {
+                var offset = new Vector3(
+                    ((corner & 1) == 0 ? -0.5f : 0.5f) * size.x,
+                    ((corner & 2) == 0 ? -0.5f : 0.5f) * size.y,
+                    ((corner & 4) == 0 ? -0.5f : 0.5f) * size.z);
+                world.Encapsulate(brush.transform.TransformPoint(local.center + offset));
+            }
+            return world;
+        }
+
         [Test]
         public void SpawnCircleStaysClear()
         {

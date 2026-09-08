@@ -285,15 +285,16 @@ namespace CameraCoop.EditorTools
             rack.GetComponent<BoxCollider>().size = new Vector3(1f, 2.5f, 1.025f);
             PhysicalToolStation rackStation = rack.AddComponent<PhysicalToolStation>();
             rackStation.SetConfiguration(paintTool, PhysicalToolStation.StationKind.Rack, 0);
-            SetField(paintTool, "rack", rack.transform);
             // dockAnchor를 지정하면 붓 셋이 그 한 점에 겹쳐 docking된다. 각자 놓인 자리로 돌아가게 비워 둔다.
 
             var brushes = new PhysicalBrush[3];
             for (int index = 0; index < brushes.Length; index++)
             {
-                // 간격은 붓 길이(0.9)보다 넓게. 0.22 m 잡기 collider끼리 겹치면 조준이 갈린다.
+                // 붓 메시의 긴 축은 local z이고 아래 회전이 그것을 world x로 보낸다 — 즉 붓은 z가 아니라
+                // x로 눕는다. 그래서 z 간격은 붓 길이(0.9)가 아니라 0.22 m 잡기 collider만 벌리면 된다.
+                // 0.95로 벌렸을 때는 바깥 두 자루가 상판(z 1.6 m) 밖 허공에 떠 있었다 (2026-09-08 캡처).
                 var position = new Vector3(brushBench.center.x, benchTop + 0.12f,
-                    brushBench.center.z + (index - 1) * 0.95f);
+                    brushBench.center.z + (index - 1) * 0.6f);
                 Quaternion lying = Quaternion.Euler(0f, 90f, 90f);
                 GameObject brush = PropInstance(BrushPropPaths[index], "PhysicalBrush_" + index, root,
                     position, BrushLength, lying);

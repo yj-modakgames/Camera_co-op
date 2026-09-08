@@ -11,6 +11,7 @@ namespace CameraCoop
         [SerializeField, Min(0.01f)] private float minGrabSize = 0.22f;
         private PhysicalPaintTool owner;
         public bool IsHeld { get; private set; }
+        public float MinGrabSize => minGrabSize;
 
         private void Awake()
         {

@@ -609,3 +609,31 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 - 반영 5건: 상자 열마다 단일 모델(폭 14% 차이로 생기던 틈 제거), `CrateProp` 헬퍼(fallback·StripColliders·BatchingStatic 일원화, 호출부 7곳), 테스트 잔존 이름 정리·`LobbyBarrel_` Counter 그룹, "2열 3행"→"2×2", probe 배치 공식 통일. 재검증: recompile error 0, EditMode 914/914, validator PASS.
 - 재채점: 4-4 0.4→0.5(잔존 항목 제거), 5-3 0.4→0.45(상자 22개 static), 4-2 0.45→0.5(중복 제거). 총점 **9.20 → 9.40**.
 - 미반영: 방 크기 상수 3중 정의(Floor cube·builder const·테스트), `[OneTimeSetUp]` 전환.
+
+## 2026-09-08 — 들고 있는 붓 거대화·붓 집기 결함 수정
+
+### 평가 범위와 상태
+- `PhysicalPaintTool`: 붓 parent 변경 시 world scale 보존(`SetParent(…, true)`), `BrushHome`에 localScale 복원, 같은 손일 때만 든 붓을 반납하고 교체(docs/15 §5), dead rack 분기·필드 삭제. `PhysicalBrush.MinGrabSize` 노출. 붓 z 간격 0.95→0.6(상판 밖에 떠 있던 두 자루). 테스트 4개 추가(`PhysicalPaintToolTests` 3, `RelayQuizOnlineLobbyLayoutTests.EveryBrushIsAimableFromThePlayerSide`).
+
+### 항목별 점수
+| 카테고리 | 항목 | 배점 | 획득 | 근거 |
+|---|---|---|---|---|
+| 기능 | 1-1 | 0.8 | 0.8 | 손 본 lossyScale 348 × 붓 2.71 = 944(길이 313 m) → 불변. 교체·거부 동작 명세 일치 |
+| | 1-2 | 0.6 | 0.6 | 다른 손 pickup 거부(router capture 유령 방지), 같은 붓 재집기 거부 |
+| | 1-3 | 0.6 | 0.6 | 기존 가드 유지 |
+| 성능 | 2-1 | 0.7 | 0.7 | pickup 시 1회 SetParent, 할당 없음 |
+| | 2-2 | 0.7 | 0.7 | Update 변경 없음 |
+| | 2-3 | 0.6 | 0.6 | 필드 1개 삭제 |
+| 검증 | 3-1 | 0.7 | 0.7 | red→green 증거: 수정 전 `Expected 2.7137 But was 944.69`, `Expected True But was False` |
+| | 3-2 | 0.7 | 0.6 | EditMode `total 918, passed 918, failed 0`(unity cmd CLI) |
+| | 3-3 | 0.6 | 0.4 | recompile error 0, 빌드·validator PASS, 캡처로 세 붓 상판 위 확인. Play 미확인 |
+| 코드 품질 | 4-1 | 0.5 | 0.5 | `Attach`, `MinGrabSize` |
+| | 4-2 | 0.5 | 0.5 | parent 변경 경로 단일화 |
+| | 4-3 | 0.5 | 0.45 | 붓 z 간격 0.6 리터럴 |
+| | 4-4 | 0.5 | 0.5 | dead rack 분기·필드 삭제 |
+| 최적화 | 5-1~5-4 | 2.0 | 1.95 | 교체 시 reparent 2회(-0.05) |
+
+### 총점: 9.60 / 10 (점수 이력: 9.55 → 9.60, code-review 4건 반영)
+
+### 잔여 검증
+- Play: 든 붓 크기 약 0.9 m, 같은 손으로 다른 붓 집으면 교체·원위치 복귀, 다른 손으로 집으면 무반응, rack 반납 후 원배율, 세 붓 모두 상판 위·집힘.
