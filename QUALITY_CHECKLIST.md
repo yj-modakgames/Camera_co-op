@@ -657,3 +657,14 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 ### 잔여 검증
 - Play: 주먹 유지 중 팔을 크게 움직여도 한 획으로 이어지는지, 손 펴면 약 0.2 s 안에 멈추는지. 꼬리가 길면 Inspector `Fist Release Grace Seconds` 0.12~0.15.
 - 미반영: 분류기 히스테리시스(안 b). grace로도 끊기면 적용.
+
+## 2026-09-08 — 로비 낙서판을 세션 없이 그리게 함
+
+### 평가 범위와 상태
+- `HandPointer.practiceBoard` 플래그: 낙서판은 `CanUseHandUi && !IsTyping`, 내 종이·게임 캔버스는 기존 `CanDraw`. `HandInputRouter`의 canvas gate 2곳(`CanDeliver`·`ResolveWorldTarget`)을 `IsRegisteredCanvas → Pointer.CanUseCanvas`로 위임해 판정 단일화. builder가 플래그 설정, validator가 검사. 테스트 4개(세션 없음 낙서판 OK / 내 종이 거부 / Blocked 거부 / 타이핑 중 거부).
+
+### 총점: 9.65 / 10
+- 기능 2.0 (사용자 결정 반영, 내 종이 규칙 불변, validator 가드) · 성능 2.0 (분기 1개) · 검증 1.7 (red `Expected: same as <scratch board> But was: null` → green, EditMode 924/924, validator PASS, 빌드 Scene 필드값 `practiceBoard: 1/0` 확인. Play 미확인 -0.3) · 코드 품질 2.0 (gate 한 곳) · 최적화 1.95.
+
+### 잔여 검증
+- Play: host 없이 PRACTICE BOARD 그려짐, 내 종이는 안 그려짐, CLEAR가 낙서판만 지움, 타이핑 중·Blocked 중 낙서판 막힘, host 후에도 낙서판 정상.

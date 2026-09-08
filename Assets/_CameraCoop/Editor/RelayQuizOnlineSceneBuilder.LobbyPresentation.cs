@@ -162,6 +162,8 @@ namespace CameraCoop.EditorTools
             SetField(pointer, "canvasSurface", board);
             SetField(pointer, "toolState", core.ToolState);
             SetField(pointer, "aimCamera", core.PlayerCamera);
+            // host도 참가도 하지 않은 상태에서 그려져야 한다 — 세션 gate(CanDraw)를 우회한다.
+            SetField(pointer, "practiceBoard", true);
             DrawingController drawing = drawingObject.AddComponent<DrawingController>();
             SetField(drawing, "handPointer", pointer);
             SetField(drawing, "toolState", core.ToolState);

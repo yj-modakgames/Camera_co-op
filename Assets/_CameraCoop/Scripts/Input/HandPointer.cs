@@ -21,6 +21,9 @@ namespace CameraCoop
         [SerializeField] private Camera aimCamera;
         [SerializeField] private CanvasSurface canvasSurface;
         [SerializeField] private ToolState toolState;
+        // 로비 낙서판 전용. 낙서판은 세션(자리 배정)·Drawing context 없이도 그려져야 한다 (사용자 결정 2026-09-08).
+        // 내 종이·게임 캔버스는 false를 유지해 InputModeManager.CanDraw gate를 그대로 받는다.
+        [SerializeField] private bool practiceBoard;
         [SerializeField, Min(0f)] private float maxDistance = 20f;
 
         public event Action<string, Vector2, Vector3> OnCanvasStrokeStart;  // hand, norm, world
@@ -155,12 +158,20 @@ namespace CameraCoop
             if (localSurfaces.TryGetValue(hand, out CanvasSurface surface) && !CanUseCanvas(surface)) EndCanvasStroke(hand);
         }
 
+        // 이 캔버스에 그릴 수 있는지의 단독 판정자. HandInputRouter의 두 gate(CanDeliver·ResolveWorldTarget)도
+        // 여기로 위임한다 — 판정이 갈라지면 조준은 되는데 획이 안 생기는 상태가 나온다.
         internal bool CanUseCanvas(CanvasSurface surface)
         {
             return inputSource == HandPointerInputSource.HandRouter && isActiveAndEnabled && StrokesEnabled &&
-                inputModeManager != null && inputModeManager.CanDraw && toolState != null &&
+                inputModeManager != null && DrawGateOpen && toolState != null &&
                 surface != null && surface == canvasSurface && surface.isActiveAndEnabled;
         }
+
+        // 낙서판은 CanDraw(세션·Drawing context 전용)를 보지 않는다. 대신 손 UI가 살아 있는 동안 열어 두고,
+        // 정답 타이핑 중에는 닫는다 — 타이핑하다 획이 생기면 안 된다.
+        private bool DrawGateOpen => practiceBoard
+            ? inputModeManager.CanUseHandUi && !InputFocus.IsTyping
+            : inputModeManager.CanDraw;
 
         public void BeginCanvasStroke(string hand, CanvasSurface surface, Vector2 normalizedPosition)
         {

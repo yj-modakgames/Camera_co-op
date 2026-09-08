@@ -398,8 +398,10 @@ namespace CameraCoop
 
         private bool CanDeliver(HandInteractable target)
         {
+            // 캔버스 판정은 HandPointer.CanUseCanvas 한 곳으로 위임한다 (IsRegisteredCanvas 경유).
+            // 낙서판은 CanDraw 없이도 열리므로 여기서 CanDraw를 겹쳐 보면 조준만 되고 획이 안 생긴다.
             return routingEnabled && isActiveAndEnabled && hasFocus && inputModeManager != null &&
-                (target.IsCanvas ? inputModeManager.CanDraw && IsRegisteredCanvas(target) : inputModeManager.CanUseHandUi);
+                (target.IsCanvas ? IsRegisteredCanvas(target) : inputModeManager.CanUseHandUi);
         }
 
         private bool IsRegisteredCanvas(HandInteractable target)
@@ -638,8 +640,7 @@ namespace CameraCoop
 
                 HandInteractable candidate = hit.collider.GetComponentInParent<HandInteractable>();
                 if (candidate == null || !candidate.UsesWorldHitPosition || !IsAvailable(candidate)) continue;
-                if (candidate is HandCanvasInteractable &&
-                    (inputModeManager == null || !inputModeManager.CanDraw || !IsRegisteredCanvas(candidate))) continue;
+                if (candidate is HandCanvasInteractable && !IsRegisteredCanvas(candidate)) continue;
                 hitPosition = hit.point;
                 return candidate;
             }

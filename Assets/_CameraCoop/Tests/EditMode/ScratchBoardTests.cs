@@ -51,6 +51,8 @@ namespace CameraCoop.Tests
             scratchSurface = Surface("scratch board", Vector3.zero);
             workPointer = Pointer(workSurface);
             scratchPointer = Pointer(scratchSurface);
+            // 낙서판은 세션 없이도 그려져야 한다 — 씬 빌더도 같은 필드를 켠다.
+            Set(scratchPointer, "practiceBoard", true);
             workCanvas = Canvas(workSurface, workPointer);
             scratchCanvas = Canvas(scratchSurface, scratchPointer);
 
@@ -134,6 +136,67 @@ namespace CameraCoop.Tests
             CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, scratchEvents);
         }
 
+        // host도 참가도 하지 않은 로비(Explore + practiceDrawingAllowed=false)에서도 낙서판은 그려져야 한다
+        // (사용자 결정 2026-09-08). CanDraw는 세션 전용 gate라 낙서판에는 쓰지 않는다.
+        [Test]
+        public void LobbyExploreWithoutSession_StillDrawsOnScratchBoard()
+        {
+            EnterLobbyExploreWithoutSession();
+
+            Assert.That(Resolve(), Is.SameAs(scratchCanvas), "세션이 없어도 낙서판이 조준 대상이어야 한다.");
+
+            SendFist(1, 0f, false);
+            SendFist(2, 0.11f, false);
+            SendFist(3, 0.12f, true);
+            SendFist(4, 0.13f, true);
+            SendFist(5, 0.14f, false);
+            SendFist(6, 0.30f, false);
+            SendFist(7, 0.40f, false);
+
+            CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, scratchEvents);
+        }
+
+        // 회귀 방지: 낙서판을 열어 주는 것이 내 종이(activeCanvas)까지 열어서는 안 된다.
+        [Test]
+        public void LobbyExploreWithoutSession_KeepsWorkCanvasBlocked()
+        {
+            EnterLobbyExploreWithoutSession();
+
+            Assert.That(workPointer.CanUseCanvas(workSurface), Is.False, "내 종이는 세션 없이 열리면 안 된다.");
+
+            SendTo(workCanvas, 1, 0f, false);
+            SendTo(workCanvas, 2, 0.11f, false);
+            SendTo(workCanvas, 3, 0.12f, true);
+            SendTo(workCanvas, 4, 0.13f, true);
+
+            CollectionAssert.IsEmpty(workEvents, "세션 없는 로비에서 내 종이에 획이 생기면 안 된다.");
+        }
+
+        [Test]
+        public void BlockedContext_RejectsScratchBoardToo()
+        {
+            modes.SetContext(InputContext.Blocked);
+            modes.SetPracticeDrawingAllowed(false);
+
+            Assert.That(Resolve(), Is.Null, "차폐 중에는 낙서판도 조준 대상이 아니다.");
+
+            SendFist(1, 0f, false);
+            SendFist(2, 0.11f, false);
+            SendFist(3, 0.12f, true);
+            SendFist(4, 0.13f, true);
+
+            CollectionAssert.IsEmpty(scratchEvents, "차폐 중에는 낙서판에도 획이 생기면 안 된다.");
+        }
+
+        [Test]
+        public void TypingIntoAnswerField_RejectsScratchBoard()
+        {
+            EnterLobbyExploreWithoutSession();
+            InputFocus.IsTyping = true;
+
+            Assert.That(Resolve(), Is.Null, "정답 입력 중에는 낙서판이 조준 대상이 아니다.");
+        }
+
         [Test]
         public void UnregisteredCanvas_IsStillRejectedByTheRouter()
         {
@@ -182,6 +245,19 @@ namespace CameraCoop.Tests
         private void SendFist(ulong id, float now, bool fist)
         {
             Send(id, now, false, fist);
+        }
+
+        // 자리 배정이 없는 로비 상태 — PartyWorldController.UpdateCanvasMovement가 켜 주지 않은 상태다.
+        private void EnterLobbyExploreWithoutSession()
+        {
+            modes.SetContext(InputContext.Explore);
+            modes.SetPracticeDrawingAllowed(false);
+        }
+
+        // 조준선 밖에 있는 캔버스를 라우터에 직접 물려 gate만 시험한다.
+        private void SendTo(HandInteractable target, ulong id, float now, bool fist)
+        {
+            router.ProcessSample(Sample(id, false, fist), now, target, workSurface.transform.position);
         }
 
         private void Send(ulong id, float now, bool pinched, bool fist)

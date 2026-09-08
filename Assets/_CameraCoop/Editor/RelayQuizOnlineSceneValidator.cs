@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using CameraCoop.Party;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -71,10 +72,14 @@ namespace CameraCoop.EditorTools
             {
                 "CameraStation", "GestureTutorialStation", "BrushRack", "EraserStation",
                 "JumpObstaclePath", "Action_Host", "Action_Invite", "Action_Leave",
-                "Action_StartSelectedMode", "ModeSelectorRoot", "PublicPracticeEasels"
+                "Action_StartSelectedMode", "ModeSelectorRoot", "PublicPracticeEasels",
+                "ScratchBoardDrawing"
             };
             foreach (string name in required)
                 if (Find(scene, name) == null) return Fail("Lobby is missing " + name + ".", out error);
+            if (!IsPracticeBoardPointer(Find(scene, "ScratchBoardDrawing").GetComponent<HandPointer>()))
+                return Fail("ScratchBoardDrawing HandPointer must set practiceBoard "
+                    + "so the lobby board draws without a session.", out error);
             if (Find(scene, "ModeSelectorRoot").activeSelf)
                 return Fail("ModeSelectorRoot must be hidden until START opens selection.", out error);
 
@@ -104,6 +109,14 @@ namespace CameraCoop.EditorTools
             }
             error = string.Empty;
             return true;
+        }
+
+        // practiceBoard는 private serialize 필드다 (Editor assembly에는 internal도 안 보인다).
+        private static bool IsPracticeBoardPointer(HandPointer pointer)
+        {
+            FieldInfo field = typeof(HandPointer).GetField("practiceBoard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            return pointer != null && field != null && (bool)field.GetValue(pointer);
         }
 
         private static bool ValidateMissingScripts(Scene scene, out string error)
