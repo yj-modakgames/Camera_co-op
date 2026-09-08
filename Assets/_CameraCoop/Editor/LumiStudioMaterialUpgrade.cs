@@ -4,14 +4,14 @@ using UnityEngine;
 
 namespace CameraCoop.EditorTools
 {
-    // LumiStudio Painting Tools는 Built-in Standard shader로 저장돼 있어 URP 프로젝트에서 마젠타로 보인다.
+    // 반입한 3rd-party 에셋은 Built-in Standard shader로 저장돼 있어 URP 프로젝트에서 마젠타로 보인다.
     // Unity 6의 Render Pipeline Converter는 창 조작이 필요하므로, 이 두 material만 코드로 변환한다.
     // ROM(Roughness/Occlusion/Metallic) 팩 텍스처는 URP Lit의 metallic-smoothness 배치와 다르다.
     // URP는 occlusion을 G 채널에서 읽으므로 occlusion만 재사용하고, metallic/smoothness는 상수로 둔다.
     public static class LumiStudioMaterialUpgrade
     {
-        private const string MenuPath = "Camera Co-op/Assets/Upgrade LumiStudio Materials to URP";
-        private const string MaterialFolder = "Assets/LumiStudio";
+        private const string MenuPath = "Camera Co-op/Assets/Upgrade Imported Materials to URP";
+        private static readonly string[] MaterialFolders = { "Assets/LumiStudio", "Assets/Stylized_Astronaut" };
         private const string UrpLitShader = "Universal Render Pipeline/Lit";
         private const float DefaultSmoothness = 0.35f;
 
@@ -25,7 +25,13 @@ namespace CameraCoop.EditorTools
                 return;
             }
 
-            string[] guids = AssetDatabase.FindAssets("t:Material", new[] { MaterialFolder });
+            string[] folders = System.Array.FindAll(MaterialFolders, AssetDatabase.IsValidFolder);
+            if (folders.Length == 0)
+            {
+                Debug.LogWarning("[LumiStudioMaterialUpgrade] 대상 폴더가 없습니다: " + string.Join(", ", MaterialFolders));
+                return;
+            }
+            string[] guids = AssetDatabase.FindAssets("t:Material", folders);
             var upgraded = new List<string>();
             foreach (string guid in guids)
             {

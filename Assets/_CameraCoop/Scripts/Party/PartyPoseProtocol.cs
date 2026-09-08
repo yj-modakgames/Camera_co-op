@@ -11,6 +11,14 @@ namespace CameraCoop.Party
         Running = 2
     }
 
+    // 원격 아바타가 붓을 어느 손에 들고 있는지. 들고 있지 않으면 None이다.
+    public enum PartyCarriedHand
+    {
+        None = 0,
+        Left = 1,
+        Right = 2
+    }
+
     [Serializable]
     public sealed class PartyPosePacket
     {
@@ -27,17 +35,20 @@ namespace CameraCoop.Party
         public float positionZ;
         public float yawDegrees;
         public int moveState;
+        public int carriedHand;
     }
 
     public readonly struct PartyPoseSample
     {
-        public PartyPoseSample(int slot, Vector3 position, float yawDegrees, PartyMoveState moveState, long sequence)
+        public PartyPoseSample(int slot, Vector3 position, float yawDegrees, PartyMoveState moveState, long sequence,
+            PartyCarriedHand carriedHand = PartyCarriedHand.None)
         {
             Slot = slot;
             Position = position;
             YawDegrees = yawDegrees;
             MoveState = moveState;
             Sequence = sequence;
+            CarriedHand = carriedHand;
         }
 
         public int Slot { get; }
@@ -45,12 +56,13 @@ namespace CameraCoop.Party
         public float YawDegrees { get; }
         public PartyMoveState MoveState { get; }
         public long Sequence { get; }
+        public PartyCarriedHand CarriedHand { get; }
     }
 
     public static class PartyPoseProtocol
     {
         public const string GameId = "camera-coop-party-pose";
-        public const int Version = 2;
+        public const int Version = 3;
         public const int MaxMessageBytes = 1024;
         public const string KindSubmit = "submit";
         public const string KindRelay = "relay";
@@ -83,7 +95,9 @@ namespace CameraCoop.Party
                     && packet.sequence > 0
                     && (packet.kind == KindSubmit || packet.kind == KindRelay || packet.kind == KindRemove)
                     && packet.slot >= -1
-                    && packet.slot < PartyRoster.Capacity;
+                    && packet.slot < PartyRoster.Capacity
+                    && packet.carriedHand >= (int)PartyCarriedHand.None
+                    && packet.carriedHand <= (int)PartyCarriedHand.Right;
             }
             catch (Exception exception) when (exception is ArgumentException || exception is DecoderFallbackException)
             {

@@ -767,9 +767,18 @@ namespace CameraCoop.Party
             Vector3 position = localPlayerRoot.position;
             PartyMoveState moveState = hasPreviousLocalPosition && (position - previousLocalPosition).sqrMagnitude > 0.000001f
                 ? PartyMoveState.Walking : PartyMoveState.Idle;
-            poseSession.Tick(nowSeconds, position, localPlayerRoot.eulerAngles.y, moveState);
+            poseSession.Tick(nowSeconds, position, localPlayerRoot.eulerAngles.y, moveState, LocalCarriedHand());
             previousLocalPosition = position;
             hasPreviousLocalPosition = true;
+        }
+
+        // 다른 사람 화면에서도 붓을 든 모습이 보이게 pose에 실어 보낸다.
+        private PartyCarriedHand LocalCarriedHand()
+        {
+            if (physicalPaintTool == null
+                || physicalPaintTool.Location != PhysicalPaintTool.BrushLocation.Held) return PartyCarriedHand.None;
+            return string.Equals(physicalPaintTool.HeldHand, "Right", StringComparison.Ordinal)
+                ? PartyCarriedHand.Right : PartyCarriedHand.Left;
         }
 
         private void UpdateMural(OnlineRelayQuizView view, PartyRosterSnapshot roster, float nowSeconds)

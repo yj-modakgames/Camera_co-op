@@ -83,6 +83,12 @@ namespace CameraCoop.Party
 
         public void Tick(float nowSeconds, Vector3 localPosition, float localYawDegrees, PartyMoveState moveState)
         {
+            Tick(nowSeconds, localPosition, localYawDegrees, moveState, PartyCarriedHand.None);
+        }
+
+        public void Tick(float nowSeconds, Vector3 localPosition, float localYawDegrees, PartyMoveState moveState,
+            PartyCarriedHand carriedHand)
+        {
             if (disposed) throw new ObjectDisposedException(nameof(PartyPoseSession));
             if (!PartyPoseSlotState.IsFinite(nowSeconds) || nowSeconds < currentTime) throw new ArgumentOutOfRangeException(nameof(nowSeconds));
             currentTime = nowSeconds;
@@ -96,7 +102,7 @@ namespace CameraCoop.Party
             localSequence++;
             byte[] bytes = PartyPoseProtocol.Encode(CreatePacket(
                 transport.IsHost ? PartyPoseProtocol.KindRelay : PartyPoseProtocol.KindSubmit,
-                localSequence, LocalSlot, localPosition, normalizedYaw, moveState));
+                localSequence, LocalSlot, localPosition, normalizedYaw, moveState, carriedHand));
             if (transport.IsHost) SendToRoster(bytes, LocalSlot);
             else transport.SendToHost(bytes, false);
         }
@@ -130,7 +136,8 @@ namespace CameraCoop.Party
             PartyPoseSample sample = Sample(slot, packet);
             RemotePoseUpdated?.Invoke(sample);
             SendToRoster(PartyPoseProtocol.Encode(CreatePacket(
-                PartyPoseProtocol.KindRelay, packet.sequence, slot, sample.Position, sample.YawDegrees, sample.MoveState)), slot);
+                PartyPoseProtocol.KindRelay, packet.sequence, slot, sample.Position, sample.YawDegrees, sample.MoveState,
+                sample.CarriedHand)), slot);
         }
 
         private void HandleClientMessage(string peerIdentity, PartyPosePacket packet)
@@ -168,7 +175,8 @@ namespace CameraCoop.Party
             if (!transport.IsHost) return;
             long removalSequence = slots.CreateRemovalSequence(slot);
             SendToRoster(PartyPoseProtocol.Encode(CreatePacket(
-                PartyPoseProtocol.KindRemove, removalSequence, slot, Vector3.zero, 0f, PartyMoveState.Idle)), slot);
+                PartyPoseProtocol.KindRemove, removalSequence, slot, Vector3.zero, 0f, PartyMoveState.Idle,
+                PartyCarriedHand.None)), slot);
         }
 
         private void SendToRoster(byte[] bytes, int sourceSlot)
@@ -180,7 +188,8 @@ namespace CameraCoop.Party
             }
         }
 
-        private PartyPosePacket CreatePacket(string kind, long sequence, int slot, Vector3 position, float yawDegrees, PartyMoveState moveState)
+        private PartyPosePacket CreatePacket(string kind, long sequence, int slot, Vector3 position, float yawDegrees,
+            PartyMoveState moveState, PartyCarriedHand carriedHand)
         {
             return new PartyPosePacket
             {
@@ -196,7 +205,8 @@ namespace CameraCoop.Party
                 positionY = position.y,
                 positionZ = position.z,
                 yawDegrees = yawDegrees,
-                moveState = (int)moveState
+                moveState = (int)moveState,
+                carriedHand = (int)carriedHand
             };
         }
 
@@ -226,7 +236,7 @@ namespace CameraCoop.Party
         private static PartyPoseSample Sample(int slot, PartyPosePacket packet)
         {
             return new PartyPoseSample(slot, new Vector3(packet.positionX, packet.positionY, packet.positionZ), packet.yawDegrees,
-                (PartyMoveState)packet.moveState, packet.sequence);
+                (PartyMoveState)packet.moveState, packet.sequence, (PartyCarriedHand)packet.carriedHand);
         }
     }
 }

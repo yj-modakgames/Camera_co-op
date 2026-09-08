@@ -22,7 +22,8 @@ namespace CameraCoop.EditorTools
             {
                 ReadyPads = new WorldReadyPadInteractable[4],
                 ZoneBounds = new BoxCollider[4], Spawns = new Transform[4], Docks = new Transform[4],
-                AvatarRoots = new Transform[4], RemotePresenters = new RemoteAvatarPresenter[3]
+                AvatarRoots = new Transform[4], RemotePresenters = new RemoteAvatarPresenter[3],
+                AvatarRigs = new AvatarRig[4]
             };
             Transform baysRoot = Group("NorthPlayerBays", core.WorldRoot.transform);
             Material[] colors = { context.Red, context.Blue, context.Green, context.Yellow };
@@ -62,11 +63,20 @@ namespace CameraCoop.EditorTools
 
                 Transform avatarRoot = Group("AvatarRoot_" + slot, bay);
                 avatarRoot.position = new Vector3(xs[slot], 0f, 0.7f);
-                GameObject avatar = Capsule("AvatarBody_" + slot, avatarRoot, new Vector3(0f, 1f, 0f),
-                    new Vector3(0.65f, 1f, 0.65f), colors[slot]);
-                Collider avatarCollider = avatar.GetComponent<Collider>();
-                if (avatarCollider != null) UnityEngine.Object.DestroyImmediate(avatarCollider);
+                AvatarRig rig = AstronautAvatarFactory.Create("AvatarBody_" + slot, avatarRoot, avatarRoot.position,
+                    180f, colors[slot]);
+                if (!rig.IsValid)
+                {
+                    GameObject avatar = Capsule("AvatarBody_" + slot, avatarRoot, new Vector3(0f, 1f, 0f),
+                        new Vector3(0.65f, 1f, 0.65f), colors[slot]);
+                    Collider avatarCollider = avatar.GetComponent<Collider>();
+                    if (avatarCollider != null) UnityEngine.Object.DestroyImmediate(avatarCollider);
+                }
+                // slot 0은 본인이다. 본인 캐릭터는 PlayerRig를 따라다니므로 bay에 세워두면 분신이 하나 더 생긴다.
+                // binding 계약을 위해 root는 남기고 몸만 끈다.
+                if (slot == 0 && rig.IsValid) rig.Root.SetActive(false);
                 layout.AvatarRoots[slot] = avatarRoot;
+                layout.AvatarRigs[slot] = rig;
 
                 if (slot > 0)
                 {
@@ -84,8 +94,19 @@ namespace CameraCoop.EditorTools
             core.PersonalCanvas.Configure("EditorLocalPlayer", LocalMarker("CanvasCarryAnchor", core.PlayerRig,
                 new Vector3(0f, 1.55f, 0.65f), 0f), layout.Docks[0], 2.25f);
             layout.CarryCanvasAnchor = FieldObject<Transform>(core.PersonalCanvas, "avatarAnchor");
-            layout.LeftBrushAnchor = LocalMarker("LeftBrushCarryAnchor", core.PlayerRig, new Vector3(-0.35f, 1.35f, 0.7f), 0f);
-            layout.RightBrushAnchor = LocalMarker("RightBrushCarryAnchor", core.PlayerRig, new Vector3(0.35f, 1.35f, 0.7f), 0f);
+
+            // 본인 캐릭터. PlayerRig 아래에 두어 이동·회전을 그대로 따라간다. 카메라는 머리 위(2.4)에 있어
+            // 고개를 숙이면 자기 몸과 손에 든 붓이 보인다.
+            AvatarRig localRig = AstronautAvatarFactory.Create("LocalAvatarBody", core.PlayerRig,
+                core.PlayerRig.position, 0f, context.Red);
+            layout.LocalAvatarRig = localRig;
+            if (localRig.IsValid && localRig.Animator != null)
+                localRig.Animator.gameObject.AddComponent<LocalAvatarAnimator>().Configure(core.PlayerRig);
+            // 붓은 캐릭터 손 본에 쥐어진다. 아바타가 없으면 예전처럼 카메라 앞 marker로 되돌아간다.
+            layout.LeftBrushAnchor = localRig.LeftHand != null ? localRig.LeftHand
+                : LocalMarker("LeftBrushCarryAnchor", core.PlayerRig, new Vector3(-0.35f, 1.35f, 0.7f), 0f);
+            layout.RightBrushAnchor = localRig.RightHand != null ? localRig.RightHand
+                : LocalMarker("RightBrushCarryAnchor", core.PlayerRig, new Vector3(0.35f, 1.35f, 0.7f), 0f);
 
             var actionList = new List<WorldActionInteractable>();
             Transform lobby = Group("CentralLobby", core.WorldRoot.transform);
@@ -206,7 +227,8 @@ namespace CameraCoop.EditorTools
             return actions;
         }
 
-        private static ToolLayout BuildPhysicalTools(Context context, CoreReferences core)
+        private static ToolLayout BuildPhysicalTools(Context context, CoreReferences core,
+            Transform leftBrushAnchor, Transform rightBrushAnchor)
         {
             Transform root = Group("PhysicalTools", core.WorldRoot.transform);
             PhysicalPaintTool paintTool = root.gameObject.AddComponent<PhysicalPaintTool>();
@@ -309,8 +331,8 @@ namespace CameraCoop.EditorTools
             ZoneSign(root, "ArtSupplies", "ART SUPPLIES · PICK UP A BRUSH", new Vector3(-13.3f, 3.3f, -4.2f), -90f,
                 context.Dark);
 
-            SetField(paintTool, "leftCarryAnchor", Find(context.Scene, "LeftBrushCarryAnchor").transform);
-            SetField(paintTool, "rightCarryAnchor", Find(context.Scene, "RightBrushCarryAnchor").transform);
+            SetField(paintTool, "leftCarryAnchor", leftBrushAnchor);
+            SetField(paintTool, "rightCarryAnchor", rightBrushAnchor);
             SetObjectArray(paintTool, "brushReferences", brushes.Cast<UnityEngine.Object>().ToArray());
             return new ToolLayout { PaintTool = paintTool, Brushes = brushes };
         }

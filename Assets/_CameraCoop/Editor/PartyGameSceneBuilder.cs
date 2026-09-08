@@ -162,9 +162,17 @@ namespace CameraCoop.EditorTools
                 Label("PLAYER " + (slot + 1), slotRoot, slotRoot.position + new Vector3(0f, 2.8f, 2.15f),
                     0.3f, Color.white);
 
-                GameObject avatar = Capsule("Avatar_" + slot, slotRoot,
-                    slotRoot.position + new Vector3(0f, 1f, 0f), new Vector3(0.6f, 1f, 0.6f), colors[slot]);
-                UnityEngine.Object.DestroyImmediate(avatar.GetComponent<Collider>());
+                AvatarRig rig = AstronautAvatarFactory.Create("Avatar_" + slot, slotRoot, slotRoot.position, 180f,
+                    colors[slot]);
+                GameObject avatar = rig.Root;
+                if (avatar == null)
+                {
+                    avatar = Capsule("Avatar_" + slot, slotRoot,
+                        slotRoot.position + new Vector3(0f, 1f, 0f), new Vector3(0.6f, 1f, 0.6f), colors[slot]);
+                    UnityEngine.Object.DestroyImmediate(avatar.GetComponent<Collider>());
+                }
+                // slot 0(본인)은 로비의 LocalAvatarBody가 PlayerRig를 따라다니므로 여기서는 세우지 않는다.
+                if (slot == 0 && rig.IsValid) avatar.SetActive(false);
                 avatars[slot] = avatar;
                 if (slot > 0)
                 {

@@ -87,3 +87,19 @@ UDP 손 센서 wire는 v1을 유지한다. Steam party game의 별도 `OnlineRel
 v4 packet의 전환 관련 필드는 `sessionId`, `rosterGeneration`, `selectedMode`, `modeGeneration`, `startSignal`, `transitionGeneration`, `transitionPhase`, `sceneReadyMask`이다. `startSignal`은 mode 선택과 additive Scene load를 확정하는 epoch이며, `START` 자체에서는 증가하지 않는다. `SelectModeAndBeginLoad`가 mode 선택을 승인할 때 증가한다. `transitionGeneration`은 additive Scene load/unload의 순서를 나타낸다. `transitionPhase`의 정확한 값은 `Lobby`, `SelectingMode`, `LoadingGame`, `InGame`, `ReturningToLobby`다. `sceneReadyMask`는 네 slot의 Scene 준비 상태를 나타낸다. `CoopMural` wire는 별도 `muralEpoch` 필드를 만들지 않고 `startSignal`을 mural session epoch로 사용하며, layer의 `revision`과 함께 늦은 layer·중복 완료를 거부한다.
 
 v4는 동일 `sessionId`와 최신 generation만 수용한다. Scene load failure와 timeout은 host가 실패 전환을 broadcast하고 private drawing·secret을 공개하지 않은 채 game Scene을 정리해 lobby로 돌아간다. disconnect는 `Abort`를 broadcast하고 round를 폐기하며 새 invite가 필요하다. drawing payload는 별도 reliable chunk로 전송하며 raw camera 영상·hand landmarks를 보내지 않는다.
+
+## 7. Party pose protocol v3 — 아바타 위치와 든 손
+
+`PartyPoseProtocol`은 `GameId=camera-coop-party-pose`, `MaxMessageBytes=1024`를 쓰는 별도 wire다. 아바타의 위치·yaw·이동 상태만 실어 나르며, 원격 player의 캐릭터를 그리는 데 쓴다. 여기에 raw camera 영상이나 hand landmark를 보내지 않는다.
+
+**v2 → v3 변경**: `carriedHand` 필드를 추가하고 `Version`을 3으로 올렸다. 값은 `0=None`, `1=Left`, `2=Right`이며 범위를 벗어난 packet은 decode에서 거부한다. 다른 player 화면에서도 붓을 든 손이 보이게 하기 위한 필드다.
+
+| 필드 | 뜻 |
+|---|---|
+| `sessionId`, `rosterGeneration`, `transitionGeneration` | 이전 session·roster·Scene의 늦은 packet을 거르는 epoch |
+| `sequence`, `kind` | 순서 보장과 `submit`/`relay`/`remove` 구분 |
+| `slot`, `positionX/Y/Z`, `yawDegrees` | 어느 slot이 어디를 보고 어디에 서 있는지 |
+| `moveState` | `0=Idle`, `1=Walking`, `2=Running`. 아바타 Idle/Run 전환에 쓴다 |
+| `carriedHand` | `0=None`, `1=Left`, `2=Right`. 그 손의 붓 표시를 켠다 |
+
+v2와 v3를 혼용하지 않는다. version이 다른 packet은 수용하지 않으므로 build를 섞어 쓰면 아바타가 서로 보이지 않는다.
