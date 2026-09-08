@@ -43,7 +43,7 @@
 
 ### 4-1. Intel Mac 열·전력 설정
 
-- 두 quality level은 `vSyncCount: 1`을 사용한다. frame rate는 display refresh rate를 따르며 고정 60 FPS를 뜻하지 않는다.
+- 두 quality level의 asset 값은 `vSyncCount: 1`을 유지한다. **macOS Player는 실행 시 `MacPlayerFrameCap`이 vSync를 끄고 30 FPS로 고정한다**(2026-09-08 결정, MacBookPro16,1 dGPU 발열 실측). Windows·Editor는 display refresh rate를 따른다.
 - `macRetinaSupport: 0`으로 Retina backing resolution 렌더링을 끈다.
 - macOS postbuild가 `Info.plist`에 `NSSupportsAutomaticGraphicsSwitching=true`를 기록한다. 이 key는 macOS의 automatic graphics switching opt-in이며, Unity Metal Player가 integrated GPU를 사용한다고 보장하지 않는다.
 - Intel Mac 비교 QA에서는 Unity 실행 인자 `-force-low-power-device`를 별도 case로 시험할 수 있다. 기본 실행 인자로 강제하지 않는다.
