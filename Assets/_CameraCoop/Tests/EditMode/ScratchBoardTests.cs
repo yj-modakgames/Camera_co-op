@@ -106,7 +106,10 @@ namespace CameraCoop.Tests
             SendFist(2, 0.11f, false);
             SendFist(3, 0.12f, true);
             SendFist(4, 0.13f, true);
+            // fist 손실은 fistReleaseGraceSeconds를 넘겨야 획을 끝낸다 (잡음 1~2 sample 흡수).
             SendFist(5, 0.14f, false);
+            SendFist(6, 0.30f, false);
+            SendFist(7, 0.40f, false);
 
             CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, scratchEvents);
             CollectionAssert.IsEmpty(workEvents, "낙서판 스트로크가 작업 캔버스로 새면 안 된다.");
@@ -125,6 +128,8 @@ namespace CameraCoop.Tests
             Send(4, 0.13f, pinched: true, fist: true);
             Send(5, 0.14f, pinched: true, fist: true);
             Send(6, 0.15f, pinched: false, fist: false);
+            Send(7, 0.30f, pinched: false, fist: false);
+            Send(8, 0.40f, pinched: false, fist: false);
 
             CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, scratchEvents);
         }

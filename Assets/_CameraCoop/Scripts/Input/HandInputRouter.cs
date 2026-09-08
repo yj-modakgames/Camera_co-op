@@ -26,6 +26,8 @@ namespace CameraCoop
         [SerializeField] private Text hoverStatusLabel;
         [SerializeField] private float inputFreshnessSeconds = 0.20f;
         [SerializeField] private float rearmOpenSeconds = 0.10f;
+        // 캔버스 획을 유지하는 fist 손실 허용 시간. 30 fps 기준 6 sample쯤 되는 잡음을 흡수한다.
+        [SerializeField] private float fistReleaseGraceSeconds = 0.20f;
         [SerializeField] private float clickCooldownSeconds = 0.15f;
         [SerializeField] private float maxDistance = 20f;
 
@@ -39,6 +41,7 @@ namespace CameraCoop
             public bool wasFist;
             public float sourceTime;
             public float openStartedAt;
+            public float fistGraceUntil = float.NegativeInfinity;
             public int openSamples;
             public int revision;
             public HandInteractable hover;
@@ -106,7 +109,8 @@ namespace CameraCoop
             }
             if (cursorController == null || inputModeManager == null || playerCamera == null || eventSystem == null ||
                 uiRaycasters == null || uiRaycasters.Length == 0 || audioSource == null || hoverClip == null || clickClip == null ||
-                inputFreshnessSeconds <= 0f || rearmOpenSeconds < 0f || clickCooldownSeconds < 0f || maxDistance <= 0f)
+                inputFreshnessSeconds <= 0f || rearmOpenSeconds < 0f || fistReleaseGraceSeconds < 0f ||
+                clickCooldownSeconds < 0f || maxDistance <= 0f)
             {
                 Debug.LogError("HandInputRouter: assign cursorController, inputModeManager, playerCamera, eventSystem, UI raycasters, audioSource and both clips; timing and distance settings must be valid.", this);
                 enabled = false;
@@ -279,6 +283,7 @@ namespace CameraCoop
             hand.sourceTime = sourceTime;
             hand.wasPinched = sample.isPinched;
             hand.wasFist = sample.isFist;
+            if (sample.isFist) hand.fistGraceUntil = sourceTime + fistReleaseGraceSeconds;
             hand.revision++;
             // 손을 쥐면 pinch가 fist보다 한두 sample 먼저 참이 된다 — 손가락이 말리는 도중 엄지·검지 거리가
             // 먼저 좁아지기 때문이다. 여기서 arm을 지우면 뒤따라 오는 fist edge가 armed=false를 만나
@@ -313,13 +318,21 @@ namespace CameraCoop
             {
                 Vector3 capturePosition = PositionFor(hand.capture, sample, hitPosition);
                 hand.capturePosition = capturePosition;
-                bool held = hand.capture.IsCanvas ? sample.isFist : sample.isPinched;
-                bool wasHeld = hand.capture.IsCanvas ? wasFist : wasPinched;
-                if (held)
+                if (hand.capture.IsCanvas)
+                {
+                    // HandGestureClassifier.IsFist는 히스테리시스가 없어, 주먹을 쥔 채 팔을 움직이면 landmark
+                    // 잡음으로 한두 sample이 false로 떨어진다. 그때마다 획을 끝내면 press를 되찾으려면 손을
+                    // 완전히 펴야 하므로(ObserveOpen) 그리기가 사실상 죽는다 (화면 녹화 2026-09-08: 16초 내내
+                    // HUD "· FIST"인데 stroke 0). grace 안에 주먹이 돌아오면 같은 획을 잇는다.
+                    // grace 동안 Hold는 하지 않는다 — 손을 펴서 멈출 때 0.2초짜리 꼬리가 그려지면 안 된다.
+                    if (sample.isFist) hand.capture.Hold(sample, capturePosition);
+                    else if (sourceTime > hand.fistGraceUntil) ReleaseCapture(hand, capturePosition, now);
+                }
+                else if (sample.isPinched)
                 {
                     hand.capture.Hold(sample, capturePosition);
                 }
-                else if (wasHeld)
+                else if (wasPinched)
                 {
                     ReleaseCapture(hand, capturePosition, now);
                 }

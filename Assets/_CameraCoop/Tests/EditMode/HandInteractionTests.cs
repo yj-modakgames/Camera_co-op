@@ -227,18 +227,59 @@ namespace CameraCoop.Tests
             SendGesture(1, 0f, false, false, canvas);
             SendGesture(2, 0.11f, false, false, canvas);
             SendGesture(3, 0.12f, false, true, canvas);
-            SendGesture(4, 0.13f, false, true, canvas);
-            SendGesture(5, 0.14f, false, false, canvas);
-            SendGesture(6, 0.15f, false, true, canvas);
+            SendGesture(4, 0.17f, false, true, canvas);
+            // 손을 편 뒤 fistReleaseGraceSeconds가 지나야 획이 끝난다.
+            SendGesture(5, 0.22f, false, false, canvas);
+            SendGesture(6, 0.35f, false, false, canvas);
+            SendGesture(7, 0.40f, false, false, canvas);
 
             CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "end:Left" }, strokeEvents,
+                "Open hand past the grace window ends the stroke.");
+
+            SendGesture(8, 0.45f, false, true, canvas);
+            Assert.AreEqual(3, strokeEvents.Count,
                 "Held fist cannot restart until a fresh open-hand rearm interval completes.");
 
-            SendGesture(7, 0.25f, false, false, canvas);
-            SendGesture(8, 0.36f, false, false, canvas);
-            SendGesture(9, 0.37f, false, true, canvas);
+            SendGesture(9, 0.50f, false, false, canvas);
+            SendGesture(10, 0.61f, false, false, canvas);
+            SendGesture(11, 0.66f, false, true, canvas);
 
             Assert.AreEqual("start:Left", strokeEvents[3]);
+        }
+
+        // 주먹을 쥔 채 팔을 움직이면 landmark 잡음으로 IsFist(히스테리시스 없는 순수 함수)가 한 sample 튄다.
+        // 그 한 sample에 획을 끝내면 press를 되찾으려면 손을 완전히 펴야 해서(ObserveOpen) 그리기가 죽는다
+        // (사용자 보고 2026-09-08: HUD는 16초 내내 "· FIST"인데 stroke 0).
+        [Test]
+        public void LocalRouter_SingleFistDropoutKeepsTheCanvasStroke()
+        {
+            SendGesture(1, 0f, false, false, canvas);
+            SendGesture(2, 0.11f, false, false, canvas);
+            SendGesture(3, 0.12f, false, true, canvas);
+            SendGesture(4, 0.17f, false, true, canvas);
+            SendGesture(5, 0.22f, false, false, canvas);
+            SendGesture(6, 0.27f, false, true, canvas);
+            SendGesture(7, 0.32f, false, true, canvas);
+
+            CollectionAssert.AreEqual(new[] { "start:Left", "move:Left", "move:Left", "move:Left" }, strokeEvents,
+                "한 sample fist 손실로 획이 끊기면 안 된다.");
+        }
+
+        [Test]
+        public void LocalRouter_OpenHandBeyondGraceStillEndsTheCanvasStroke()
+        {
+            SendGesture(1, 0f, false, false, canvas);
+            SendGesture(2, 0.11f, false, false, canvas);
+            SendGesture(3, 0.12f, false, true, canvas);
+            SendGesture(4, 0.17f, false, false, canvas);
+
+            CollectionAssert.AreEqual(new[] { "start:Left" }, strokeEvents, "grace 안에서는 아직 끊지 않는다.");
+
+            SendGesture(5, 0.30f, false, false, canvas);
+            SendGesture(6, 0.40f, false, false, canvas);
+
+            CollectionAssert.AreEqual(new[] { "start:Left", "end:Left" }, strokeEvents,
+                "손을 펴고 grace를 넘기면 획이 끝나야 한다.");
         }
 
         [Test]

@@ -637,3 +637,23 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 
 ### 잔여 검증
 - Play: 든 붓 크기 약 0.9 m, 같은 손으로 다른 붓 집으면 교체·원위치 복귀, 다른 손으로 집으면 무반응, rack 반납 후 원배율, 세 붓 모두 상판 위·집힘.
+
+## 2026-09-08 — fist 드로잉 끊김(주먹 유지 중 획 소실) 수정
+
+### 평가 범위와 상태
+- `HandInputRouter`: 캔버스 캡처 중 fist 손실에 `fistReleaseGraceSeconds`(0.20) grace. grace 안에 fist 복귀 시 같은 획 유지, 초과 시 Release. pinch/버튼 경로 무변경. 테스트 2개 추가(red→green), 기존 3개에 grace 통과 sample 보정.
+
+### 항목별 점수 (요약)
+| 카테고리 | 획득/배점 | 근거 |
+|---|---|---|
+| 기능 | 1.95/2.0 | 영상 증상(HUD FIST·stroke 0·커서 왕복) 전부 원인 설명. 손 펴서 멈추기는 0.2 s 지연으로 유지(docs/15 §D3). grace 중 Hold 안 함(꼬리 방지) |
+| 성능 | 2.0/2.0 | sample당 float 비교 1회 추가, 할당 0 |
+| 검증 | 1.7/2.0 | red: `Expected: "move:Left" But was: "end:Left"` → green. EditMode 920/920. Play 미확인(-0.3) |
+| 코드 품질 | 1.95/2.0 | 분류기 순수성 유지, 라우터 한 곳 수정. 0.20 리터럴은 SerializeField 기본값 |
+| 최적화 | 2.0/2.0 | — |
+
+### 총점: 9.60 / 10
+
+### 잔여 검증
+- Play: 주먹 유지 중 팔을 크게 움직여도 한 획으로 이어지는지, 손 펴면 약 0.2 s 안에 멈추는지. 꼬리가 길면 Inspector `Fist Release Grace Seconds` 0.12~0.15.
+- 미반영: 분류기 히스테리시스(안 b). grace로도 끊기면 적용.
