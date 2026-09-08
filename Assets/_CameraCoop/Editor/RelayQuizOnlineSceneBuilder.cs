@@ -28,6 +28,9 @@ namespace CameraCoop.EditorTools
         private static readonly Color Paper = Hex("F5F2E9");
         private static readonly Color Accent = Hex("77D6C5");
         private static readonly Color Wood = Hex("8A6039");
+        // 실외 외계 행성. 방 바닥은 착륙 패드처럼 조금 밝게, 방 밖 평원은 어둡게 깔아 지평선을 만든다.
+        private static readonly Color PlanetPad = Hex("A98FB2");
+        private static readonly Color PlanetSoil = Hex("5A4767");
 
         private sealed class Context
         {
@@ -43,9 +46,8 @@ namespace CameraCoop.EditorTools
             public Material Paper;
             public Material Accent;
             public Material Wood;
-            public Material FloorGrid;
-            public Material WallLong;
-            public Material WallShort;
+            public Material PlanetFloor;
+            public Material PlanetGround;
             public Material Line;
             public Material SoftLine;
         }
@@ -101,7 +103,7 @@ namespace CameraCoop.EditorTools
             CoreReferences core = PrepareCore(context);
             context.PlayerCamera = core.PlayerCamera;
             PartyLayout party = BuildPartyLayout(context, core);
-            ToolLayout tools = BuildPhysicalTools(context, core);
+            ToolLayout tools = BuildPhysicalTools(context, core, party.LeftBrushAnchor, party.RightBrushAnchor);
             PresentationLayout presentation = BuildPresentation(context, core);
             BuildRuntime(context, core, party, tools, presentation);
             HideRelaySetupRoot(core.QuizUi);
@@ -148,6 +150,8 @@ namespace CameraCoop.EditorTools
             public Transform RightBrushAnchor;
             public Transform[] AvatarRoots;
             public RemoteAvatarPresenter[] RemotePresenters;
+            public AvatarRig[] AvatarRigs;
+            public AvatarRig LocalAvatarRig;
         }
 
         private sealed class ToolLayout

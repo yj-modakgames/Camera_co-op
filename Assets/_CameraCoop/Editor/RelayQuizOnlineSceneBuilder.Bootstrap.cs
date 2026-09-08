@@ -26,13 +26,13 @@ namespace CameraCoop.EditorTools
             CreateOrReplaceMaterial("WhitePaper", Paper, 0.05f);
             CreateOrReplaceMaterial("ActionAccent", Accent, 0.25f);
             CreateOrReplaceMaterial("RoomWood", Wood, 0.1f);
-            // 격자 텍스처가 바닥·벽의 거리감을 만든다. 단색 회색이 "어수선하다"는 인상의 절반이었다.
-            CreateOrReplaceTexturedMaterial("FloorGrid", PrototypeTextureFolder + "Dark/texture_13.png",
-                new Color(0.62f, 0.66f, 0.74f), new Vector2(14f, 8f));
-            CreateOrReplaceTexturedMaterial("WallGridLong", PrototypeTextureFolder + "Dark/texture_09.png",
-                new Color(0.5f, 0.55f, 0.66f), new Vector2(14f, 4f));
-            CreateOrReplaceTexturedMaterial("WallGridShort", PrototypeTextureFolder + "Dark/texture_09.png",
-                new Color(0.5f, 0.55f, 0.66f), new Vector2(8f, 4f));
+            // 격자 텍스처가 거리감을 만든다. 실외로 바뀐 뒤에도 착륙 패드 바닥에는 이 단서를 남긴다.
+            // Dark/texture_13은 #333 바탕에 "WALL 1x1 meter" 라벨이 찍혀 있어 어떤 tint를 줘도 검게 죽고
+            // 바닥에 글자가 깔린다. Light/texture_13은 흰 격자뿐이라 tint가 그대로 나온다.
+            CreateOrReplaceTexturedMaterial("PlanetFloor", PrototypeTextureFolder + "Light/texture_13.png",
+                PlanetPad, new Vector2(14f, 8f));
+            // 방 밖 평원은 격자를 깔지 않는다. 220 m에 격자를 뿌리면 행성이 모눈종이가 된다.
+            CreateOrReplaceMaterial("PlanetGround", PlanetSoil, 0.02f);
             AssetDatabase.SaveAssets();
         }
 
@@ -44,8 +44,8 @@ namespace CameraCoop.EditorTools
                 Red = Material("PlayerRed"), Blue = Material("PlayerBlue"), Green = Material("PlayerGreen"),
                 Yellow = Material("PlayerYellow"), Dark = Material("RoomDark"), Wall = Material("RoomWall"),
                 Floor = Material("RoomFloor"), Paper = Material("WhitePaper"), Accent = Material("ActionAccent"),
-                Wood = Material("RoomWood"), FloorGrid = Material("FloorGrid"),
-                WallLong = Material("WallGridLong"), WallShort = Material("WallGridShort"),
+                Wood = Material("RoomWood"),
+                PlanetFloor = Material("PlanetFloor"), PlanetGround = Material("PlanetGround"),
                 Line = AssetDatabase.LoadAssetAtPath<Material>("Assets/_CameraCoop/Materials/StrokeLine.mat"),
                 SoftLine = AssetDatabase.LoadAssetAtPath<Material>("Assets/_CameraCoop/Materials/StrokeSoft.mat")
             };
@@ -63,38 +63,95 @@ namespace CameraCoop.EditorTools
             boundsCollider.center = new Vector3(0f, 2f, 0f);
             boundsCollider.size = new Vector3(28f, 4f, 16f);
 
-            Cube("Floor", studio.transform, new Vector3(0f, -0.1f, 0f), new Vector3(28f, 0.2f, 16f), context.FloorGrid);
-            Cube("NorthWall", studio.transform, new Vector3(0f, 4f, 8f), new Vector3(28f, 8f, 0.25f), context.WallLong);
-            Cube("SouthWall", studio.transform, new Vector3(0f, 4f, -8f), new Vector3(28f, 8f, 0.25f), context.WallLong);
-            Cube("WestWall", studio.transform, new Vector3(-14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.WallShort);
-            Cube("EastWall", studio.transform, new Vector3(14f, 4f, 0f), new Vector3(0.25f, 8f, 16f), context.WallShort);
-            // 모서리 기둥은 방의 크기를 읽히게 한다. 플레이어 이동 한계(±13.5, ±7.5) 밖에 세워 통행을 막지 않는다.
-            float[] pillarX = { -13.72f, 13.72f };
-            float[] pillarZ = { -7.72f, 7.72f };
-            for (int corner = 0; corner < 4; corner++)
-            {
-                var ground = new Vector3(pillarX[corner % 2], 0f, pillarZ[corner / 2]);
-                if (SyntyProp(SyntyBaseFolder, "SM_Bld_Base_Pillar_01", "RoomPillar_" + corner, studio.transform,
-                        ground, 3.6f) == null)
-                    Cube("RoomPillar_" + corner, studio.transform, ground + Vector3.up * 1.8f,
-                        new Vector3(0.4f, 3.6f, 0.4f), context.Dark);
-            }
+            // 벽과 기둥은 없다. 이동 한계는 PlayerMoveLogic.ClampToRoom(±13.5, ±7.5)이 이미 맡고 있어
+            // collider로 다시 막으면 중복이고, 실외 지평선을 가린다.
+            Cube("Floor", studio.transform, new Vector3(0f, -0.1f, 0f), new Vector3(28f, 0.2f, 16f),
+                context.PlanetFloor);
+            BuildPlanetTerrain(context, studio.transform);
 
             GameObject lightObject = new GameObject("RoomKeyLight");
             lightObject.transform.SetParent(studio.transform, false);
-            lightObject.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
+            // 실외 저각 태양. 산이 긴 그림자를 드리워 평원이 밋밋해지지 않는다.
+            lightObject.transform.rotation = Quaternion.Euler(26f, -38f, 0f);
             Light key = lightObject.AddComponent<Light>();
             key.type = LightType.Directional;
-            key.color = new Color(0.9f, 0.94f, 1f);
-            key.intensity = 1.2f;
+            key.color = new Color(1f, 0.84f, 0.72f);
+            key.intensity = 1.6f;
             GameObject fillObject = new GameObject("RoomFillLight");
             fillObject.transform.SetParent(studio.transform, false);
             fillObject.transform.position = new Vector3(0f, 3.4f, 0f);
             Light fill = fillObject.AddComponent<Light>();
             fill.type = LightType.Point;
             fill.range = 24f;
-            fill.intensity = 6f;
-            fill.color = new Color(0.72f, 0.82f, 1f);
+            // 천장이 사라져 반사광이 없다. 실내용 6은 과하다 — 절반은 ambient가 채운다.
+            fill.intensity = 4f;
+            fill.color = new Color(0.66f, 0.78f, 1f);
+            // 실내 천장 반사광을 대신하는 자주빛 ambient. 이게 없으면 북쪽을 보는 연습 이젤 면과
+            // 산의 그늘면이 통째로 검게 죽는다 (기본 Skybox ambient보다 밝게 잡아야 예전 밝기가 나온다).
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.46f, 0.40f, 0.56f);
+        }
+
+        // 방 밖은 지평선을 만드는 것이 전부다. 전부 collider 없는 static batching 대상이고,
+        // 산은 PlayerMoveLogic 한계(±13.5, ±7.5) 밖 최소 10 m 지점부터 선다.
+        private static void BuildPlanetTerrain(Context context, Transform studio)
+        {
+            Transform terrain = Group("Terrain", studio);
+
+            // Floor cube는 방(28×16)까지만이다. 그 밖이 비면 지평선 아래가 카메라 배경색으로 뚫린다.
+            GameObject plain = Cube("PlanetPlain", terrain, new Vector3(0f, -0.13f, 0f),
+                new Vector3(220f, 0.2f, 220f), context.PlanetGround);
+            UnityEngine.Object.DestroyImmediate(plain.GetComponent<Collider>());
+            MarkTerrainStatic(plain);
+
+            // 능선. 두 겹(반지름 1.0 / 1.34)으로 엇갈려 20° 간격 사이의 틈을 뒤쪽 산이 메운다.
+            string[] mountains = { "SP_Mountains/SP_Mountain01", "SP_Mountains/SP_Mountain02", "SP_Mountains/SP_Mountain03" };
+            for (int index = 0; index < 18; index++)
+            {
+                float angle = index * 20f;
+                float radians = angle * Mathf.Deg2Rad;
+                float ring = index % 2 == 0 ? 1f : 1.34f;
+                var ground = new Vector3(Mathf.Sin(radians) * 25f * ring, -0.05f, Mathf.Cos(radians) * 18f * ring);
+                AlienProp(mountains[index % mountains.Length], "Terrain_Mountain_" + index, terrain, ground,
+                    8f + index % 6 * 2.2f, PropFit.Height, angle + 25f);
+            }
+
+            // 중경. 능선과 방 사이가 비면 평원이 마분지처럼 보인다.
+            float[,] rocks =
+            {
+                { -17.5f, 6.5f, 2.4f }, { -16.5f, -6f, 1.6f }, { 17f, 5f, 2.8f },
+                { 16.2f, -7.5f, 1.8f }, { -5f, 11.5f, 2.2f }, { 7.5f, -11f, 3f }
+            };
+            for (int index = 0; index < rocks.GetLength(0); index++)
+                AlienProp("SP_Rocks/SP_Rock0" + (index + 3), "Terrain_Rock_" + index, terrain,
+                    new Vector3(rocks[index, 0], 0f, rocks[index, 1]), rocks[index, 2], PropFit.Height, index * 57f);
+
+            float[,] trees =
+            {
+                { -19.5f, 1.5f, 5.5f }, { 18.5f, -1f, 6.2f }, { -9.5f, 12.5f, 4.8f },
+                { 3.5f, 13f, 6.6f }, { -3f, -12f, 5f }, { 12f, -12.5f, 5.8f }
+            };
+            for (int index = 0; index < trees.GetLength(0); index++)
+                AlienProp("SP_Trees/SP_Tree0" + (index % 4 + 1), "Terrain_Tree_" + index, terrain,
+                    new Vector3(trees[index, 0], 0f, trees[index, 1]), trees[index, 2], PropFit.Height, index * 41f);
+
+            float[,] patches =
+            {
+                { -24f, 10f, 16f }, { 22f, 12f, 14f }, { -27f, -15f, 15f }, { 18f, -14f, 13f }
+            };
+            for (int index = 0; index < patches.GetLength(0); index++)
+                AlienProp("SP_Ground/SP_Ground0" + (index + 1), "Terrain_Ground_" + index, terrain,
+                    new Vector3(patches[index, 0], -0.06f, patches[index, 1]), patches[index, 2],
+                    PropFit.Footprint, index * 73f);
+
+            // 행성은 낮은 산 너머(방위 22°와 120°, 능선 고도 17°/13°)에 걸리게 둔다. 그래야 능선 위로 뜬다.
+            // 방위 0°는 PUBLIC PRACTICE WALL 표지판이 정면으로 가려서 쓸 수 없다.
+            AlienProp("SP_Planet", "Terrain_Planet_0", terrain, new Vector3(35.6f, 24f, 88.1f), 34f);
+            AlienProp("SP_Planet", "Terrain_Planet_1", terrain, new Vector3(73.6f, 20f, -42.5f), 20f);
+            // 안테나는 남서쪽(방위 235°)에 세운다. 그쪽 능선이 가장 낮고(고도 13.5°), 16 m면 탑 끝이
+            // 뒷줄 산(고도 30.3°)까지 넘어 검은 하늘을 배경으로 실루엣이 선다.
+            AlienProp("SP_Sci-fi_Antenna", "Terrain_Antenna", terrain, new Vector3(-16.5f, 0f, -11.5f), 16f,
+                PropFit.Height, 35f);
         }
 
         private static CoreReferences PrepareCore(Context context)

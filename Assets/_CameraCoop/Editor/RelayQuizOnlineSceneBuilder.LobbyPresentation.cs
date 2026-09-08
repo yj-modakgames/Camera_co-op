@@ -237,17 +237,26 @@ namespace CameraCoop.EditorTools
             }
         }
 
-        // 구역 사이 빈 벽을 채워 방의 크기를 읽히게 한다. Kenney 모델에는 collider가 없어 통행을 막지 않는다.
+        // 방 구석의 빈자리를 외계 식생으로 채운다. AlienProp이 collider를 지우므로 통행도 손 조준도 막지 않는다.
+        // 자리는 기능 소품·ReadyPad·JumpStep·canvas에서 1 m 이상 떨어진 곳만 고른다.
         private static void BuildLobbyDecor(Transform parent)
         {
             Transform root = Group("LobbyDecor", parent);
-            KenneyProp("pottedPlant", "Decor_Plant_00", root, new Vector3(-13f, 0f, 7f), 1.6f);
-            KenneyProp("pottedPlant", "Decor_Plant_01", root, new Vector3(13f, 0f, 7f), 1.6f);
-            KenneyProp("plantSmall1", "Decor_Plant_02", root, new Vector3(13.2f, 0f, 2f), 0.7f);
-            KenneyProp("lampSquareFloor", "Decor_Lamp_00", root, new Vector3(-13.2f, 0f, 3.4f), 2.2f);
-            KenneyProp("bench", "Decor_Bench_00", root, new Vector3(-6.4f, 0f, -6.6f), 0.9f, PropFit.Height, 180f);
-            KenneyProp("coatRackStanding", "Decor_CoatRack_00", root, new Vector3(6.4f, 0f, -6.9f), 1.9f);
-            KenneyProp("trashcan", "Decor_Trashcan_00", root, new Vector3(-10.6f, 0f, -0.6f), 0.8f);
+            AlienProp("SP_Plants/SP_Plant01", "Decor_Plant_00", root, new Vector3(-13f, 0f, 7f), 1.6f);
+            AlienProp("SP_Plants/SP_Plant03", "Decor_Plant_01", root, new Vector3(13f, 0f, 7f), 1.6f,
+                PropFit.Height, 140f);
+            AlienProp("SP_Plants/SP_Plant06", "Decor_Plant_02", root, new Vector3(13.2f, 0f, 2f), 0.7f);
+            AlienProp("SP_Crystals/SP_Crystal01", "Decor_Lamp_00", root, new Vector3(-13.2f, 0f, 3.4f), 2.2f);
+            AlienProp("SP_Rocks/SP_Rock04", "Decor_Bench_00", root, new Vector3(-6.4f, 0f, -6.6f), 0.9f,
+                PropFit.Height, 180f);
+            AlienProp("SP_Crystals/SP_Crystal02", "Decor_CoatRack_00", root, new Vector3(6.4f, 0f, -6.9f), 1.9f);
+            AlienProp("SP_Stones/SP_Stone01", "Decor_Trashcan_00", root, new Vector3(-10.6f, 0f, -0.6f), 0.8f);
+            AlienProp("SP_Rocks/SP_Rock06", "Decor_Rock_00", root, new Vector3(-8.2f, 0f, -3.4f), 0.85f);
+            AlienProp("SP_Rocks/SP_Rock08", "Decor_Rock_01", root, new Vector3(7.8f, 0f, -5.2f), 1f,
+                PropFit.Height, 65f);
+            AlienProp("SP_Crystals/SP_Crystal01", "Decor_Crystal_00", root, new Vector3(-9.6f, 0f, -6.8f), 1.3f,
+                PropFit.Height, 120f);
+            AlienProp("SP_Plants/SP_Plant08", "Decor_Plant_03", root, new Vector3(4.2f, 0f, -6.9f), 1.1f);
         }
 
         private static void DestroyNamed(Scene scene, string name)

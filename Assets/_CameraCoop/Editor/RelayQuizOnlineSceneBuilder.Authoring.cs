@@ -162,6 +162,29 @@ namespace CameraCoop.EditorTools
             return FitProp(folder + prefab + ".prefab", name, parent, groundCenter, targetSize, fit, yaw);
         }
 
+        private const string AlienPropFolder =
+            "Assets/Free Demo of Low Poly Space Alien Worlds 3D Asset Pack/Prefabs/Space Forest/";
+
+        // 외계 지형·장식 prefab. 원래 collider가 없지만 손 raycast를 가리지 않도록 보장하고,
+        // 움직이지 않는 물체이므로 static batching 대상으로 표시한다.
+        private static GameObject AlienProp(string prefab, string name, Transform parent, Vector3 groundCenter,
+            float targetSize, PropFit fit = PropFit.Height, float yaw = 0f)
+        {
+            GameObject item = FitProp(AlienPropFolder + prefab + ".prefab", name, parent, groundCenter,
+                targetSize, fit, yaw);
+            if (item == null) return null;
+            StripColliders(item);
+            MarkTerrainStatic(item);
+            return item;
+        }
+
+        private static void MarkTerrainStatic(GameObject item)
+        {
+            if (item == null) return;
+            foreach (Transform node in item.GetComponentsInChildren<Transform>(true))
+                GameObjectUtility.SetStaticEditorFlags(node.gameObject, StaticEditorFlags.BatchingStatic);
+        }
+
         // 손 조준 표적의 크기·위치는 prop pivot이 아니라 이 빈 루트의 BoxCollider가 정한다.
         // prop 모델마다 pivot이 제각각이라 collider를 모델에 맡기면 조준 표적이 어긋난다.
         private static GameObject ControlBody(string name, Transform parent, Vector3 groundCenter, Vector3 size,
