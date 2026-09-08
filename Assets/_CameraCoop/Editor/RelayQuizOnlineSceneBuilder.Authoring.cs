@@ -167,12 +167,17 @@ namespace CameraCoop.EditorTools
 
         // 외계 지형·장식 prefab. 원래 collider가 없지만 손 raycast를 가리지 않도록 보장하고,
         // 움직이지 않는 물체이므로 static batching 대상으로 표시한다.
+        // 에셋 팩이 빠졌을 때의 primitive 되돌리기를 호출부마다 쓰지 않고 여기서 한 번에 한다 —
+        // 지평선에 구멍이 나느니 회색 상자가 서 있는 편이 낫다.
         private static GameObject AlienProp(string prefab, string name, Transform parent, Vector3 groundCenter,
             float targetSize, PropFit fit = PropFit.Height, float yaw = 0f)
         {
+            Vector3 fallbackSize = fit == PropFit.Footprint
+                ? new Vector3(targetSize, 0.05f, targetSize)
+                : Vector3.one * targetSize;
             GameObject item = FitProp(AlienPropFolder + prefab + ".prefab", name, parent, groundCenter,
-                targetSize, fit, yaw);
-            if (item == null) return null;
+                targetSize, fit, yaw)
+                ?? Cube(name, parent, groundCenter + Vector3.up * (fallbackSize.y * 0.5f), fallbackSize, Material("PlanetGround"));
             StripColliders(item);
             MarkTerrainStatic(item);
             return item;

@@ -92,28 +92,40 @@ namespace CameraCoop.EditorTools
             RenderSettings.ambientLight = new Color(0.46f, 0.40f, 0.56f);
         }
 
-        // 방 밖은 지평선을 만드는 것이 전부다. 전부 collider 없는 static batching 대상이고,
-        // 산은 PlayerMoveLogic 한계(±13.5, ±7.5) 밖 최소 10 m 지점부터 선다.
+        // 지평선을 만드는 능선의 형태. 방(28×16)의 종횡비를 따라 타원으로 돌리고, 한 칸 걸러
+        // 뒤 열(RidgeBackRing)에 세워 앞줄 사이의 틈을 메운다. 앞줄과 방 경계의 간격은 축 방향 10 m, 대각선 약 6 m다.
+        private const int RidgeCount = 18;
+        private const float RidgeStepDegrees = 360f / RidgeCount;
+        private const float RidgeRadiusX = 25f;
+        private const float RidgeRadiusZ = 18f;
+        private const float RidgeBackRing = 1.34f;
+        private const float RidgeMinHeight = 8f;
+        private const float RidgeHeightStep = 2.2f;
+        private const int RidgeHeightCycle = 6;
+        // 평원은 능선 바깥까지 덮어야 한다. 220 m면 가장 먼 행성(약 95 m) 아래까지 지면이 이어진다.
+        private const float PlainSize = 220f;
+
+        // 방 밖은 지평선을 만드는 것이 전부다. 전부 collider 없는 static batching 대상이다.
         private static void BuildPlanetTerrain(Context context, Transform studio)
         {
             Transform terrain = Group("Terrain", studio);
 
             // Floor cube는 방(28×16)까지만이다. 그 밖이 비면 지평선 아래가 카메라 배경색으로 뚫린다.
             GameObject plain = Cube("PlanetPlain", terrain, new Vector3(0f, -0.13f, 0f),
-                new Vector3(220f, 0.2f, 220f), context.PlanetGround);
+                new Vector3(PlainSize, 0.2f, PlainSize), context.PlanetGround);
             UnityEngine.Object.DestroyImmediate(plain.GetComponent<Collider>());
             MarkTerrainStatic(plain);
 
-            // 능선. 두 겹(반지름 1.0 / 1.34)으로 엇갈려 20° 간격 사이의 틈을 뒤쪽 산이 메운다.
             string[] mountains = { "SP_Mountains/SP_Mountain01", "SP_Mountains/SP_Mountain02", "SP_Mountains/SP_Mountain03" };
-            for (int index = 0; index < 18; index++)
+            for (int index = 0; index < RidgeCount; index++)
             {
-                float angle = index * 20f;
+                float angle = index * RidgeStepDegrees;
                 float radians = angle * Mathf.Deg2Rad;
-                float ring = index % 2 == 0 ? 1f : 1.34f;
-                var ground = new Vector3(Mathf.Sin(radians) * 25f * ring, -0.05f, Mathf.Cos(radians) * 18f * ring);
+                float ring = index % 2 == 0 ? 1f : RidgeBackRing;
+                var ground = new Vector3(Mathf.Sin(radians) * RidgeRadiusX * ring, -0.05f,
+                    Mathf.Cos(radians) * RidgeRadiusZ * ring);
                 AlienProp(mountains[index % mountains.Length], "Terrain_Mountain_" + index, terrain, ground,
-                    8f + index % 6 * 2.2f, PropFit.Height, angle + 25f);
+                    RidgeMinHeight + index % RidgeHeightCycle * RidgeHeightStep, PropFit.Height, angle + 25f);
             }
 
             // 중경. 능선과 방 사이가 비면 평원이 마분지처럼 보인다.

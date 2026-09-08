@@ -511,3 +511,52 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 
 - Editor를 닫은 뒤: headless `BuildAll` → `Built and saved` 확인, `RelayQuizOnlineSceneValidator` PASS, EditMode 전체(기준선 892 + 신규 3).
 - Play 확인: 낙서판에 실제로 선이 그려지는지, 좌우가 뒤집히지 않는지, CLEAR가 낙서판만 지우고 작업 캔버스는 남기는지, 붓 3자루를 손으로 집을 수 있는지, 카운터 버튼이 카운터 위에 제대로 얹혀 있는지.
+
+## 2026-09-08 — RelayQuizOnline 로비 실외 외계 행성 전환
+
+### 평가 범위와 상태
+- `RelayQuizOnlineSceneBuilder`(Bootstrap/Authoring/LobbyPresentation/본체)에서 Studio 벽 4·기둥 4 제거, `PlanetFloor`·`PlanetGround` material 추가, `BuildPlanetTerrain`(산 18·바위 6·나무 6·지면 4·행성 2·안테나 1·평원 1) 신설, `BuildLobbyDecor` Kenney 7개 → Space Alien Worlds prefab 11개 교체, `AlienProp` 헬퍼(collider 제거·static 표시·primitive fallback), 신규 EditMode 테스트 `RelayQuizOnlineLobbyTerrainTests` 3개.
+
+### 항목별 점수
+| 카테고리 | 항목 | 배점 | 획득 | 근거 |
+|---|---|---|---|---|
+| 기능 | 1-1 요구사항 | 0.8 | 0.8 | 벽·기둥 제거, 경계는 `PlayerMoveLogic.ClampToRoom`(PlayerController.cs:149) 유지로 collider 중복 없음, Floor collider 유지, 지평선·행성 2·안테나 1, Decor 7개 교체(+4), material은 `BuildMaterials`/`Context` 관례, validator PASS |
+| | 1-2 엣지 케이스 | 0.6 | 0.55 | `AlienProp` 에셋 부재 시 `Cube` fallback(Authoring.cs `?? Cube(...)`) — 팩이 존재해 실행 경로는 코드 리뷰로만 확인 |
+| | 1-3 에러 핸들링 | 0.6 | 0.6 | `FitProp` 경고 + null → fallback, `Material("PlanetGround")`는 `BuildMaterials` 선행으로 항상 존재 |
+| 성능 | 2-1 GC | 0.7 | 0.7 | 런타임 코드 변경 없음(Editor 빌더만). 신규 MonoBehaviour 0 |
+| | 2-2 Update | 0.7 | 0.7 | Update 없음 |
+| | 2-3 메모리 | 0.6 | 0.6 | 지형 37개 + 평원 1, 데모 팩 mesh 소형. 누수 경로 없음 |
+| 검증 | 3-1 테스트 작성 | 0.7 | 0.6 | `RelayQuizOnlineLobbyTerrainTests` 3개(벽·기둥 부재+Floor collider, 지형·장식 collider 0, 마젠타 shader 회귀). fallback 경로 미테스트 |
+| | 3-2 실행·통과 | 0.7 | 0.6 | MCP `run_tests mode=editor`: `total 910, passed 910, failed 0`. Editor 닫은 CLI 실행은 하지 않음(Editor 점유) |
+| | 3-3 실행 확인 | 0.6 | 0.45 | recompile `errors:[]`, BuildMenu `Built and saved ...RelayQuizOnline.unity`, primitive 경고 0건, validator PASS, Scene view 4방향 캡처 마젠타 0·빈 배경 0. Play Mode 미확인 |
+| 코드 품질 | 4-1 네이밍 | 0.5 | 0.5 | `Terrain_*`/`Decor_*`/`Ridge*` const |
+| | 4-2 SOLID | 0.5 | 0.5 | `BuildPlanetTerrain` 분리, `AlienProp`이 후처리 3종을 한 곳에서 |
+| | 4-3 매직넘버 | 0.5 | 0.45 | 능선 상수 9개 const 추출. `angle + 25f`, `-0.05f`, `-0.13f` 잔존 |
+| | 4-4 데드코드 | 0.5 | 0.4 | 고아 asset `FloorGrid.mat`/`WallGridLong.mat`/`WallGridShort.mat` 잔존(.meta 수동 삭제 금지로 미처리) |
+| 최적화 | 5-1 풀링 | 0.5 | 0.5 | 정적 배경, 생성/파괴 없음 |
+| | 5-2 캐싱 | 0.5 | 0.45 | prop마다 `AssetDatabase.LoadAssetAtPath`(Editor 1회성, 48회) |
+| | 5-3 배칭 | 0.5 | 0.4 | 지형·장식 전부 `BatchingStatic` 플래그(scene 파싱 `all==4: True n=37`). draw call 실측 없음 |
+| | 5-4 불필요 연산 | 0.5 | 0.5 | — |
+
+### 총점: 9.30 / 10
+
+### 이 구현 방식을 선택한 이유
+- 경계 collider를 새로 두지 않았다. `PlayerController`가 이미 clamp로 경계를 처리하므로 Boundary_* 4개는 중복이며 지평선을 가린다.
+- 마젠타 대응은 필요 없었다. 팩 FBX가 `materialImportMode 2`로 URP Lit을 생성해 캡처에서 마젠타 0. `PaintAll` fallback은 쓰지 않아 원래 재질을 유지했다.
+- fallback을 `AlienProp` 한 곳에 넣어 호출부 48곳을 건드리지 않았다.
+
+### 감점 요인 및 개선 방안
+- 3-3: Play Mode 확인(이동 경계·손 조준·밝기·행성 가독성) 후 반영.
+- 4-4: Unity Editor에서 고아 material 3개 삭제.
+- 5-3: Frame Debugger로 로비 SetPass 실측.
+- 3-1: 팩 폴더를 임시로 빼고 빌드하는 fallback 테스트는 비용 대비 낮아 보류.
+
+### 점수 이력
+`8.55 → 9.30` (8.55: fallback 미구현·능선 매직넘버·신규 테스트 없음. 9.30: `AlienProp` fallback, `Ridge*` const, 테스트 3개 추가 후 910/910)
+
+### 잔여 검증
+- Play: JumpStep 점프 중 ±13.5/±7.5 경계에서 방 밖으로 나가지 않는지, Decor_Rock_00·Decor_Crystal_00 근처 PhysicalTools 손 조준, 북향 연습 이젤 획 대비, 행성 2개·안테나 가시성.
+
+### code-review 반영 (2026-09-08)
+- `AlienProp` fallback이 `PropFit.Footprint`일 때 납작한 판(높이 0.05)을 만들도록 수정, 주석 수치 오류 2건 정정. 재compile error 0, EditMode 910/910 (12:20 KST 실행).
+- 미반영: 테스트 fixture가 `PartyGameSceneTests`와 중복 — 공용 base class 추출은 리팩터링 범위 밖으로 남김.
