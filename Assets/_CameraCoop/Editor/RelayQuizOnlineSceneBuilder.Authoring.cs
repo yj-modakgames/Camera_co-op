@@ -54,10 +54,7 @@ namespace CameraCoop.EditorTools
             LumiPropFolder + "SM_Brush_02a.prefab",
             LumiPropFolder + "SM_Brush_03a.prefab"
         };
-        private const string PalettePropPath = LumiPropFolder + "SM_Palette_02a.prefab";
         private const float BrushLength = 0.9f;
-        // 손에 드는 팔레트 크기. 1.1 m는 물감통 위를 덮어 조준을 가렸다.
-        private const float PaletteWidth = 0.6f;
 
         // 손 raycast는 collider를 맞춰야 한다. 모델 prefab에 collider가 없으면 bounds 기준 box를 붙인다.
         private static void EnsureCollider(GameObject item)
@@ -178,6 +175,20 @@ namespace CameraCoop.EditorTools
             GameObject item = FitProp(AlienPropFolder + prefab + ".prefab", name, parent, groundCenter,
                 targetSize, fit, yaw)
                 ?? Cube(name, parent, groundCenter + Vector3.up * (fallbackSize.y * 0.5f), fallbackSize, Material("PlanetGround"));
+            StripColliders(item);
+            MarkTerrainStatic(item);
+            return item;
+        }
+
+        // 기지 장식 소품(보급 상자·드럼·스크린). AlienProp과 같은 계약이다 —
+        // 에셋이 없으면 primitive로 되돌리고, collider를 지우고(앞을 가리면 station 조준이 막힌다),
+        // 움직이지 않으므로 static batching 대상으로 표시한다. null을 돌려주지 않으므로 호출부에 분기가 없다.
+        private static GameObject CrateProp(string model, string name, Transform parent, Vector3 groundCenter,
+            float targetSize, Material fallback, PropFit fit = PropFit.Height, float yaw = 0f)
+        {
+            GameObject item = SyntyProp(SyntyPropFolder, model, name, parent, groundCenter, targetSize, fit, yaw)
+                ?? Cube(name, parent, groundCenter + Vector3.up * (targetSize * 0.5f),
+                    Vector3.one * targetSize, fallback);
             StripColliders(item);
             MarkTerrainStatic(item);
             return item;
@@ -449,6 +460,11 @@ namespace CameraCoop.EditorTools
                 AssetDatabase.CreateAsset(material, path);
             }
             else material.shader = shader;
+            // 예전 빌드가 남긴 텍스처를 지운다. 이걸 안 하면 단색으로 되돌린 material이 옛 텍스처를 그대로 쓴다 —
+            // PlanetGround가 42×42로 깔린 격자 텍스처를 계속 물고 있어 220 m 평원이 모눈종이로 보였다.
+            // CreateOrReplaceTexturedMaterial은 이 뒤에 자기 텍스처를 다시 넣으므로 영향받지 않는다.
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
+            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", null);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
             if (material.HasProperty("_Color")) material.SetColor("_Color", color);
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);

@@ -127,12 +127,15 @@ namespace CameraCoop.EditorTools
                 new Vector3(3.2f, 0f, -2.7f), context.Green));
             actionList.Add(Action(context, lobby, "START", PartyWorldAction.StartSelectedMode,
                 new Vector3(0f, 0f, -4.4f), context.Yellow));
+            // 예전 자리(-11.8)는 BayRug_0 위였다. 러그 서쪽 끝(-11.65) 바깥으로 빼 자리 표식을 침범하지 않게 한다.
             actionList.Add(Action(context, baysRoot, "Carry Paper", PartyWorldAction.CarryCanvas,
-                new Vector3(-11.8f, 0f, 5.4f), context.Red));
+                new Vector3(-12.7f, 0f, 6.6f), context.Red));
             actionList.Add(Action(context, baysRoot, "Dock Paper", PartyWorldAction.DockCanvas,
-                new Vector3(-11.8f, 0f, 4f), context.Accent));
+                new Vector3(-12.7f, 0f, 5.2f), context.Accent));
 
-            ZoneSign(lobby, "Lobby", "LOBBY · HOST / INVITE / START", new Vector3(0f, 3.1f, CounterZ - 0.4f), 0f,
+            // 높이 3.1은 15 m 뒤 PLAYER 2·3 표지판과 같은 시선 각도(7°)에 걸려 글자가 겹쳤다.
+            // spawn에서 26° 위로 올려 4.9~10.5°에 몰려 있는 이젤·자리·연습벽 표지판 위로 완전히 뺀다.
+            ZoneSign(lobby, "Lobby", "LOBBY · HOST / INVITE / START", new Vector3(0f, 5f, CounterZ - 1f), 0f,
                 context.Dark);
             // 모드 표지판은 ModeSelectorRoot 안에 둔다. 선택이 닫혀 있을 때 혼자 남으면 안내가 거짓말이 된다.
             ZoneSign(modes, "Mode", "PICK A MODE, THEN START", new Vector3(0f, 3.2f, -3.6f), 0f, context.Dark);
@@ -143,73 +146,78 @@ namespace CameraCoop.EditorTools
             return layout;
         }
 
-        // kitchenBar 조각을 실측 폭만큼 이어 붙인다. 상수 간격은 에셋이 바뀌면 틈이 생긴다.
+        // 주방 카운터(Kenney kitchenBar)는 실내 가구다. 외계 기지 컨셉에 맞춰 보급 상자를 이어 붙인
+        // 바리케이드로 바꾼다.
+        //
+        // **한 줄에는 한 모델만 쓴다.** 세 상자는 높이 대비 폭이 1.137 / 1.022 / 1.000으로 최대 14% 다르다.
+        // 높이 기준으로 맞춰 놓고 조각마다 모델을 바꾸면, 첫 조각 하나로 잰 폭으로 깐 격자에 0.1 m 틈이 벌어진다.
+        // 변화는 줄끼리 다른 모델을 써서 준다 — 카운터 01, 카메라 콘솔 02, 보급 작업대 03.
+        private static readonly string[] CrateModels =
+            { "SM_Gen_Prop_Crate_01", "SM_Gen_Prop_Crate_02", "SM_Gen_Prop_Crate_03" };
+
         private static void BuildLobbyCounter(Context context, Transform lobby, out float counterTop,
             out float counterFront, out float counterHalfWidth)
         {
-            GameObject probe = KenneyProp("kitchenBar", "LobbyCounter_0", lobby,
-                new Vector3(0f, 0f, CounterZ), CounterHeight);
-            if (probe == null)
+            GameObject probe = CrateProp(CrateModels[0], "LobbyCounter_0", lobby,
+                new Vector3(0f, 0f, CounterZ), CounterHeight, context.Wood);
+            // 조각 폭은 실측한다 — 상수 간격은 에셋이 바뀌면 틈이 생긴다.
+            Bounds segment = WorldRenderBounds(probe);
+            float width = segment.size.x;
+            for (int index = 1; index <= 6; index++)
             {
-                Cube("LobbyCounter_0", lobby, new Vector3(0f, CounterHeight * 0.5f, CounterZ),
-                    new Vector3(7.2f, CounterHeight, 0.9f), context.Wood);
-                counterTop = CounterHeight;
-                counterFront = CounterZ - 0.45f;
-                counterHalfWidth = 3.6f;
+                float offset = (index + 1) / 2 * width * (index % 2 == 0 ? 1f : -1f);
+                CrateProp(CrateModels[0], "LobbyCounter_" + index, lobby,
+                    new Vector3(offset, 0f, CounterZ), CounterHeight, context.Wood);
             }
-            else
-            {
-                Bounds segment = WorldRenderBounds(probe);
-                float width = segment.size.x;
-                for (int index = 1; index <= 6; index++)
-                {
-                    float offset = (index + 1) / 2 * width * (index % 2 == 0 ? 1f : -1f);
-                    KenneyProp("kitchenBar", "LobbyCounter_" + index, lobby,
-                        new Vector3(offset, 0f, CounterZ), CounterHeight);
-                }
-                counterTop = segment.max.y;
-                counterFront = segment.min.z;
-                counterHalfWidth = width * 3.5f;
-            }
-            // LobbyDesk는 카운터 앞판이다. 방 이름이 여기 붙고, 카운터 몸통은 Kenney 모델이 맡는다.
+            counterTop = segment.max.y;
+            counterFront = segment.min.z;
+            counterHalfWidth = width * 3.5f;
+            // LobbyDesk는 카운터 앞판이다. 방 이름이 여기 붙고, 카운터 몸통은 상자들이 맡는다.
             Cube("LobbyDesk", lobby, new Vector3(0f, 0.45f, counterFront - 0.05f),
                 new Vector3(counterHalfWidth * 2f - 0.2f, 0.8f, 0.06f), context.Dark);
             Label("4 PLAYER CAMERA CO-OP", lobby, new Vector3(0f, 0.45f, counterFront - 0.086f), 0.62f, Color.white);
         }
 
+        // 예전엔 바 스툴 3개·책·머그였다. 셋 다 실내 소품이고, 스툴은 MEMORY COPY 받침과 겹쳐 있었다.
+        // 바리케이드 양 끝을 막는 금속 드럼 두 개로 대체한다 — 카운터에서 0.9 m 떨어뜨려 겹치지 않는다.
         private static void BuildLobbyCounterProps(Context context, Transform lobby, float counterTop,
             float counterFront, float counterHalfWidth)
         {
             Transform props = Group("LobbyDeskProps", lobby);
-            for (int index = 0; index < 3; index++)
+            string[] barrels = { "SM_Gen_Prop_Barrel_Metal_01", "SM_Gen_Prop_Barrel_Metal_03" };
+            for (int index = 0; index < barrels.Length; index++)
             {
-                float x = -2.2f + index * 2.2f;
-                KenneyProp("stoolBar", "LobbyStool_" + index, props, new Vector3(x, 0f, counterFront - 0.85f), 0.85f);
+                float x = (counterHalfWidth + 0.9f) * (index == 0 ? -1f : 1f);
+                CrateProp(barrels[index], "LobbyBarrel_" + index, props,
+                    new Vector3(x, 0f, CounterZ), 0.95f, context.Wood);
             }
-            KenneyProp("books", "LobbyBooks", props,
-                new Vector3(-counterHalfWidth + 0.6f, counterTop, CounterZ), 0.24f, PropFit.Height, 20f);
-            SyntyProp(SyntyPropFolder, "SM_Gen_Prop_Mug_01", "LobbyMug", props,
-                new Vector3(counterHalfWidth - 0.6f, counterTop, CounterZ), 0.14f);
         }
 
+        // 사무용 책상 두 개 + 회전의자였다. 의자는 PREVIEW 버튼과 겹쳐 있었고 셋 다 실내 가구다.
+        // 버튼 하나당 보급 상자 하나를 깔아 콘솔 열을 만든다 — 버튼이 허공에 뜨지 않는다.
         private static WorldActionInteractable[] BuildCameraStation(Context context, CoreReferences core)
         {
             Transform station = Group("CameraStation", core.WorldRoot.transform);
-            float deskTop = 0.78f;
-            for (int index = 0; index < 2; index++)
+            const float consoleX = 12.2f;
+            const float firstZ = -5.8f;
+            const float deskFit = 0.8f;
+            float deskTop = deskFit;
+            float pitch = deskFit;
+            for (int index = 0; index < 4; index++)
             {
-                float z = -5.4f + index * 1.5f;
-                GameObject desk = KenneyProp("desk", "CameraDesk_" + index, station,
-                    new Vector3(12.4f, 0f, z), deskTop, PropFit.Height, -90f);
-                if (desk == null)
-                    Cube("CameraDesk_" + index, station, new Vector3(12.4f, deskTop * 0.5f, z),
-                        new Vector3(1.2f, deskTop, 1.5f), context.Dark);
+                GameObject crate = CrateProp(CrateModels[1], "CameraDesk_" + index, station,
+                    new Vector3(consoleX, 0f, firstZ + index * pitch), deskFit, context.Dark);
+                if (index > 0) continue;
+                // 상판 높이와 상자 간격은 첫 조각을 실측해 정한다. 상수를 믿으면 버튼이 상자 속에 박히거나 뜬다.
+                Bounds bounds = WorldRenderBounds(crate);
+                deskTop = bounds.max.y;
+                pitch = bounds.size.z;
             }
-            SyntyProp(SyntyPropFolder, "SM_Gen_Prop_Screen_01", "CameraMonitor", station,
-                new Vector3(12.85f, deskTop, -4.65f), 0.7f, PropFit.Height, -90f);
-            KenneyProp("chairDesk", "CameraChair", station, new Vector3(11.4f, 0f, -2.6f), 0.9f, PropFit.Height, -90f);
+            // 모니터는 콘솔 뒤(동쪽) 바닥에 세운다. 상자 위에 얹으면 버튼 조준선을 가린다.
+            CrateProp("SM_Gen_Prop_Screen_01", "CameraMonitor", station,
+                new Vector3(12.95f, 0f, firstZ + 1.5f * pitch), 1.6f, context.Dark, PropFit.Height, -90f);
             ZoneSign(station, "Camera", "CAMERA · REFRESH / PREV / NEXT / PREVIEW",
-                new Vector3(12.9f, 3.3f, -4.2f), 90f, context.Dark);
+                new Vector3(12.9f, 3.3f, firstZ + 1.5f * pitch), 90f, context.Dark);
 
             var actions = new WorldActionInteractable[4];
             PartyWorldAction[] catalog =
@@ -222,9 +230,36 @@ namespace CameraCoop.EditorTools
             for (int index = 0; index < actions.Length; index++)
             {
                 actions[index] = Action(context, station, labels[index], catalog[index],
-                    new Vector3(12.2f, deskTop, -5.8f + index * 0.8f), tints[index]);
+                    new Vector3(consoleX, deskTop, firstZ + index * pitch), tints[index]);
             }
             return actions;
+        }
+
+        // 보급 상자 2×2로 짠 작업대. 상자 실측 크기로 격자를 만드므로 에셋이 바뀌어도 틈이 없다.
+        // 상자는 정육면체가 아니다 (높이 0.8로 맞추면 1.14 × 1.56). 2×2가 서쪽 벽면에서 두 작업대가
+        // 겹치지 않고 들어가는 최대 크기다 — 3행으로 짜면 z로 3.7 m가 되어 서로 물린다.
+        // 돌려주는 bounds가 위에 얹는 물건들의 유일한 기준점이다.
+        private static Bounds SupplyBench(Context context, Transform root, int index, Vector3 center)
+        {
+            const float benchTop = 0.8f;
+            Transform bench = Group("SupplyBench_" + index, root);
+            // 첫 상자를 놓아 칸 크기를 재고, 같은 공식으로 자기 자리(0,0 칸)로 옮긴다.
+            GameObject probe = CrateProp(CrateModels[2], "BenchCrate_00", bench, center, benchTop, context.Wood);
+            Vector3 cell = WorldRenderBounds(probe).size;
+            probe.transform.position += CrateCell(0, 0, cell);
+            for (int column = 0; column < 2; column++)
+            for (int row = 0; row < 2; row++)
+            {
+                if (column == 0 && row == 0) continue;
+                CrateProp(CrateModels[2], "BenchCrate_" + column + row, bench,
+                    center + CrateCell(column, row, cell), benchTop, context.Wood);
+            }
+            return WorldRenderBounds(bench.gameObject);
+        }
+
+        private static Vector3 CrateCell(int column, int row, Vector3 cell)
+        {
+            return new Vector3((column - 0.5f) * cell.x, 0f, (row - 0.5f) * cell.z);
         }
 
         private static ToolLayout BuildPhysicalTools(Context context, CoreReferences core,
@@ -236,21 +271,17 @@ namespace CameraCoop.EditorTools
             SetField(paintTool, "localPlayerId", "EditorLocalPlayer");
             SetField(paintTool, "maxInteractionDistance", 12f);
 
-            const float benchTop = 0.8f;
-            float[] benchZ = { -5.8f, -3.4f };
-            for (int index = 0; index < benchZ.Length; index++)
-            {
-                GameObject bench = KenneyProp("table", "SupplyBench_" + index, root,
-                    new Vector3(-13f, 0f, benchZ[index]), benchTop, PropFit.Height, 90f);
-                if (bench == null)
-                    Cube("SupplyBench_" + index, root, new Vector3(-13f, benchTop * 0.5f, benchZ[index]),
-                        new Vector3(1.1f, benchTop, 2f), context.Wood);
-            }
+            // 작업대는 Kenney 실내 테이블이었다. 보급 상자를 2×2로 깔아 기지 작업대로 바꾼다.
+            // 위에 얹는 물건은 전부 여기서 돌려주는 실측 bounds로 자리를 잡는다 — 상수 높이를 믿지 않는다.
+            Bounds brushBench = SupplyBench(context, root, 0, new Vector3(-12.6f, 0f, -6.25f));
+            Bounds paintBench = SupplyBench(context, root, 1, new Vector3(-12.6f, 0f, -3.38f));
+            float benchTop = brushBench.max.y;
 
             // 붓 세 자루가 얹히는 받침. 손 조준 표적이 되도록 collider를 상판보다 크게 잡되,
             // 붓보다 벽 쪽(서쪽)에 둔다 — 앞을 가리면 가장 가까운 hit만 보는 라우터가 붓을 못 집는다.
-            GameObject rack = Cube("BrushRack", root, new Vector3(-13.02f, benchTop + 0.06f, benchZ[0]),
-                new Vector3(0.44f, 0.12f, 2f), context.Wood);
+            GameObject rack = Cube("BrushRack", root,
+                new Vector3(brushBench.center.x - 0.4f, benchTop + 0.06f, brushBench.center.z),
+                new Vector3(0.44f, 0.12f, brushBench.size.z - 0.2f), context.Wood);
             rack.GetComponent<BoxCollider>().size = new Vector3(1f, 2.5f, 1.025f);
             PhysicalToolStation rackStation = rack.AddComponent<PhysicalToolStation>();
             rackStation.SetConfiguration(paintTool, PhysicalToolStation.StationKind.Rack, 0);
@@ -261,7 +292,8 @@ namespace CameraCoop.EditorTools
             for (int index = 0; index < brushes.Length; index++)
             {
                 // 간격은 붓 길이(0.9)보다 넓게. 0.22 m 잡기 collider끼리 겹치면 조준이 갈린다.
-                var position = new Vector3(-12.62f, benchTop + 0.12f, benchZ[0] - 0.95f + index * 0.95f);
+                var position = new Vector3(brushBench.center.x, benchTop + 0.12f,
+                    brushBench.center.z + (index - 1) * 0.95f);
                 Quaternion lying = Quaternion.Euler(0f, 90f, 90f);
                 GameObject brush = PropInstance(BrushPropPaths[index], "PhysicalBrush_" + index, root,
                     position, BrushLength, lying);
@@ -276,19 +308,21 @@ namespace CameraCoop.EditorTools
                 SetField(brushes[index], "paintTool", paintTool);
             }
 
-            // 물감 받침. 상호작용은 아래 PaintPot이 담당하는 장식이므로 collider를 지운다 —
-            // 남겨 두면 PaintPot_3 앞을 가려 조준이 아예 안 된다 (사용자 보고 2026-09-04).
-            StripColliders(PropInstance(PalettePropPath, "PaintPalette", root,
-                new Vector3(-13.2f, benchTop + 0.05f, -2.0f), PaletteWidth, Quaternion.Euler(0f, 20f, 0f)));
+            // PaintPalette(LumiStudio)는 지웠다. 작업대 위에 물감통 넉 대가 이미 꽉 차 놓을 자리가 없어
+            // 상판 밖 허공에 떠 있었고, 조준을 가려 2026-09-04 결함의 원인이 됐던 소품이다.
 
             Material[] paints = { context.Red, context.Blue, context.Green, context.Yellow };
             string[] potModels =
                 { "SM_Gen_Prop_Pot_01", "SM_Gen_Prop_Pot_02", "SM_Gen_Prop_Pot_03", "SM_Gen_Prop_Pot_04" };
+            float paintTop = paintBench.max.y;
             for (int index = 0; index < paints.Length; index++)
             {
                 // 높이로 맞추면 납작한 항아리(Pot_04)가 폭 0.51 m로 부풀어 옆 통까지 넘본다. 폭 기준으로 맞춘다.
+                // 통은 상판 동쪽 절반에 둔다 — 플레이어가 동쪽에서 조준하므로 앞을 가리는 것이 없어야 한다.
                 GameObject pot = ControlBody("PaintPot_" + index, root,
-                    new Vector3(-12.85f, benchTop, benchZ[1] - 0.75f + index * 0.5f), new Vector3(0.34f, 0.34f, 0.34f),
+                    new Vector3(paintBench.center.x + 0.15f, paintTop,
+                        paintBench.center.z + (index - 1.5f) * 0.5f),
+                    new Vector3(0.34f, 0.34f, 0.34f),
                     SyntyPropFolder + potModels[index] + ".prefab", paints[index], PropFit.Footprint);
                 PhysicalToolStation station = pot.AddComponent<PhysicalToolStation>();
                 station.SetConfiguration(paintTool, PhysicalToolStation.StationKind.Paint, index);
@@ -299,7 +333,7 @@ namespace CameraCoop.EditorTools
             for (int index = 0; index < 3; index++)
             {
                 GameObject width = ControlBody("WidthControl_" + index, root,
-                    new Vector3(-11.5f, 0f, -5.8f + index * 1.2f),
+                    new Vector3(-11f, 0f, -5.8f + index * 1.2f),
                     new Vector3(0.55f, widthHeights[index], 0.55f),
                     SyntyPropFolder + "SM_Gen_Prop_Plinth_02.prefab", context.Accent);
                 PhysicalToolStation station = width.AddComponent<PhysicalToolStation>();
@@ -309,17 +343,19 @@ namespace CameraCoop.EditorTools
                 ConfigureControlLabel(widthLabel, core.PlayerCamera);
             }
 
-            GameObject eraser = ControlBody("EraserStation", root, new Vector3(-11.5f, 0f, -2.2f),
+            GameObject eraser = ControlBody("EraserStation", root, new Vector3(-11f, 0f, -2f),
                 new Vector3(0.7f, 0.7f, 0.7f), SyntyPropFolder + "SM_Gen_Prop_Crate_01.prefab", context.Paper);
             PhysicalToolStation eraserStation = eraser.AddComponent<PhysicalToolStation>();
             eraserStation.SetConfiguration(paintTool, PhysicalToolStation.StationKind.Eraser, 0);
             TextMesh eraserLabel = Label("ERASER", eraser.transform, new Vector3(0f, 0.57f, 0f), 0.18f, Dark, true);
             ConfigureControlLabel(eraserLabel, core.PlayerCamera);
             // 선택한 색을 되돌려 주는 칩. 물감통을 눌러도 바뀐 걸 볼 데가 없었다 (사용자 보고 2026-09-04).
-            GameObject chipStand = Cube("CurrentInkStand", root, new Vector3(-12.85f, benchTop + 0.15f, -2.45f),
+            // 통 반대쪽(서쪽) 끝에 세워 조준선에서 비켜 둔다.
+            var chipGround = new Vector3(paintBench.center.x - 0.4f, paintTop, paintBench.max.z - 0.4f);
+            GameObject chipStand = Cube("CurrentInkStand", root, chipGround + new Vector3(0f, 0.15f, 0f),
                 new Vector3(0.1f, 0.3f, 0.1f), context.Dark);
             UnityEngine.Object.DestroyImmediate(chipStand.GetComponent<Collider>());
-            GameObject chip = Cube("CurrentInkChip", root, new Vector3(-12.85f, benchTop + 0.36f, -2.45f),
+            GameObject chip = Cube("CurrentInkChip", root, chipGround + new Vector3(0f, 0.36f, 0f),
                 new Vector3(0.26f, 0.12f, 0.26f), context.Paper);
             UnityEngine.Object.DestroyImmediate(chip.GetComponent<Collider>());
             ToolStatusIndicator indicator = chip.AddComponent<ToolStatusIndicator>();
@@ -328,7 +364,7 @@ namespace CameraCoop.EditorTools
             TextMesh chipLabel = Label("INK", chip.transform, new Vector3(0f, 0.22f, 0f), 0.16f, Color.white, true);
             ConfigureControlLabel(chipLabel, core.PlayerCamera);
 
-            ZoneSign(root, "ArtSupplies", "ART SUPPLIES · PICK UP A BRUSH", new Vector3(-13.3f, 3.3f, -4.2f), -90f,
+            ZoneSign(root, "ArtSupplies", "ART SUPPLIES · PICK UP A BRUSH", new Vector3(-13.3f, 3.3f, -5f), -90f,
                 context.Dark);
 
             SetField(paintTool, "leftCarryAnchor", leftBrushAnchor);

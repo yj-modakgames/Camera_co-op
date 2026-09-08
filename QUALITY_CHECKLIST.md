@@ -560,3 +560,52 @@ host 실행 인자로 party 정원을 2~4로 줄여 시험할 수 있게 하고,
 ### code-review 반영 (2026-09-08)
 - `AlienProp` fallback이 `PropFit.Footprint`일 때 납작한 판(높이 0.05)을 만들도록 수정, 주석 수치 오류 2건 정정. 재compile error 0, EditMode 910/910 (12:20 KST 실행).
 - 미반영: 테스트 fixture가 `PartyGameSceneTests`와 중복 — 공용 base class 추출은 리팩터링 범위 밖으로 남김.
+
+## 2026-09-08 — 로비 소품 재배치·탐사 기지 컨셉 통일
+
+### 평가 범위와 상태
+- Kenney 실내 가구(kitchenBar·stoolBar·books·desk·chairDesk·table)를 Synty 보급 상자·금속 드럼으로 교체, 겹치던 기능 소품(Carry/Dock·JumpStep·ScratchBoardClear·WidthControl·Eraser) 이동, 장식 11→9 재배치(Footprint 기준), `PushOutsideRoom`으로 지형을 방 밖 여유(산 16 m·기타 5 m)까지 밀어냄, `CreateOrReplaceMaterial` 잔존 텍스처 제거, 감사 테스트 `RelayQuizOnlineLobbyLayoutTests` 4개.
+
+### 항목별 점수
+| 카테고리 | 항목 | 배점 | 획득 | 근거 |
+|---|---|---|---|---|
+| 기능 | 1-1 | 0.8 | 0.75 | XZ 겹침 49쌍→0, 1 m 위반 24→0, 방 안 지형 11→0(테스트 출력). 기능 소품 이름·컴포넌트 유지, validator PASS. BayRug(Kenney)는 색 표식으로 유지 |
+| | 1-2 | 0.6 | 0.55 | Crate/Barrel/Screen 부재 시 Cube fallback, `SupplyBench`도 bounds 반환. 실행 경로는 리뷰만 |
+| | 1-3 | 0.6 | 0.6 | `PushOutsideRoom` null·무방향·지하 bounds 가드 |
+| 성능 | 2-1 | 0.7 | 0.7 | 런타임 코드 변경 없음 |
+| | 2-2 | 0.7 | 0.7 | Update 없음 |
+| | 2-3 | 0.6 | 0.6 | 소품 6개 삭제, 상자 추가로 mesh 수 유사. 누수 없음 |
+| 검증 | 3-1 | 0.7 | 0.65 | 겹침·지형 침범·1 m 이격·spawn 반경 테스트 4개. 실패 메시지가 쌍·폭을 출력 |
+| | 3-2 | 0.7 | 0.6 | `SUMMARY {'Total': 914, 'Passed': 914, 'Failed': 0}` (unity cmd CLI, Editor 열림). Editor 닫은 CLI 미실행 |
+| | 3-3 | 0.6 | 0.45 | recompile error 0, `Built and saved`, primitive 경고 0, validator PASS, 캡처 9장 마젠타 0·겹침 0. Play 미확인 |
+| 코드 품질 | 4-1 | 0.5 | 0.5 | `MountainMargin`·`SupplyBench`·`CrateModels` |
+| | 4-2 | 0.5 | 0.45 | `SupplyBench` 분리. 테스트 `GroupOf`가 이름 하드코딩 |
+| | 4-3 | 0.5 | 0.4 | 작업대 오프셋(0.15·0.4·0.95) 리터럴 잔존 |
+| | 4-4 | 0.5 | 0.4 | 테스트 `AuditedNames`에 삭제된 소품(LobbyStool_/LobbyBooks/LobbyMug/CameraChair/PaintPalette) 잔존, 고아 mat 3개 |
+| 최적화 | 5-1 | 0.5 | 0.5 | — |
+| | 5-2 | 0.5 | 0.45 | Editor 1회성 LoadAssetAtPath |
+| | 5-3 | 0.5 | 0.4 | 지형 static 유지. draw call 미측정 |
+| | 5-4 | 0.5 | 0.5 | `PushOutsideRoom` 사각형 밖이면 조기 return |
+
+### 총점: 9.20 / 10
+
+### 이 구현 방식을 선택한 이유
+- 겹침을 눈이 아니라 bounds 테스트로 판정해 재발을 막는다. 실패 메시지가 곧 배치 지도다.
+- 상수 높이 대신 상자 실측 bounds로 버튼·붓·물감통을 얹어 에셋이 바뀌어도 허공에 뜨지 않는다.
+- 지형은 능선 형태를 유지하고 실측 bounds로 필요한 만큼만 밀었다.
+
+### 감점 요인 및 개선 방안
+- 4-4: 테스트 `AuditedNames`의 삭제 소품 항목 정리, 고아 mat 3개 Editor에서 삭제.
+- 3-3: Play 확인(버튼 조준·붓 집기·점프 발판·Carry/Dock 도달).
+- 5-3: Frame Debugger 측정.
+
+### 점수 이력
+`9.20` (1회 채점. 재배치 전 겹침 감사 실패 3/4는 구현 전 기준선)
+
+### 잔여 검증
+- Play: HOST/INVITE/LEAVE·REFRESH/PREV/NEXT/PREVIEW 조준(상판 높이 변경), 붓 3·물감통 4·THIN/MID/WIDE·ERASER, CARRY/DOCK (-12.7, 6.6/5.2) 도달, JumpStep 6개 밟기, 라벨 billboard.
+
+### code-review 반영 (2026-09-08, 재배치)
+- 반영 5건: 상자 열마다 단일 모델(폭 14% 차이로 생기던 틈 제거), `CrateProp` 헬퍼(fallback·StripColliders·BatchingStatic 일원화, 호출부 7곳), 테스트 잔존 이름 정리·`LobbyBarrel_` Counter 그룹, "2열 3행"→"2×2", probe 배치 공식 통일. 재검증: recompile error 0, EditMode 914/914, validator PASS.
+- 재채점: 4-4 0.4→0.5(잔존 항목 제거), 5-3 0.4→0.45(상자 22개 static), 4-2 0.45→0.5(중복 제거). 총점 **9.20 → 9.40**.
+- 미반영: 방 크기 상수 3중 정의(Floor cube·builder const·테스트), `[OneTimeSetUp]` 전환.

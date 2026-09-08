@@ -175,7 +175,8 @@ namespace CameraCoop.EditorTools
             SetField(interactable, "handPointer", pointer);
             SetObjectArray(core.HandRouter, "extraCanvases", new UnityEngine.Object[] { interactable });
 
-            GameObject clear = PedestalButton("ScratchBoardClear", station, new Vector3(-12.9f, 0f, 2.5f),
+            // 2.5는 낙서판 뒤판(x -13.72)과 0.03 m 겹쳐 있었다. 판 동쪽으로 완전히 빼고 DOCK PAPER와도 벌린다.
+            GameObject clear = PedestalButton("ScratchBoardClear", station, new Vector3(-12.6f, 0f, 3f),
                 "SM_Gen_Prop_Button_02", context.Yellow, context.Dark);
             ScratchBoardClearButton clearButton = clear.AddComponent<ScratchBoardClearButton>();
             SetField(clearButton, "drawingController", drawing);
@@ -216,14 +217,15 @@ namespace CameraCoop.EditorTools
         private static void BuildJumpTutorial(Context context, Transform parent)
         {
             Transform root = Group("JumpObstaclePath", parent);
-            ZoneSign(root, "Jump", "JUMP PRACTICE", new Vector3(8.2f, 3.4f, 0.6f), 0f, context.Accent);
-            string[] crates = { "SM_Gen_Prop_Crate_01", "SM_Gen_Prop_Crate_02", "SM_Gen_Prop_Crate_03" };
+            ZoneSign(root, "Jump", "JUMP PRACTICE", new Vector3(8.5f, 3f, -1f), 0f, context.Accent);
             for (int index = 0; index < 6; index++)
             {
                 float height = 0.3f + index % 3 * 0.25f;
-                var ground = new Vector3(5.6f + index * 1.15f, 0f, -0.4f + index * 0.6f);
-                GameObject step = SyntyProp(SyntyPropFolder, crates[index % crates.Length], "JumpStep_" + index,
-                    root, ground, 0.9f, PropFit.Footprint);
+                // 예전 경로(z -0.4 → 2.6)는 PLAYER 4 자리 러그(z 1.30~6.70) 위로 올라타 발판 셋이 겹쳐 있었다.
+                // 러그 남쪽 z -1.9 ~ -0.1 구간으로 눕혀 자리와 통행로를 침범하지 않게 한다.
+                var ground = new Vector3(5.9f + index * 1.15f, 0f, -1.9f + index * 0.36f);
+                GameObject step = SyntyProp(SyntyPropFolder, CrateModels[index % CrateModels.Length],
+                    "JumpStep_" + index, root, ground, 0.9f, PropFit.Footprint);
                 if (step == null)
                 {
                     Cube("JumpStep_" + index, root, ground + Vector3.up * (height * 0.5f),
@@ -237,26 +239,34 @@ namespace CameraCoop.EditorTools
             }
         }
 
-        // 방 구석의 빈자리를 외계 식생으로 채운다. AlienProp이 collider를 지우므로 통행도 손 조준도 막지 않는다.
-        // 자리는 기능 소품·ReadyPad·JumpStep·canvas에서 1 m 이상 떨어진 곳만 고른다.
+        // 방 가장자리 빈자리를 외계 식생·광물로 채운다. AlienProp이 collider를 지우므로 통행도 손 조준도 막지 않는다.
+        //
+        // 자리는 남쪽 가장자리(z -7.8 ~ -6.4)와 동쪽 가장자리(x 12.7 ~ 14)뿐이다. 그 밖은 전부
+        // 자리 러그·통행로·기능 소품이 쓴다. 서쪽·북서쪽은 작업대와 CARRY/DOCK이 1 m 여유까지 다 먹었다.
+        //
+        // 크기는 전부 PropFit.Footprint로 준다. Height로 맞추면 납작한 모델이 옆으로 부푼다 —
+        // SP_Stone01을 높이 0.8로 맞췄더니 폭 16.8 m짜리 판이 되어 서쪽 바닥 절반을 덮고 있었다.
         private static void BuildLobbyDecor(Transform parent)
         {
             Transform root = Group("LobbyDecor", parent);
-            AlienProp("SP_Plants/SP_Plant01", "Decor_Plant_00", root, new Vector3(-13f, 0f, 7f), 1.6f);
-            AlienProp("SP_Plants/SP_Plant03", "Decor_Plant_01", root, new Vector3(13f, 0f, 7f), 1.6f,
-                PropFit.Height, 140f);
-            AlienProp("SP_Plants/SP_Plant06", "Decor_Plant_02", root, new Vector3(13.2f, 0f, 2f), 0.7f);
-            AlienProp("SP_Crystals/SP_Crystal01", "Decor_Lamp_00", root, new Vector3(-13.2f, 0f, 3.4f), 2.2f);
-            AlienProp("SP_Rocks/SP_Rock04", "Decor_Bench_00", root, new Vector3(-6.4f, 0f, -6.6f), 0.9f,
-                PropFit.Height, 180f);
-            AlienProp("SP_Crystals/SP_Crystal02", "Decor_CoatRack_00", root, new Vector3(6.4f, 0f, -6.9f), 1.9f);
-            AlienProp("SP_Stones/SP_Stone01", "Decor_Trashcan_00", root, new Vector3(-10.6f, 0f, -0.6f), 0.8f);
-            AlienProp("SP_Rocks/SP_Rock06", "Decor_Rock_00", root, new Vector3(-8.2f, 0f, -3.4f), 0.85f);
-            AlienProp("SP_Rocks/SP_Rock08", "Decor_Rock_01", root, new Vector3(7.8f, 0f, -5.2f), 1f,
-                PropFit.Height, 65f);
-            AlienProp("SP_Crystals/SP_Crystal01", "Decor_Crystal_00", root, new Vector3(-9.6f, 0f, -6.8f), 1.3f,
-                PropFit.Height, 120f);
-            AlienProp("SP_Plants/SP_Plant08", "Decor_Plant_03", root, new Vector3(4.2f, 0f, -6.9f), 1.1f);
+            AlienProp("SP_Crystals/SP_Crystal01", "Decor_Crystal_00", root, new Vector3(-8.8f, 0f, -7.05f), 1.3f,
+                PropFit.Footprint, 120f);
+            AlienProp("SP_Rocks/SP_Rock06", "Decor_Rock_00", root, new Vector3(-6.4f, 0f, -7.05f), 1.2f,
+                PropFit.Footprint, 25f);
+            AlienProp("SP_Plants/SP_Plant01", "Decor_Plant_00", root, new Vector3(-3.9f, 0f, -7.05f), 1.3f,
+                PropFit.Footprint);
+            AlienProp("SP_Plants/SP_Plant08", "Decor_Plant_01", root, new Vector3(3.3f, 0f, -7.05f), 1.2f,
+                PropFit.Footprint, 200f);
+            AlienProp("SP_Rocks/SP_Rock08", "Decor_Rock_01", root, new Vector3(6.2f, 0f, -7.05f), 1.4f,
+                PropFit.Footprint, 65f);
+            AlienProp("SP_Crystals/SP_Crystal02", "Decor_Crystal_01", root, new Vector3(9.4f, 0f, -7.05f), 1.3f,
+                PropFit.Footprint, 310f);
+            AlienProp("SP_Plants/SP_Plant03", "Decor_Plant_02", root, new Vector3(13.1f, 0f, 2.5f), 1.2f,
+                PropFit.Footprint, 140f);
+            AlienProp("SP_Stones/SP_Stone01", "Decor_Stone_00", root, new Vector3(13.1f, 0f, 5f), 1.3f,
+                PropFit.Footprint, 40f);
+            AlienProp("SP_Plants/SP_Plant06", "Decor_Plant_03", root, new Vector3(13.1f, 0f, 7.4f), 1f,
+                PropFit.Footprint);
         }
 
         private static void DestroyNamed(Scene scene, string name)

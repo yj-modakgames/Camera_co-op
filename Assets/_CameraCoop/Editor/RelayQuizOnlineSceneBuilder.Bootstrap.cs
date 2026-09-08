@@ -104,6 +104,45 @@ namespace CameraCoop.EditorTools
         private const int RidgeHeightCycle = 6;
         // 평원은 능선 바깥까지 덮어야 한다. 220 m면 가장 먼 행성(약 95 m) 아래까지 지면이 이어진다.
         private const float PlainSize = 220f;
+        // 방(Floor cube)의 절반 크기. 지형은 이 사각형 밖에 있어야 한다.
+        private const float RoomHalfX = 14f;
+        private const float RoomHalfZ = 8f;
+        // 지형과 방 사이에 남기는 여유. 1.5 m로는 남쪽 산자락이 spawn(z -7.2)에서 2 m 앞에 서서
+        // 화면을 파랗게 덮었다. 5 m면 산발치가 보여 능선까지의 거리가 읽힌다.
+        private const float TerrainMargin = 5f;
+        // 산만 따로 더 민다. 높이가 8~19 m라 5 m 이격으로는 spawn(z -7.2) 뒤 5.8 m에 벽처럼 서서
+        // 화면 절반을 파랗게 덮었다. 16 m면 spawn에서 남쪽을 볼 때 능선이 화면 세로의 38%로 내려앉아
+        // 위로 하늘, 아래로 평원이 함께 보인다 (12 m에서는 46%로 아직 답답했다).
+        private const float MountainMargin = 16f;
+
+        // 산·바위·나무는 prefab마다 실루엣이 제각각이라 상수 반지름으로 두면 자락이 방 안까지 내려온다
+        // (RidgeRadius 25/18에서 서쪽 산 세 개가 ART SUPPLIES 작업대를 통째로 삼켰다).
+        // 실측 bounds를 보고 바깥 방향으로 필요한 만큼만 민다 — 능선의 형태와 높이는 그대로 둔다.
+        private static void PushOutsideRoom(GameObject item, Vector3 outward, float margin = TerrainMargin)
+        {
+            if (item == null) return;
+            outward.y = 0f;
+            if (outward.sqrMagnitude < 1e-6f) return;
+            outward.Normalize();
+            Bounds bounds = WorldRenderBounds(item);
+            if (bounds.max.y <= 0f) return;
+            // 판정 사각형은 방이 아니라 방+여유다. 방 밖이기만 하면 통과시키면 경계에 딱 붙은 산이 남는다.
+            float limitX = RoomHalfX + margin;
+            float limitZ = RoomHalfZ + margin;
+            if (bounds.min.x >= limitX || bounds.max.x <= -limitX) return;
+            if (bounds.min.z >= limitZ || bounds.max.z <= -limitZ) return;
+
+            float needX = float.MaxValue;
+            if (outward.x > 0.001f) needX = (limitX - bounds.min.x) / outward.x;
+            else if (outward.x < -0.001f) needX = (-limitX - bounds.max.x) / outward.x;
+            float needZ = float.MaxValue;
+            if (outward.z > 0.001f) needZ = (limitZ - bounds.min.z) / outward.z;
+            else if (outward.z < -0.001f) needZ = (-limitZ - bounds.max.z) / outward.z;
+
+            // x·z 중 하나만 빠져나가면 사각형에서 벗어난다. 덜 움직이는 축을 고른다.
+            float push = Mathf.Min(needX, needZ);
+            if (push > 0f && push < float.MaxValue) item.transform.position += outward * push;
+        }
 
         // 방 밖은 지평선을 만드는 것이 전부다. 전부 collider 없는 static batching 대상이다.
         private static void BuildPlanetTerrain(Context context, Transform studio)
@@ -124,8 +163,9 @@ namespace CameraCoop.EditorTools
                 float ring = index % 2 == 0 ? 1f : RidgeBackRing;
                 var ground = new Vector3(Mathf.Sin(radians) * RidgeRadiusX * ring, -0.05f,
                     Mathf.Cos(radians) * RidgeRadiusZ * ring);
-                AlienProp(mountains[index % mountains.Length], "Terrain_Mountain_" + index, terrain, ground,
-                    RidgeMinHeight + index % RidgeHeightCycle * RidgeHeightStep, PropFit.Height, angle + 25f);
+                PushOutsideRoom(AlienProp(mountains[index % mountains.Length], "Terrain_Mountain_" + index, terrain,
+                    ground, RidgeMinHeight + index % RidgeHeightCycle * RidgeHeightStep, PropFit.Height, angle + 25f),
+                    ground, MountainMargin);
             }
 
             // 중경. 능선과 방 사이가 비면 평원이 마분지처럼 보인다.
@@ -135,8 +175,11 @@ namespace CameraCoop.EditorTools
                 { 16.2f, -7.5f, 1.8f }, { -5f, 11.5f, 2.2f }, { 7.5f, -11f, 3f }
             };
             for (int index = 0; index < rocks.GetLength(0); index++)
-                AlienProp("SP_Rocks/SP_Rock0" + (index + 3), "Terrain_Rock_" + index, terrain,
-                    new Vector3(rocks[index, 0], 0f, rocks[index, 1]), rocks[index, 2], PropFit.Height, index * 57f);
+            {
+                var ground = new Vector3(rocks[index, 0], 0f, rocks[index, 1]);
+                PushOutsideRoom(AlienProp("SP_Rocks/SP_Rock0" + (index + 3), "Terrain_Rock_" + index, terrain,
+                    ground, rocks[index, 2], PropFit.Height, index * 57f), ground);
+            }
 
             float[,] trees =
             {
@@ -144,17 +187,22 @@ namespace CameraCoop.EditorTools
                 { 3.5f, 13f, 6.6f }, { -3f, -12f, 5f }, { 12f, -12.5f, 5.8f }
             };
             for (int index = 0; index < trees.GetLength(0); index++)
-                AlienProp("SP_Trees/SP_Tree0" + (index % 4 + 1), "Terrain_Tree_" + index, terrain,
-                    new Vector3(trees[index, 0], 0f, trees[index, 1]), trees[index, 2], PropFit.Height, index * 41f);
+            {
+                var ground = new Vector3(trees[index, 0], 0f, trees[index, 1]);
+                PushOutsideRoom(AlienProp("SP_Trees/SP_Tree0" + (index % 4 + 1), "Terrain_Tree_" + index, terrain,
+                    ground, trees[index, 2], PropFit.Height, index * 41f), ground);
+            }
 
             float[,] patches =
             {
                 { -24f, 10f, 16f }, { 22f, 12f, 14f }, { -27f, -15f, 15f }, { 18f, -14f, 13f }
             };
             for (int index = 0; index < patches.GetLength(0); index++)
-                AlienProp("SP_Ground/SP_Ground0" + (index + 1), "Terrain_Ground_" + index, terrain,
-                    new Vector3(patches[index, 0], -0.06f, patches[index, 1]), patches[index, 2],
-                    PropFit.Footprint, index * 73f);
+            {
+                var ground = new Vector3(patches[index, 0], -0.06f, patches[index, 1]);
+                PushOutsideRoom(AlienProp("SP_Ground/SP_Ground0" + (index + 1), "Terrain_Ground_" + index, terrain,
+                    ground, patches[index, 2], PropFit.Footprint, index * 73f), ground);
+            }
 
             // 행성은 낮은 산 너머(방위 22°와 120°, 능선 고도 17°/13°)에 걸리게 둔다. 그래야 능선 위로 뜬다.
             // 방위 0°는 PUBLIC PRACTICE WALL 표지판이 정면으로 가려서 쓸 수 없다.
