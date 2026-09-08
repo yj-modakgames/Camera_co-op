@@ -110,6 +110,7 @@ namespace CameraCoop
         private bool onlineSetupNoticeActive;
         private float onlineSetupNoticeUntil;
         private string onlineSetupNotice = string.Empty;
+        private string onlineStatus = string.Empty;
         private OnlineRelayQuizView cachedOnlineView;
         private RelayQuizPauseStage cachedOnlinePauseStage;
         private bool cachedOnlineHidden;
@@ -304,6 +305,17 @@ namespace CameraCoop
             }
         }
 
+        // 연결·참가 실패 문구는 controller의 status에만 남아 화면에 안 보였다.
+        // SyncView는 view가 그대로면 조기 return하므로, 문구가 바뀌면 여기서 캐시된 view로 다시 그린다.
+        public void SetOnlineStatus(string text)
+        {
+            string next = string.IsNullOrEmpty(text) ? string.Empty : text;
+            if (onlineStatus == next) return;
+            onlineStatus = next;
+            if (initialized && cachedOnlineView != null)
+                ApplyOnlineView(cachedOnlineView, cachedOnlinePauseStage, cachedOnlineHidden, cachedOnlineCanReady);
+        }
+
         public void ApplyOnlineView(OnlineRelayQuizView view, RelayQuizPauseStage pauseStage, bool hidden, bool canReady)
         {
             if (!initialized || view == null) return;
@@ -316,7 +328,12 @@ namespace CameraCoop
                 && view.state != RelayQuizState.Setup && view.state != RelayQuizState.Reveal && view.state != RelayQuizState.Gallery);
             UpdateOnlineSetupNotice(view, available);
             bool showingNotice = available && onlineSetupNoticeActive;
-            setupRoot.SetActive(showingNotice);
+            // abort되면 available이 false라 모든 root가 꺼져 빈 로비만 남았다. 최소한 사유는 남겨둔다.
+            string abortNotice = !view.aborted ? string.Empty
+                : string.IsNullOrEmpty(view.status) ? onlineStatus : view.status;
+            bool showingStatus = !showingNotice && (view.aborted ? abortNotice.Length > 0
+                : available && view.state == RelayQuizState.Setup && onlineStatus.Length > 0);
+            setupRoot.SetActive(showingNotice || showingStatus);
             handoverRoot.SetActive(!showingNotice && (waiting || acting && view.state == RelayQuizState.Handover));
             wordRevealRoot.SetActive(!showingNotice && acting && view.state == RelayQuizState.WordReveal);
             SetDrawingHud(!showingNotice && acting && view.state == RelayQuizState.Drawing);
@@ -340,11 +357,13 @@ namespace CameraCoop
             answerActive = acting && view.state == RelayQuizState.Guessing;
             if (!answerActive) ReleaseAnswerFocus();
             string rosterInfo = "Steam 4인 · " + view.rosterCount + "/" + OnlineRelayQuizProtocol.PlayerCount + "명 연결"
+                + (onlineStatus.Length > 0 ? " · " + onlineStatus : string.Empty)
                 + "\n" + (view.allReady ? "4명 모두 준비 완료"
                     : (view.localReady ? "내 ReadyPad 준비 완료" : "내 ReadyPad 준비 대기")
                         + " · " + (view.remoteReady ? "나머지 3명 준비 완료" : "나머지 플레이어 준비 대기"))
                 + (canReady ? "\n각자 자기 ReadyPad에 손을 올려 준비하세요" : "\n카메라 연결을 기다리는 중");
-            setupInfoLabel.text = onlineSetupNoticeActive ? onlineSetupNotice : rosterInfo;
+            setupInfoLabel.text = onlineSetupNoticeActive ? onlineSetupNotice
+                : view.aborted ? abortNotice : rosterInfo;
             handoverLabel.text = view.transferPending ? "최종 데이터를 전송하는 중입니다"
                 : view.active ? "내 차례입니다\n준비되면 " + (useWorldLobbyActions ? "내 ReadyPad에서 준비하세요" : "손으로 준비를 눌러주세요")
                     : "다른 플레이어 차례입니다 · 잠시 기다려주세요";

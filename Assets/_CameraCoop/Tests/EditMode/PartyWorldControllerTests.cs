@@ -1043,6 +1043,20 @@ namespace CameraCoop.Tests
             Assert.That(error, Does.Contain("readyPadsBySlot"));
         }
 
+        [Test]
+        public void AbortedSession_KeepsTheLeavePadSoThePlayerRecoversWithoutRestart()
+        {
+            var gateway = new FakeGateway
+            {
+                // abort되면 transport가 사라져 LocalIdentity가 빈 문자열이 된다. Leave pad는 그래도 남아야 한다.
+                LocalPlayerId = string.Empty,
+                View = new OnlineRelayQuizView { state = RelayQuizState.Setup, aborted = true }
+            };
+            PartyWorldController controller = CreateController(gateway);
+
+            Assert.That(controller.CanExecute(PartyWorldAction.Leave), Is.True);
+        }
+
         private PartyWorldController CreateController(FakeGateway gateway)
         {
             PartyWorldController controller = CreateObject("party world").AddComponent<PartyWorldController>();

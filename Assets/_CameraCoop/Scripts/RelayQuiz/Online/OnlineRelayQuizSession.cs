@@ -350,6 +350,7 @@ namespace CameraCoop
             }
             if (peer != expectedHostId) return;
             hostConnected = true;
+            Debug.Log("[OnlineRelayQuiz] host transport 연결 · hello 전송 (host=" + peer + ")");
             SendHello();
         }
 
@@ -396,6 +397,7 @@ namespace CameraCoop
             }
             if (incomingSequences.TryGetValue(peer, out long previous) && packet.sequence <= previous) return;
             int slot = RosterCount;
+            Debug.Log("[OnlineRelayQuiz] hello 수신 · roster slot " + slot + " 배정 (peer=" + peer + ")");
             roster[slot] = peer;
             slotByPeer[peer] = slot;
             incomingSequences[peer] = packet.sequence;
@@ -515,6 +517,7 @@ namespace CameraCoop
                 || welcome.brushes != brushes || welcome.assignedSlot <= 0
                 || welcome.assignedSlot >= OnlineRelayQuizProtocol.PlayerCount
                 || string.IsNullOrEmpty(packet.sessionId) || packet.rosterGeneration <= 0) return;
+            Debug.Log("[OnlineRelayQuiz] welcome 수신 · slot " + welcome.assignedSlot + " 배정 완료");
             sessionId = packet.sessionId;
             rosterGeneration = packet.rosterGeneration;
             roundId = packet.roundId;
@@ -1485,6 +1488,8 @@ namespace CameraCoop
         private void Abort(string reason, bool notify)
         {
             if (View.aborted) return;
+            Debug.Log("[OnlineRelayQuiz] session abort · " + reason + " (isHost=" + IsHost
+                + " slot=" + localSlot + " roster=" + View.rosterCount + ")");
             if (notify)
             {
                 if (IsHost)

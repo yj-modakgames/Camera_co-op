@@ -59,6 +59,10 @@ namespace CameraCoop
         private Transform lobbyGalleryPose;
         private OnlineRelayQuizSession autoReadySession;
         private int autoReadyGeneration = -1;
+        // Steam 콜백이 돌아오지 않으면 busy가 영구 true로 잠긴다 (Host·Join·Leave 모두). watchdog으로 한 곳에서 푼다.
+        private const float BusyTimeoutSeconds = 15f;
+        private float busyDeadline;
+        private bool steamInitLogged;
 
         private bool CameraReady => cameraControlPanel != null
             && (cameraControlPanel.State == CameraConnectionState.Receiving || cameraControlPanel.State == CameraConnectionState.External);
@@ -120,12 +124,19 @@ namespace CameraCoop
             {
                 status = "Steam을 실행하고 로그인해주세요 · 연결을 다시 확인합니다";
                 retrySteamAt = Time.unscaledTime + 5f;
+                if (!steamInitLogged)
+                {
+                    steamInitLogged = true;
+                    Debug.Log("[OnlineRelayQuiz] Steam init 실패 · 초대를 받을 수 없습니다 (Steam 미실행/미로그인?)");
+                }
                 return;
             }
+            steamInitLogged = false;
             if (!subscribed)
             {
                 SteamFriends.OnGameLobbyJoinRequested += HandleJoinRequested;
                 subscribed = true;
+                Debug.Log("[OnlineRelayQuiz] Steam 초대 구독 완료 · SteamId=" + SteamBootstrap.LocalSteamId);
             }
             if (session == null && !busy) status = "Host로 방을 만들거나 친구의 Steam 초대를 수락해주세요";
         }
@@ -159,6 +170,7 @@ namespace CameraCoop
         private void LateUpdate()
         {
             if (!initialized) return;
+            TickBusyWatchdog(Time.unscaledTime);
             if (!SteamBootstrap.IsValid && !busy && session == null && Time.unscaledTime >= retrySteamAt) SubscribeSteam();
             try
             {
@@ -240,6 +252,9 @@ namespace CameraCoop
         private void SyncView(bool force)
         {
             OnlineRelayQuizView view = session == null ? new OnlineRelayQuizView() : session.View;
+            // status는 여태 private 필드에만 쌓여 실패 원인이 화면에 안 남았다 (docs/09 §11).
+            // 아래 조기 return을 타도 문구는 갱신돼야 하므로 먼저 넘긴다.
+            relayQuizUI.SetOnlineStatus(status);
             if (sceneCoordinatorConfigured) sceneCoordinator.ApplyView(view);
             bool hidden = !hasFocus && view.state != RelayQuizState.Setup;
             RelayQuizPauseStage stage = PauseStage(view);
@@ -398,12 +413,52 @@ namespace CameraCoop
                 PauseStage(session.View) == RelayQuizPauseStage.ResumeReady)) session.Execute(RelayQuizAction.Resume, session.View.generation);
         }
 
+        // Host·초대 참가 공통 진입 guard. abort된 session을 남겨두면 이후 초대·Host가 전부 조용히 무시되고
+        // 앱 재시작 말고는 복구 수단이 없어진다 — 그래서 abort된 session은 "없음"으로 취급해 먼저 정리한다.
+        private bool TryBeginEntry(string origin)
+        {
+            if (!initialized || !isActiveAndEnabled)
+            {
+                Debug.Log("[OnlineRelayQuiz] " + origin + " 무시 · initialized=" + initialized
+                    + " active=" + isActiveAndEnabled);
+                return false;
+            }
+            if (session != null && session.View.aborted)
+            {
+                Debug.Log("[OnlineRelayQuiz] " + origin + " · abort된 session 정리 후 계속 (" + session.View.status + ")");
+                ReleaseSession();
+            }
+            if (busy || session != null)
+            {
+                Debug.Log("[OnlineRelayQuiz] " + origin + " 무시 · busy=" + busy + " session=" + (session != null));
+                return false;
+            }
+            return true;
+        }
+
+        private void BeginBusy()
+        {
+            busy = true;
+            busyDeadline = Time.unscaledTime + BusyTimeoutSeconds;
+        }
+
+        // Steam 콜백이 돌아오지 않아도 busy를 풀어준다. operationGeneration을 올려 늦게 온 콜백은 stale로 정리된다.
+        private bool TickBusyWatchdog(float now)
+        {
+            if (!busy || now < busyDeadline) return false;
+            operationGeneration++;
+            busy = false;
+            status = "Steam 응답이 없어 요청을 취소했습니다 · 다시 Host를 만들거나 초대를 받아주세요";
+            Debug.Log("[OnlineRelayQuiz] busy watchdog · " + BusyTimeoutSeconds + "초 내 Steam 응답 없음, 요청 취소");
+            return true;
+        }
+
         public async void OnClickHostSteam()
         {
-            if (!initialized || !isActiveAndEnabled || busy || session != null) return;
+            if (!TryBeginEntry("Host 생성")) return;
             SubscribeSteam();
             if (!SteamBootstrap.IsValid) return;
-            busy = true;
+            BeginBusy();
             int operation = ++operationGeneration;
             status = "Steam 방을 만드는 중";
             try
@@ -463,13 +518,22 @@ namespace CameraCoop
         private void HandleJoinRequested(Lobby lobby, SteamId friendId)
         {
             SynchronizationContext context = unityContext;
-            if (context != null) context.Post(_ => BeginJoin(lobby), null);
+            if (context == null)
+            {
+                Debug.Log("[OnlineRelayQuiz] 초대 수신했지만 Unity context가 없습니다 · lobby=" + lobby.Id);
+                return;
+            }
+            context.Post(_ =>
+            {
+                Debug.Log("[OnlineRelayQuiz] 초대 수락 수신 · lobby=" + lobby.Id + " friend=" + friendId);
+                BeginJoin(lobby);
+            }, null);
         }
 
         private async void BeginJoin(Lobby lobby)
         {
-            if (this == null || !initialized || !isActiveAndEnabled || busy || session != null) return;
-            busy = true;
+            if (this == null || !TryBeginEntry("Steam 초대 참가")) return;
+            BeginBusy();
             int operation = ++operationGeneration;
             status = "Steam 초대에 참가하는 중";
             try
@@ -485,14 +549,19 @@ namespace CameraCoop
 
         private void CompleteJoin(int operation, Lobby lobby, RoomEnter result)
         {
+            Debug.Log("[OnlineRelayQuiz] lobby.Join 결과 · RoomEnter=" + result + " lobby=" + lobby.Id
+                + " current=" + IsCurrentOperation(operation));
             if (!IsCurrentOperation(operation)) { if (result == RoomEnter.Success) lobby.Leave(); return; }
             busy = false;
             if (result != RoomEnter.Success) { status = "참가 실패: " + result; return; }
-            if (lobby.GetData("relay-game") != OnlineRelayQuizProtocol.GameId
-                || lobby.GetData("relay-version") != OnlineRelayQuizProtocol.Version.ToString()
-                || lobby.GetData("relay-brushes") != toolState.BrushCount.ToString()
-                || lobby.Owner.Id == SteamClient.SteamId)
-            { lobby.Leave(); status = "같은 RelayQuiz version의 친구 초대만 참가할 수 있습니다"; return; }
+            string gate = DescribeLobbyGate(lobby, toolState.BrushCount);
+            if (gate.Length > 0)
+            {
+                lobby.Leave();
+                status = "같은 RelayQuiz version의 친구 초대만 참가할 수 있습니다";
+                Debug.Log("[OnlineRelayQuiz] lobby gate 거절 · " + gate);
+                return;
+            }
             SteamTransport created = null;
             try
             {
@@ -508,6 +577,22 @@ namespace CameraCoop
                 joinedLobby = null;
                 OperationFailed(operation, "연결 실패: " + exception.Message);
             }
+        }
+
+        // 거절 사유를 예상값/실제값으로 남긴다. 비면 통과.
+        private static string DescribeLobbyGate(Lobby lobby, int brushCount)
+        {
+            string report = GateMismatch("relay-game", OnlineRelayQuizProtocol.GameId, lobby.GetData("relay-game"))
+                + GateMismatch("relay-version", OnlineRelayQuizProtocol.Version.ToString(), lobby.GetData("relay-version"))
+                + GateMismatch("relay-brushes", brushCount.ToString(), lobby.GetData("relay-brushes"));
+            if (lobby.Owner.Id == SteamClient.SteamId) report += " owner=자기 자신";
+            return report.Trim();
+        }
+
+        private static string GateMismatch(string key, string expected, string actual)
+        {
+            return expected == actual ? string.Empty : " " + key + "(예상 " + expected + " / 실제 "
+                + (string.IsNullOrEmpty(actual) ? "없음" : actual) + ")";
         }
 
         private void Bind(SteamTransport transport, string expectedHost)
@@ -526,6 +611,8 @@ namespace CameraCoop
             steamTransport = transport;
             transportClosed = false;
             appliedSerial = 0;
+            Debug.Log("[OnlineRelayQuiz] session bind · host=" + expectedHost + " local=" + transport.LocalPlayerId
+                + " isHost=" + transport.IsHost);
             partyWorldController?.BindNetwork(session, transport, toolState.BrushCount);
             SyncView(true);
         }
@@ -541,7 +628,7 @@ namespace CameraCoop
         {
             if (!initialized) return;
             operationGeneration++;
-            busy = true;
+            BeginBusy();
             status = "Lobby로 돌아가는 중";
             if (sceneCoordinatorConfigured)
             {

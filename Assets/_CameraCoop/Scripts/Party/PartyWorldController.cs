@@ -404,7 +404,8 @@ namespace CameraCoop.Party
                 case PartyWorldAction.Invite:
                     return gateway.IsHost && view != null && !view.aborted && view.state == RelayQuizState.Setup
                         && !view.rosterLocked && view.rosterCount < PartyRoster.Capacity;
-                case PartyWorldAction.Leave: return !string.IsNullOrEmpty(gateway.LocalIdentity);
+                // abort되면 transport가 사라져 LocalIdentity가 빈다. session이 남아 있는 동안은 Leave가 유일한 복구 수단이다.
+                case PartyWorldAction.Leave: return !string.IsNullOrEmpty(gateway.LocalIdentity) || view != null;
                 case PartyWorldAction.SelectRelayCopy:
                 case PartyWorldAction.SelectMemoryCopy:
                 case PartyWorldAction.SelectCoopMural:

@@ -63,7 +63,8 @@ namespace CameraCoop.EditorTools
 
             ApplyMacPlayerSettings(report.summary.platform, report.summary.outputPath);
 
-            Copy(Path.Combine(root, "steam_appid.txt"), Path.Combine(dest, "steam_appid.txt"));
+            string appId = Path.Combine(root, "steam_appid.txt");
+            foreach (string target in SteamAppIdDestinations(mac, dest, report.summary.outputPath)) Copy(appId, target);
             Copy(Path.Combine(root, TrackerSrc, "fake_hand.py"), Path.Combine(dest, "fake_hand.py"));
             Copy(Path.Combine(root, DistSrc, "README_FIRST.txt"), Path.Combine(dest, "README_FIRST.txt"));
 
@@ -90,6 +91,15 @@ namespace CameraCoop.EditorTools
             }
 
             Debug.Log("[CameraCoopBuild] payload 배치 완료 (" + (mac ? "macOS" : "Windows") + "): " + dest);
+        }
+
+        // Steam은 cwd에서 steam_appid.txt를 찾는다. macOS는 Finder로 .app을 열면 cwd가 "/"라
+        // .app 옆 파일을 못 읽으므로, 실행 파일과 같은 Contents/MacOS에도 함께 둔다.
+        private static string[] SteamAppIdDestinations(bool mac, string dest, string outputPath)
+        {
+            string beside = Path.Combine(dest, "steam_appid.txt");
+            if (!mac || string.IsNullOrEmpty(outputPath)) return new[] { beside };
+            return new[] { beside, Path.Combine(outputPath, "Contents", "MacOS", "steam_appid.txt") };
         }
 
         private static void ApplyMacPlayerSettings(BuildTarget platform, string outputPath)

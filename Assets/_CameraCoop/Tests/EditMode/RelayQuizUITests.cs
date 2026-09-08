@@ -180,6 +180,36 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void AbortedOnlineSessionShowsTheReasonInsteadOfAnEmptyLobby()
+        {
+            var aborted = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Setup,
+                aborted = true,
+                status = "연결 확인 시간 초과 · 새 초대가 필요합니다"
+            };
+
+            ui.ApplyOnlineView(aborted, RelayQuizPauseStage.None, false, true);
+
+            Assert.That(setupRoot.activeSelf, Is.True, "abort되면 모든 root가 꺼져 빈 로비만 남았다");
+            Assert.That(setupInfoLabel.text, Does.Contain("연결 확인 시간 초과"));
+        }
+
+        [Test]
+        public void ChangedOnlineStatusRedrawsTheLobbyWithoutAnotherViewUpdate()
+        {
+            var setup = new OnlineRelayQuizView { state = RelayQuizState.Setup, rosterCount = 4 };
+            ui.ApplyOnlineView(setup, RelayQuizPauseStage.None, false, true);
+            Invoke(ui, "UpdateOnlineSetupNotice", float.MaxValue);
+
+            // SyncView는 view가 안 바뀌면 조기 return한다. status만 바뀐 실패 문구도 화면에 올라와야 한다.
+            ui.SetOnlineStatus("참가 실패: 같은 RelayQuiz version의 친구 초대만 참가할 수 있습니다");
+
+            Assert.That(setupRoot.activeSelf, Is.True);
+            Assert.That(setupInfoLabel.text, Does.Contain("참가 실패"));
+        }
+
+        [Test]
         public void OnlineGameStartNoticeSuppressesHandoverThenRestoresItOnExpiry()
         {
             var setup = new OnlineRelayQuizView { state = RelayQuizState.Setup, rosterCount = 4 };

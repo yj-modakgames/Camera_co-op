@@ -69,6 +69,32 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void MacSteamAppId_IsAlsoPlacedNextToTheExecutableInsideTheApp()
+        {
+            Type payloadType = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(assembly => assembly.GetType("CameraCoop.EditorTools.CameraCoopBuildPayload"))
+                .FirstOrDefault(type => type != null);
+            MethodInfo method = payloadType.GetMethod("SteamAppIdDestinations",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, "steam_appid.txt 배치 경로 함수가 필요하다");
+
+            string appPath = Path.Combine("out", "CameraCoop.app");
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    Path.Combine("out", "steam_appid.txt"),
+                    Path.Combine(appPath, "Contents", "MacOS", "steam_appid.txt")
+                },
+                (string[])method.Invoke(null, new object[] { true, "out", appPath }),
+                "Finder 실행 cwd는 \"/\"라 .app 옆 파일만으로는 Steam이 appid를 못 읽는다");
+
+            CollectionAssert.AreEqual(
+                new[] { Path.Combine("out", "steam_appid.txt") },
+                (string[])method.Invoke(null, new object[] { false, "out", Path.Combine("out", "CameraCoop.exe") }),
+                "Windows는 실행 파일 옆 한 곳이면 된다");
+        }
+
+        [Test]
         public void Postprocess_DoesNotReadMacPlistForWindowsBuild()
         {
             Type payloadType = AppDomain.CurrentDomain.GetAssemblies()

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using CameraCoop.Netplay;
 using CameraCoop.Party;
 using CameraCoop.Party.SceneFlow;
 using NUnit.Framework;
@@ -262,6 +263,50 @@ namespace CameraCoop.Tests
             Assert.That(modes.CurrentMode, Is.EqualTo(InputMode.Move));
         }
 
+        [Test]
+        public void AbortedSession_IsReleasedSoTheNextSteamInviteStartsWithoutRestart()
+        {
+            OnlineRelayQuizController controller = CreateObject("stale session controller")
+                .AddComponent<OnlineRelayQuizController>();
+            SetField(controller, "initialized", true);
+            OnlineRelayQuizSession aborted = CreateAbortedSession();
+            SetField(controller, "session", aborted);
+
+            Assert.That(InvokeBool(controller, "TryBeginEntry", "Steam 초대 참가"), Is.True,
+                "abort된 session은 '없음'으로 봐야 다음 초대가 진행된다");
+            Assert.That(GetField(controller, "session"), Is.Null,
+                "abort된 session을 남겨두면 이후 모든 초대·Host가 조용히 무시된다");
+        }
+
+        [Test]
+        public void SteamRequestWithoutResponse_ReleasesBusySoHostAndJoinRecover()
+        {
+            OnlineRelayQuizController controller = CreateObject("busy watchdog controller")
+                .AddComponent<OnlineRelayQuizController>();
+            SetField(controller, "initialized", true);
+            SetField(controller, "busy", true);
+            SetField(controller, "busyDeadline", 100f);
+
+            Assert.That(InvokeBool(controller, "TickBusyWatchdog", 99f), Is.False,
+                "제한 시간 전에는 진행 중인 요청을 유지해야 한다");
+            Assert.That(GetField(controller, "busy"), Is.True);
+
+            Assert.That(InvokeBool(controller, "TickBusyWatchdog", 100f), Is.True);
+            Assert.That(GetField(controller, "busy"), Is.False,
+                "콜백이 오지 않으면 busy를 풀어야 재시도할 수 있다");
+            Assert.That(InvokeBool(controller, "TryBeginEntry", "Steam 초대 참가"), Is.True);
+        }
+
+        private OnlineRelayQuizSession CreateAbortedSession()
+        {
+            var transport = new LoopbackTransport(true, "stale-host");
+            var session = new OnlineRelayQuizSession(transport, "stale-host", () => "낱말",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            session.Abort("연결 확인 시간 초과 · 새 초대가 필요합니다");
+            Assert.That(session.View.aborted, Is.True);
+            return session;
+        }
+
         private OnlineRelayQuizController CreateController(out PlayerController player, out InputModeManager modes,
             out Transform lobbyPose, out Transform galleryPose)
         {
@@ -357,6 +402,20 @@ namespace CameraCoop.Tests
             FieldInfo field = component.GetType().GetField(name, InstanceFlags);
             Assert.That(field, Is.Not.Null, component.GetType().Name + " must serialize " + name + ".");
             field.SetValue(component, value);
+        }
+
+        private static object GetField(Component component, string name)
+        {
+            FieldInfo field = component.GetType().GetField(name, InstanceFlags);
+            Assert.That(field, Is.Not.Null, component.GetType().Name + " must serialize " + name + ".");
+            return field.GetValue(component);
+        }
+
+        private static bool InvokeBool(Component component, string method, params object[] args)
+        {
+            MethodInfo callback = component.GetType().GetMethod(method, InstanceFlags);
+            Assert.That(callback, Is.Not.Null, component.GetType().Name + " must expose " + method + ".");
+            return (bool)callback.Invoke(component, args);
         }
 
         private static void Invoke(Component component, string method)
