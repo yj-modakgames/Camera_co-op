@@ -59,6 +59,9 @@ namespace CameraCoop
         private Transform lobbyGalleryPose;
         private OnlineRelayQuizSession autoReadySession;
         private int autoReadyGeneration = -1;
+        private PartySceneBindings relaySceneBindings;
+        private readonly CanvasDrawingData[] appliedSlotDrawings = new CanvasDrawingData[OnlineRelayQuizProtocol.PlayerCount];
+        private float nextLiveDrawingAt;
         // Steam 콜백이 돌아오지 않으면 busy가 영구 true로 잠긴다 (Host·Join·Leave 모두). watchdog으로 한 곳에서 푼다.
         private const float BusyTimeoutSeconds = 15f;
         private float busyDeadline;
@@ -184,6 +187,12 @@ namespace CameraCoop
                 }
                 if (session != null && session.View.aborted && !transportClosed) CloseTransport();
                 SyncView(false);
+                if (session != null && session.View.active && session.View.state == RelayQuizState.Drawing
+                    && Time.unscaledTime >= nextLiveDrawingAt)
+                {
+                    nextLiveDrawingAt = Time.unscaledTime + 0.5f;
+                    session.PublishLiveDrawing(drawingController.SnapshotDrawing());
+                }
                 ProcessMouse();
                 relayQuizUI.UpdateAnswerInput();
                 if (session != null) relayQuizUI.UpdateOnlineTimer(session.View, !hasFocus && session.View.state != RelayQuizState.Setup);
@@ -257,6 +266,7 @@ namespace CameraCoop
             relayQuizUI.SetOnlineStatus(status);
             if (sceneCoordinatorConfigured) sceneCoordinator.ApplyView(view);
             bool hidden = !hasFocus && view.state != RelayQuizState.Setup;
+            ApplyRelaySlotDrawings(view, !hidden && !view.paused && !view.aborted && !view.transferPending);
             RelayQuizPauseStage stage = PauseStage(view);
             int flags = (hidden ? 1 : 0) | (view.paused ? 2 : 0) | (view.transferPending ? 4 : 0)
                 | (view.aborted ? 8 : 0) | (view.connected ? 16 : 0) | (view.localReady ? 32 : 0)
@@ -293,7 +303,10 @@ namespace CameraCoop
             // 로비 연습 획도 보여야 한다. drawing만 보면 Setup 상태의 stroke가 통째로 숨겨진다.
             bool lobbyPractice = visible && view.state == RelayQuizState.Setup && !view.modeStarted;
             drawingController.SetStrokesVisible(drawing || lobbyPractice);
-            bool referencePreview = visible && PartyWorldController.IsReferenceVisible(view);
+            bool privateReference = view.active && view.referenceDrawing != null
+                && (view.referenceKind == RelayQuizReferenceKind.PreviousDrawing
+                    || view.referenceKind == RelayQuizReferenceKind.OwnDrawing);
+            bool referencePreview = visible && (PartyWorldController.IsReferenceVisible(view) || privateReference);
             bool guessingPreview = visible && view.state == RelayQuizState.Guessing && view.active && view.drawing != null;
             bool preview = referencePreview || guessingPreview;
             if (previewSurface != null) previewSurface.gameObject.SetActive(preview);
@@ -359,6 +372,27 @@ namespace CameraCoop
             ApplyGallery(view, visible);
         }
 
+        internal void ApplyRelaySlotDrawings(OnlineRelayQuizView view, bool visible)
+        {
+            if (relaySceneBindings?.RelayDrawingRoots == null) return;
+            for (int slot = 0; slot < relaySceneBindings.RelayDrawingRoots.Length; slot++)
+            {
+                GameObject root = relaySceneBindings.RelayDrawingRoots[slot];
+                CanvasDrawingPresenter presenter = relaySceneBindings.RelayDrawingPresenters[slot];
+                bool show = visible && view.CanSeeSlotDrawing(slot)
+                    && !(view.active && view.state == RelayQuizState.Drawing && view.localSlot == slot);
+                root.SetActive(show);
+                CanvasDrawingData drawing = null;
+                if (show && view.visibleDrawings != null)
+                    foreach (OnlineRelayQuizGalleryEntry entry in view.visibleDrawings)
+                        if (entry != null && entry.ownerSlot == slot) drawing = entry.drawing;
+                if (ReferenceEquals(appliedSlotDrawings[slot], drawing)) continue;
+                if (drawing == null) presenter.ClearPresentation();
+                else presenter.Show(drawing, relaySceneBindings.RelayDrawingSurfaces[slot]);
+                appliedSlotDrawings[slot] = drawing;
+            }
+        }
+
         private CanvasDrawingData CaptureDrawing()
         {
             handInputRouter.CancelCanvasCaptures(HandCancelReason.ViewChanged);
@@ -392,6 +426,7 @@ namespace CameraCoop
 
         private void HidePrivateContent()
         {
+            ApplyRelaySlotDrawings(new OnlineRelayQuizView(), false);
             if (inputModeManager != null) inputModeManager.SetContext(InputContext.Blocked);
             if (handInputRouter != null) handInputRouter.CancelAll(HandCancelReason.ViewChanged);
             if (drawingController != null) { drawingController.FinalizeActiveStrokes(); drawingController.SetStrokesVisible(false); }
@@ -720,6 +755,8 @@ namespace CameraCoop
         {
             if (adapter == null) throw new ArgumentNullException(nameof(adapter));
             PartySceneBindings bindings = adapter.Bindings ?? throw new ArgumentException("Scene bindings are required.", nameof(adapter));
+            relaySceneBindings = bindings;
+            Array.Clear(appliedSlotDrawings, 0, appliedSlotDrawings.Length);
             partyWorldController?.BindGamePort(adapter);
             workCanvasRoot = bindings.WritablePaperRoot;
             previewPresenter = bindings.ReferencePresenter;
@@ -745,6 +782,8 @@ namespace CameraCoop
 
         public void UnbindGameScene(IPartyGameScenePort adapter)
         {
+            ApplyRelaySlotDrawings(new OnlineRelayQuizView(), false);
+            relaySceneBindings = null;
             if (previewPresenter != null) previewPresenter.ClearPresentation();
             if (previewSurface != null) previewSurface.gameObject.SetActive(false);
             if (workCanvasRoot != null) workCanvasRoot.SetActive(false);

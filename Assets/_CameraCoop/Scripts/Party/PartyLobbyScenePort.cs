@@ -10,6 +10,7 @@ namespace CameraCoop.Party
         [SerializeField] private GameObject[] practiceLayerRoots;
         [SerializeField] private CanvasDrawingPresenter[] practiceLayerPresenters;
         [SerializeField] private CanvasSurface[] practiceLayerSurfaces;
+        [SerializeField] private DrawingController practiceDrawing;
         [SerializeField] private GameObject[] avatarRoots;
         [SerializeField] private RemoteAvatarPresenter[] avatarPresenters;
 
@@ -18,6 +19,7 @@ namespace CameraCoop.Party
         public GameObject[] PracticeLayerRoots => practiceLayerRoots;
         public CanvasDrawingPresenter[] PracticeLayerPresenters => practiceLayerPresenters;
         public CanvasSurface[] PracticeLayerSurfaces => practiceLayerSurfaces;
+        public DrawingController PracticeDrawing { get => practiceDrawing; set => practiceDrawing = value; }
         public GameObject[] AvatarRoots => avatarRoots;
         public RemoteAvatarPresenter[] AvatarPresenters => avatarPresenters;
 

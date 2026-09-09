@@ -31,6 +31,9 @@ namespace CameraCoop.Party
         [SerializeField] private GameObject[] muralLayerRoots;
         [SerializeField] private CanvasDrawingPresenter[] muralLayerPresenters;
         [SerializeField] private CanvasSurface[] muralLayerSurfaces;
+        [SerializeField] private GameObject[] relayDrawingRoots;
+        [SerializeField] private CanvasDrawingPresenter[] relayDrawingPresenters;
+        [SerializeField] private CanvasSurface[] relayDrawingSurfaces;
 
         public PartyMode Mode { get => mode; set => mode = value; }
         public GameObject SceneRoot { get => sceneRoot; set => sceneRoot = value; }
@@ -58,5 +61,8 @@ namespace CameraCoop.Party
         public GameObject[] MuralLayerRoots { get => muralLayerRoots; set => muralLayerRoots = value; }
         public CanvasDrawingPresenter[] MuralLayerPresenters { get => muralLayerPresenters; set => muralLayerPresenters = value; }
         public CanvasSurface[] MuralLayerSurfaces { get => muralLayerSurfaces; set => muralLayerSurfaces = value; }
+        public GameObject[] RelayDrawingRoots { get => relayDrawingRoots; set => relayDrawingRoots = value; }
+        public CanvasDrawingPresenter[] RelayDrawingPresenters { get => relayDrawingPresenters; set => relayDrawingPresenters = value; }
+        public CanvasSurface[] RelayDrawingSurfaces { get => relayDrawingSurfaces; set => relayDrawingSurfaces = value; }
     }
 }

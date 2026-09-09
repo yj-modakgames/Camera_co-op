@@ -32,16 +32,6 @@ namespace CameraCoop.EditorTools
             for (int slot = 0; slot < 4; slot++)
             {
                 Transform bay = Group("PlayerBay_" + slot + "_" + colorNames[slot], baysRoot);
-                // 바닥 러그가 각 자리를 표시한다. 예전 BayBack cube는 공용 연습 이젤을 통째로 삼켜 지웠다.
-                var rugGround = new Vector3(xs[slot], 0.01f, 4f);
-                GameObject rug = KenneyProp("rugSquare", "BayRug_" + slot, bay, rugGround, 5.4f, PropFit.Footprint);
-                if (rug != null) PaintAll(rug, colors[slot]);
-                else Cube("BayRug_" + slot, bay, rugGround, new Vector3(5.4f, 0.02f, 5.4f), colors[slot]);
-                FrameAt(bay, "BayEaselFrame_" + slot, new Vector3(xs[slot], 1.65f, 7.08f), new Vector2(4.65f, 3.05f),
-                    colors[slot], Quaternion.Euler(0f, 180f, 0f));
-                ZoneSign(bay, "Player" + slot, "PLAYER " + (slot + 1) + " · " + colorNames[slot].ToUpperInvariant(),
-                    new Vector3(xs[slot], 4.25f, 7.3f), 0f, colors[slot]);
-
                 GameObject zone = new GameObject("ZoneBounds_" + slot);
                 zone.transform.SetParent(bay, false);
                 zone.transform.position = new Vector3(xs[slot], 1.5f, 4.35f);
@@ -119,12 +109,16 @@ namespace CameraCoop.EditorTools
                 new Vector3(0f, counterTop, CounterZ), context.Blue));
             actionList.Add(Action(context, lobby, "Leave", PartyWorldAction.Leave,
                 new Vector3(2.2f, counterTop, CounterZ), context.Wall));
-            actionList.Add(Action(context, modes, "Relay Copy", PartyWorldAction.SelectRelayCopy,
-                new Vector3(-3.2f, 0f, -2.7f), context.Red));
-            actionList.Add(Action(context, modes, "Memory Copy", PartyWorldAction.SelectMemoryCopy,
-                new Vector3(0f, 0f, -2.7f), context.Blue));
-            actionList.Add(Action(context, modes, "Coop Mural", PartyWorldAction.SelectCoopMural,
-                new Vector3(3.2f, 0f, -2.7f), context.Green));
+            actionList.Add(Action(context, modes, "Relay Copy\nCopy each drawing", PartyWorldAction.SelectRelayCopy,
+                new Vector3(-4.4f, 0f, -2.5f), context.Red));
+            actionList.Add(Action(context, modes, "Memory Copy\nLook 5 sec, then draw", PartyWorldAction.SelectMemoryCopy,
+                new Vector3(0f, 0f, -2.5f), context.Blue));
+            actionList.Add(Action(context, modes, "Co-op Mural\nShare one canvas", PartyWorldAction.SelectCoopMural,
+                new Vector3(4.4f, 0f, -2.5f), context.Green));
+            actionList.Add(Action(context, modes, "Picture Telephone\nDraw > text > draw > guess",
+                PartyWorldAction.SelectPictureTelephone, new Vector3(-6.5f, 0f, -4.1f), context.Yellow));
+            actionList.Add(Action(context, modes, "Drawing Word Chain\n4 pictures, then private names",
+                PartyWorldAction.SelectDrawingWordChain, new Vector3(6.5f, 0f, -4.1f), context.Accent));
             actionList.Add(Action(context, lobby, "START", PartyWorldAction.StartSelectedMode,
                 new Vector3(0f, 0f, -4.4f), context.Yellow));
             // 예전 자리(-11.8)는 BayRug_0 위였다. 러그 서쪽 끝(-11.65) 바깥으로 빼 자리 표식을 침범하지 않게 한다.
@@ -133,10 +127,6 @@ namespace CameraCoop.EditorTools
             actionList.Add(Action(context, baysRoot, "Dock Paper", PartyWorldAction.DockCanvas,
                 new Vector3(-12.7f, 0f, 5.2f), context.Accent));
 
-            // 높이 3.1은 15 m 뒤 PLAYER 2·3 표지판과 같은 시선 각도(7°)에 걸려 글자가 겹쳤다.
-            // spawn에서 26° 위로 올려 4.9~10.5°에 몰려 있는 이젤·자리·연습벽 표지판 위로 완전히 뺀다.
-            ZoneSign(lobby, "Lobby", "LOBBY · HOST / INVITE / START", new Vector3(0f, 5f, CounterZ - 1f), 0f,
-                context.Dark);
             // 모드 표지판은 ModeSelectorRoot 안에 둔다. 선택이 닫혀 있을 때 혼자 남으면 안내가 거짓말이 된다.
             ZoneSign(modes, "Mode", "PICK A MODE, THEN START", new Vector3(0f, 3.2f, -3.6f), 0f, context.Dark);
             BuildLobbyCounterProps(context, lobby, counterTop, counterFront, counterHalfWidth);

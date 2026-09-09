@@ -8,7 +8,7 @@ namespace CameraCoop.Tests
     public sealed class PartyModeCatalogTests
     {
         [Test]
-        public void InitialCatalogContainsExactlyThreeApprovedModes()
+        public void CatalogContainsFiveStableDrawingModes()
         {
             PartyModeDefinition[] modes = PartyModeCatalog.All.ToArray();
 
@@ -16,11 +16,15 @@ namespace CameraCoop.Tests
             {
                 PartyMode.RelayCopy,
                 PartyMode.MemoryCopy,
-                PartyMode.CoopMural
+                PartyMode.CoopMural,
+                PartyMode.PictureTelephone,
+                PartyMode.DrawingWordChain
             }));
             Assert.That(modes.Count(mode => mode.RequiredForInitialRelease), Is.EqualTo(1));
             Assert.That(modes.Single(mode => mode.RequiredForInitialRelease).Id, Is.EqualTo(PartyMode.RelayCopy));
-            Assert.That(Enum.GetValues(typeof(PartyMode)).Length, Is.EqualTo(3));
+            Assert.That(Enum.GetValues(typeof(PartyMode)).Length, Is.EqualTo(5));
+            Assert.That((int)PartyMode.PictureTelephone, Is.EqualTo(3));
+            Assert.That((int)PartyMode.DrawingWordChain, Is.EqualTo(4));
         }
 
         [Test]
@@ -57,6 +61,22 @@ namespace CameraCoop.Tests
             Assert.That(mode.WritePolicy, Is.EqualTo(PartyWritePolicy.SequentialRosterSlots));
         }
 
+        [TestCase(PartyMode.PictureTelephone, 2, false)]
+        [TestCase(PartyMode.DrawingWordChain, 4, true)]
+        public void NewModesUsePrivateDrawingAndTextWithExactResultCounts(PartyMode id, int resultCount,
+            bool usesSharedSlotBoards)
+        {
+            PartyModeDefinition mode = PartyModeCatalog.Get(id);
+
+            Assert.That(mode.Inputs, Does.Contain(PartyModeInput.FistDrawing));
+            Assert.That(mode.Inputs, Does.Contain(PartyModeInput.KeyboardAnswer));
+            Assert.That(mode.CanvasVisibility, Is.EqualTo(PartyCanvasVisibility.PrivateToAuthorizedSlot));
+            Assert.That(mode.UsesSlotDrawingBoards, Is.EqualTo(usesSharedSlotBoards));
+            Assert.That(mode.ResultDrawingCount, Is.EqualTo(resultCount));
+            Assert.That(mode.DisplayName, Is.Not.Empty);
+            Assert.That(mode.Description, Is.Not.Empty);
+        }
+
         [Test]
         public void SceneCatalogUsesUniqueLobbyFirstBuildOrder()
         {
@@ -67,7 +87,9 @@ namespace CameraCoop.Tests
                 "Assets/_CameraCoop/Scenes/RelayQuizOnline.unity",
                 "Assets/_CameraCoop/Scenes/RelayCopy.unity",
                 "Assets/_CameraCoop/Scenes/MemoryCopy.unity",
-                "Assets/_CameraCoop/Scenes/CoopMural.unity"
+                "Assets/_CameraCoop/Scenes/CoopMural.unity",
+                "Assets/_CameraCoop/Scenes/PictureTelephone.unity",
+                "Assets/_CameraCoop/Scenes/DrawingWordChain.unity"
             }));
             Assert.That(paths.Distinct().Count(), Is.EqualTo(paths.Length));
             Assert.That(PartySceneCatalog.LobbySceneName, Is.EqualTo("RelayQuizOnline"));
@@ -77,8 +99,9 @@ namespace CameraCoop.Tests
         [Test]
         public void SceneCatalogResolvesEverySupportedModeToItsExactScene()
         {
-            PartyMode[] modes = { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural };
-            string[] expectedNames = { "RelayCopy", "MemoryCopy", "CoopMural" };
+            PartyMode[] modes = { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural,
+                PartyMode.PictureTelephone, PartyMode.DrawingWordChain };
+            string[] expectedNames = { "RelayCopy", "MemoryCopy", "CoopMural", "PictureTelephone", "DrawingWordChain" };
 
             for (int index = 0; index < modes.Length; index++)
             {

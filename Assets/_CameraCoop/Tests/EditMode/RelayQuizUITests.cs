@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using CameraCoop.Party;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -16,6 +17,7 @@ namespace CameraCoop.Tests
         private GameObject handoverRoot;
         private Text setupInfoLabel;
         private Text revealLabel;
+        private Text drawingInstructionLabel;
         private HandButtonInteractable startButton;
         private EventSystem eventSystem;
         private List<EventSystem> previousEventSystems;
@@ -68,6 +70,8 @@ namespace CameraCoop.Tests
             Set(ui, "setupInfoLabel", setupInfoLabel);
             Set(ui, "handoverLabel", CreateText("HandoverLabel"));
             Set(ui, "wordLabel", CreateText("WordLabel"));
+            drawingInstructionLabel = CreateText("DrawingInstructionLabel");
+            Set(ui, "drawingInstructionLabel", drawingInstructionLabel);
             Set(ui, "observeLabel", CreateText("ObserveLabel"));
             Set(ui, "guessHintLabel", CreateText("GuessHintLabel"));
             revealLabel = CreateText("RevealLabel");
@@ -309,6 +313,98 @@ namespace CameraCoop.Tests
 
             Assert.That(revealLabel.supportRichText, Is.False);
             Assert.That(revealLabel.text, Is.EqualTo("제시어: 제시어\n제출한 답: " + markupLikeAnswer + "\n오답입니다"));
+        }
+
+        [Test]
+        public void PictureTelephoneDrawingShowsOnlyRecipientPromptText()
+        {
+            Text wordLabel = Get<Text>(ui, "wordLabel");
+            wordLabel.supportRichText = true;
+            drawingInstructionLabel.supportRichText = true;
+            var view = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Drawing,
+                active = true,
+                hasSelectedMode = true,
+                selectedMode = PartyMode.PictureTelephone,
+                referenceKind = RelayQuizReferenceKind.PromptText,
+                privatePrompt = "<size=999>B가 적은 비공개 설명</size>",
+                word = "다른 사람이 보면 안 되는 최초 제시어"
+            };
+
+            ui.ApplyOnlineView(view, RelayQuizPauseStage.None, false, true);
+
+            Assert.That(Get<GameObject>(ui, "wordRevealRoot").activeSelf, Is.False);
+            Assert.That(drawingInstructionLabel.text, Does.Contain(view.privatePrompt));
+            Assert.That(drawingInstructionLabel.text, Does.Contain("이 글만 보고 그리세요"));
+            Assert.That(wordLabel.supportRichText, Is.False);
+            Assert.That(drawingInstructionLabel.supportRichText, Is.False);
+            Assert.That(Get<GameObject>(ui, "guessRoot").activeSelf, Is.False);
+        }
+
+        [Test]
+        public void WordChainLabelEntryIsPrivateAndStopsAfterLocalSubmission()
+        {
+            var view = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Guessing,
+                active = true,
+                hasSelectedMode = true,
+                selectedMode = PartyMode.DrawingWordChain,
+                textRole = RelayQuizTextRole.ChainLabel
+            };
+
+            ui.ApplyOnlineView(view, RelayQuizPauseStage.None, false, true);
+            ui.UpdateAnswerInput();
+
+            Assert.That(Get<GameObject>(ui, "guessRoot").activeSelf, Is.True);
+            Assert.That(Get<Text>(ui, "guessHintLabel").text, Does.Contain("다른 사람에게는 보이지 않습니다"));
+            view.localAnswerSubmitted = true;
+            ui.ApplyOnlineView(view, RelayQuizPauseStage.None, false, true);
+            Assert.That(Get<GameObject>(ui, "guessRoot").activeSelf, Is.False);
+        }
+
+        [Test]
+        public void PictureTelephoneRevealShowsOnlyAuthorizedResultTexts()
+        {
+            var view = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Reveal,
+                hasSelectedMode = true,
+                selectedMode = PartyMode.PictureTelephone,
+                correct = false,
+                word = "고등어",
+                answer = "고양이",
+                revealedTexts = new[] { string.Empty, "긴 물고기", string.Empty, "고양이" },
+                privatePrompt = "비공개 입력"
+            };
+
+            ui.ApplyOnlineView(view, RelayQuizPauseStage.None, false, true);
+
+            Assert.That(revealLabel.text, Does.Contain(view.word));
+            Assert.That(revealLabel.text, Does.Contain(view.revealedTexts[1]));
+            Assert.That(revealLabel.text, Does.Contain(view.answer));
+            Assert.That(revealLabel.text, Does.Not.Contain(view.privatePrompt));
+        }
+
+        [Test]
+        public void WordChainRevealShowsOnlyBooleanResult()
+        {
+            var view = new OnlineRelayQuizView
+            {
+                state = RelayQuizState.Reveal,
+                hasSelectedMode = true,
+                selectedMode = PartyMode.DrawingWordChain,
+                chainSucceeded = true,
+                answer = "숨겨야 하는 다른 사람 답",
+                privatePrompt = "비공개 입력"
+            };
+
+            ui.ApplyOnlineView(view, RelayQuizPauseStage.None, false, true);
+
+            Assert.That(revealLabel.text, Does.Contain("모든 단어가 이어졌습니다"));
+            Assert.That(revealLabel.text, Does.Not.Contain(view.answer));
+            Assert.That(revealLabel.text, Does.Not.Contain(view.privatePrompt));
         }
 
         [Test]

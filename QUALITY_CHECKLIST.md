@@ -1,5 +1,78 @@
 # QUALITY_CHECKLIST.md — Unity 6 기능 구현 품질 체크리스트 (Camera_co-op)
 
+## 2026-09-09 — 그림·글 교대와 그림 끝말잇기
+
+평가 범위: 기존 3개 mode를 보존하고 PictureTelephone 및 DrawingWordChain을 추가했다. 로비 선택, 별도 내부 Scene, 그림/글 차례, recipient별 정보 차단, 전체 그림 완료 후 자기 그림 단어의 비공개 입력을 포함한다.
+
+| 항목 | 배점 | 획득 | 판단 근거·감점 |
+|---|---:|---:|---|
+| 1-1 요구사항 | 0.80 | 0.75 | 두 mode의 4 session trace와 8개 Play 화면 확인. 실제 Steam 조작 미확인 |
+| 1-2 경계 조건 | 0.60 | 0.60 | 빈 입력·timeout·restart·끊긴 연결·잘못된 owner·stale/duplicate tests 통과 |
+| 1-3 오류 처리 | 0.60 | 0.60 | host 권한과 수신 허용 범위 유지, text 길이·enum 검증, rich text 해석 차단 |
+| 2-1 GC | 0.70 | 0.60 | 최대 4개 제출 text를 보관하고 기존 snapshot 경로 재사용. UI 문자열·직렬화 할당과 장시간 GC 미측정 감점 |
+| 2-2 Update | 0.70 | 0.70 | 새 frame별 Scene 탐색 없음. 기존 UI/presenter 참조와 0.5초 snapshot 경로 재사용 |
+| 2-3 자원 수명 | 0.60 | 0.55 | reset에서 text 배열·그림·상태 삭제, private cache 권한 회수. 장시간 Player 메모리 미측정 |
+| 3-1 tests | 0.70 | 0.70 | 두 mode의 전체 순서·비공개 payload·입력 역할·기존 relay reference/result 회귀 검사 |
+| 3-2 tests 실행 | 0.70 | 0.70 | 최종 NUnit 975/975, failed/skipped 0, 27.737초. UI focused 1/1 |
+| 3-3 실제 실행 | 0.60 | 0.30 | Unity Play 8상태·실제 획·입력 UI 확인, 6 Scene validator PASS. 원본 overlay를 포함한 화면이지만 synthetic View이며 Steam/손 입력 연속 조작 미확인 |
+| 4-1 가독성 | 0.50 | 0.50 | TextRole/ReferenceKind/OwnDrawing으로 역할 명시 |
+| 4-2 책임 분리 | 0.50 | 0.45 | 기존 logic/session/catalog/adapter 재사용. 큰 기존 controller 구조 유지 |
+| 4-3 상수 | 0.50 | 0.45 | 기존 serialized enum 0~2 보존, 3/4 추가. Scene 배치 좌표 일부 literal |
+| 4-4 구조 | 0.50 | 0.50 | 별도 framework/package 없이 확장, 실제 공간 계약에 맞춘 validator 수정 |
+| 5-1 pooling | 0.50 | 0.45 | 기존 drawing presenter 재사용. snapshot 교체 시 mesh 재구성 비용 유지 |
+| 5-2 caching | 0.50 | 0.45 | 기존 reference/payload cache 활용. view 문자열 생성 비용 잔존 |
+| 5-3 rendering | 0.50 | 0.40 | 공통 내부 배치/material을 공유하고 한 mode만 활성화. 단일 Editor QA이며 Player/다중 해상도 미검증, 작은 English 표지 일부 겹침 |
+| 5-4 불필요 연산 | 0.50 | 0.50 | 연결 판정은 4개 text를 최종 제출 시만 검사. 사전·AI 인식·새 polling 없음 |
+| **합계** | **10.00** | **9.20** | 검증 한계를 반영한 평가 |
+
+총점 **9.2/10**. 점수 이력 **8.8 → 9.2**. Play에서 C의 큰 prompt가 그림판을 가리던 상태는 1-1을 0.35로 감점했다. Drawing용 작은 안내로 실제 코드를 수정하고 markup 해석을 차단한 뒤, 전체 tests와 fresh 화면에서 수정 결과를 확인해 0.75로 재평가했다. 검사 반복만으로 점수를 올리지 않았다.
+
+구현 방식 선택 이유: 기존 순차 상태 흐름·host authority·Scene 전환을 확장해 중복 networking을 만들지 않았다. 끝말잇기는 사용자 확정대로 그림 단계에 단어 확인 없이 진행하고, 각자 자기 그림 이름을 마지막에 제출한다. 제출 단어는 결과에도 다른 사용자에게 공개하지 않는다. 성공 판정은 trim 후 인접 단어의 마지막/첫 Hangul 음절 일치이며 의미 인식이나 두음법칙 예외는 구현 범위가 아니다.
+
+실행 근거: `Temp/new-modes-editmode-full-final.xml`, `Temp/new-modes-validation-final.txt`(compile errors 0, Console tests seq 5054 및 validator seq 5056), `docs/19_drawing_party_modes.md`의 8개 final capture. main과 별도 read-only 검토자가 최종 이미지를 직접 열었다. 초기 capture의 임시 Canvas 변경은 Play 종료로 복구했고, 최종 8장은 원본 ScreenSpaceOverlay와 `capture_game_view source=screen`을 사용했다. 최종 Editor는 RelayQuizOnline 단일 Scene, dirty=false다.
+
+성능 측정 한계: `Temp/new-modes-play-evidence.txt`의 DrawingWordChain 결과 화면 sample은 drawCalls 23/SetPass 10, CPU 7.6918 ms/main 1.8381 ms/GPU 1.97632 ms다. 단일 Editor 결과 화면 측정이며 4인 Drawing 부하나 장시간 GC를 대표하지 않는다.
+
+감점 개선 방안: 실제 동일 build의 Steam 4대에서 HOST/INVITE/START/복귀 및 손 입력을 확인하고, 지연·연결 종료·다른 해상도와 장시간 GC/network 사용량을 측정한다. 배경의 작은 English 표지 대비·겹침은 별도 미관 개선 대상으로 남긴다. 이번 작업에서 Player 배포 build나 commit/publish는 하지 않았다.
+
+## 2026-09-09 — 공용 야외 로비와 내부 relay 그림 공개
+
+정정: 이 기록 이후 실제 Console에서 `RelayCopy requires three remote blank paper shells` 오류를 확인했다. 당시 validator 통과로 전달한 내용은 잘못됐으며 942개 tests와 Play 관찰을 Scene validator 통과로 대체할 수 없다. 두 신규 게임 통합 작업에서 validator를 현재 authorized board 계약에 맞게 수정했고, `Temp/new-modes-validator.txt`에 lobby 및 5개 내부 Scene의 실제 `True` 반환과 Console PASS(seq 4195)를 기록했다. 아래 점수는 당시 범위의 역사 기록이며, 신규 작업 평가는 별도로 기록한다.
+
+평가 범위: 로비 개인 그림 구역을 공용 16×4 면으로 통합, 기존 practice session 연결, 내부 hull·4인 구획, 첫 주자 관전과 현재/직전 주자 공개. D의 기존 정답 입력 역할은 유지했다.
+
+| 항목 | 배점 | 획득 | 근거·감점 |
+|---|---:|---:|---|
+| 1-1 요구사항 | 0.80 | 0.75 | 공용판·내부 구획·상호 공개 구현. 실제 Steam START 왕복 미확인 |
+| 1-2 경계 조건 | 0.60 | 0.60 | 64조합 공개, 잘못된 owner/stale turn, 공개 회수 cache, scene 연결 검사 통과 |
+| 1-3 오류 처리 | 0.60 | 0.60 | host와 수신자 권한 검사, 기존 chunk 한도·phase 검증 재사용 |
+| 2-1 GC | 0.70 | 0.55 | 관전 snapshot 0.5초 간격. 직렬화·복사 할당 있음. 장시간 GC 미측정 |
+| 2-2 Update | 0.70 | 0.70 | frame마다 scene 검색 없음. presenter 참조 저장, 동일 drawing 표시 재생성 생략 |
+| 2-3 자원 수명 | 0.60 | 0.50 | 공개 권한 회수 시 cache 정리, 테스트 fixture Dispose. 장시간 4인 메모리 미측정 |
+| 3-1 tests | 0.70 | 0.70 | 진행 중 획 보존, 4 session 전달, 공개 배열과 Scene ownership, 공용판 중복·복귀 검사 |
+| 3-2 tests 실행 | 0.70 | 0.70 | 최종 전체 EditMode 942/942, 실패·skip 0, 실행 22.37초 |
+| 3-3 실제 실행 | 0.60 | 0.40 | Play에서 lobby와 additive 내부, 실제 presenter에 4 session 데이터 연결. Steam 4대·START 버튼 왕복 미실행 |
+| 4-1 가독성 | 0.50 | 0.50 | SnapshotDrawing, CanSeeSlotDrawing, PracticeDrawing으로 역할 명시 |
+| 4-2 책임 분리 | 0.50 | 0.45 | 기존 session/Scene adapter 재사용. 큰 기존 controller 규모 유지 |
+| 4-3 상수 | 0.50 | 0.40 | 기존 Capacity 사용. 배치 좌표·0.5초 literal 일부 유지 |
+| 4-4 구조 | 0.50 | 0.50 | 개인 frame·중복 표지 제거, 잘못된 위치 설명 정리 |
+| 5-1 pooling | 0.50 | 0.45 | 기존 drawing renderer 사용. snapshot 교체 시 renderer 재생성 비용 잔존 |
+| 5-2 caching | 0.50 | 0.45 | 동일 remote layer/drawing 참조 재표시 생략. snapshot 직렬화 비교 비용 잔존 |
+| 5-3 rendering | 0.50 | 0.40 | 내부 단일 Editor sample drawCalls112/SetPass18, lobby157/26. 장시간·Player 성능 비교 없음 |
+| 5-4 불필요 연산 | 0.50 | 0.50 | 바뀌지 않은 live payload 전송 생략, 본인 replicated layer 숨김 |
+| **합계** | **10.00** | **9.15** | 실제 실행 범위 한계를 포함한 평가 |
+
+총점 **9.15/10**. 점수 이력: **8.65 → 9.15**. 첫 Play에서 남은 개인 frame·겹친 표지·작업판 위치 문제를 확인한 상태를 8.65로 평가했다. builder의 해당 문제 수정 및 relay binding 경계 검사 추가 후 최종 평가했다. 검증 실행만으로 점수를 올린 것이 아니다.
+
+방식 선택 이유: 낮은 고정 칸막이로 사람과 순서를 보이게 하고, 비대칭 공개는 사용자별 payload와 presenter에서 처리한다. 물리 칸막이를 공통으로 열면 C에게 A의 그림까지 노출될 수 있으므로 사용자에게 허용된 개방형 구획을 적용했다. 공용판은 기존 practice session의 입력 source만 연결해 networking 구조를 중복 생성하지 않았다. CLEAR MY DRAWING은 본인 획만 지운다.
+
+실행 근거: `Temp/pipeline_test_status.json` (942/942), `Temp/relay-layout-evidence.md`, `Temp/relay-lobby-play-final.png`, `Temp/relay-interior-host-c.png`, `Temp/relay-interior-b-c.png`. main도 결과 JSON과 세 최종 이미지를 직접 열어 확인했다. C 차례 A 화면은 A/B/C 공개·D 숨김, B 화면은 B/C 공개·A/D 숨김이다. Play 검증은 4 session loopback fixture를 실제 Scene presenter에 연결한 것이며 Steam 실기 결과가 아니다.
+
+성능 sample: 내부 CPU frame6.2792ms/GPU1.532928ms/main thread1.4201ms, allocated484273242 bytes. 로비 CPU5.9546ms/GPU1.61792ms. 단일 Editor 측정이며 Player FPS나 GC 안정성을 보장하지 않는다.
+
+잔여 확인: 동일 build의 실제 Steam4대 HOST/INVITE/START/복귀, 동시 공용판 drawing, 장시간 획 증가 시 GC·network. 기존 외부 asset의 CS0414 warning은 범위 밖으로 유지했다. Editor는 Play 종료, `RelayQuizOnline` 하나만 열리고 dirty:false 상태로 복원했다. 생성된 Unity YAML의 빈 필드 공백은 Unity 저장 형식 그대로 유지했고 C#/Markdown diff 공백 검사는 통과했다.
+
+
 > **대상 스택:** Unity 6000.3.15f1 (C#) · URP
 > **사용법:** 기능을 하나 구현할 때마다 아래 **모든 항목**을 증거 기반으로 채점한다. 총점은 **10점 만점**으로 정규화되어 있다. 총점 **9.0 미만이면 개선안을 직접 코드에 반영 → 재평가**를 9.0 이상이 될 때까지 반복하고, 매 반복의 점수 변화를 기록한다.
 > **채점 원칙:** 추측으로 만점 금지. 성능은 측정/코드분석 근거, 검증은 테스트 실제 실행 결과를 인용해야 점수를 부여한다. 감점 사유를 먼저 찾는다.

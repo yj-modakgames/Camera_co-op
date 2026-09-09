@@ -360,9 +360,23 @@ namespace CameraCoop
         {
             if (!RequireLocalDrawing()) return null;
             FinalizeActiveStrokes();
-            var strokes = new CanvasStrokeData[finishedStrokes.Count];
-            for (int i = 0; i < strokes.Length; i++) strokes[i] = finishedStrokes[i].data.Copy();
-            return new CanvasDrawingData { strokes = strokes };
+            return SnapshotDrawing();
+        }
+
+        public CanvasDrawingData SnapshotDrawing()
+        {
+            if (!RequireLocalDrawing()) return null;
+            var strokes = new List<CanvasStrokeData>(finishedStrokes.Count + activeStrokes.Count);
+            foreach (FinishedStroke stroke in finishedStrokes) strokes.Add(stroke.data.Copy());
+            foreach (ActiveStroke stroke in activeStrokes.Values)
+            {
+                if (stroke.xy.Count < 4) continue;
+                CanvasStrokeData copy = stroke.data.Copy();
+                copy.xy = stroke.xy.ToArray();
+                strokes.Add(copy);
+            }
+            strokes.Sort((left, right) => left.order.CompareTo(right.order));
+            return new CanvasDrawingData { strokes = strokes.ToArray() };
         }
 
         public bool LoadDrawing(CanvasDrawingData data)

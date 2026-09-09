@@ -30,6 +30,39 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void RelayDrawingBindingsRequireAllFourSceneLocalBoards()
+        {
+            PartySceneBindings bindings = CreateValidBindings(PartyMode.RelayCopy);
+            Component adapter = CreateAdapter(bindings);
+            bindings.RelayDrawingRoots = new GameObject[3];
+            Assert.That(Validate(adapter, out string error), Is.False);
+            Assert.That(error, Is.EqualTo("relayDrawingRoots[4] is required."));
+        }
+
+        [TestCase(PartyMode.PictureTelephone, 2, false)]
+        [TestCase(PartyMode.DrawingWordChain, 4, true)]
+        public void NewPrivateModesRequireTheirExactGalleryAndOptionalSlotBoards(PartyMode mode, int galleryCount,
+            bool usesSlotBoards)
+        {
+            PartySceneBindings bindings = CreateValidBindings(mode);
+
+            Assert.That(Validate(CreateAdapter(bindings), out string error), Is.True, error);
+            Assert.That(bindings.GalleryRoots, Has.Length.EqualTo(galleryCount));
+            if (usesSlotBoards) Assert.That(bindings.RelayDrawingRoots, Has.Length.EqualTo(PartyRoster.Capacity));
+            else Assert.That(bindings.RelayDrawingRoots, Is.Null);
+        }
+
+        [Test]
+        public void RelayDrawingPresenterOutsideTheSceneRootIsRejected()
+        {
+            PartySceneBindings bindings = CreateValidBindings(PartyMode.RelayCopy);
+            Component adapter = CreateAdapter(bindings);
+            bindings.RelayDrawingPresenters[2] = CreateObject("foreign presenter").AddComponent<CanvasDrawingPresenter>();
+            Assert.That(Validate(adapter, out string error), Is.False);
+            Assert.That(error, Is.EqualTo("relayDrawingPresenters[2] must belong to the adapter Scene root."));
+        }
+
+        [Test]
         public void AdapterContainingEventSystemIsRejected()
         {
             object bindings = CreateValidBindings(PartyMode.RelayCopy);
@@ -311,9 +344,10 @@ namespace CameraCoop.Tests
             bindings.ReferenceSurface = CreateObject("Reference surface", sceneRoot.transform).AddComponent<CanvasSurface>();
             bindings.ResultRoot = CreateObject("Result root", sceneRoot.transform);
             bindings.ResultViewPose = CreateObject("Result view pose", sceneRoot.transform).transform;
-            bindings.GalleryRoots = new GameObject[PartyRoster.Capacity - 1];
-            bindings.GalleryPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity - 1];
-            bindings.GallerySurfaces = new CanvasSurface[PartyRoster.Capacity - 1];
+            int galleryCount = PartyModeCatalog.Get(mode).ResultDrawingCount;
+            bindings.GalleryRoots = new GameObject[galleryCount];
+            bindings.GalleryPresenters = new CanvasDrawingPresenter[galleryCount];
+            bindings.GallerySurfaces = new CanvasSurface[galleryCount];
             for (int slot = 0; slot < bindings.GalleryRoots.Length; slot++)
             {
                 bindings.GalleryRoots[slot] = CreateObject("Gallery root " + slot, bindings.ResultRoot.transform);
@@ -329,6 +363,20 @@ namespace CameraCoop.Tests
             {
                 CreateObject("Tool station", sceneRoot.transform).AddComponent<WorldActionInteractable>()
             };
+
+            if (PartyModeCatalog.Get(mode).UsesSlotDrawingBoards)
+            {
+                bindings.RelayDrawingRoots = new GameObject[PartyRoster.Capacity];
+                bindings.RelayDrawingPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
+                bindings.RelayDrawingSurfaces = new CanvasSurface[PartyRoster.Capacity];
+                for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+                {
+                    GameObject board = CreateObject("Relay board " + slot, sceneRoot.transform);
+                    bindings.RelayDrawingRoots[slot] = board;
+                    bindings.RelayDrawingPresenters[slot] = board.AddComponent<CanvasDrawingPresenter>();
+                    bindings.RelayDrawingSurfaces[slot] = board.AddComponent<CanvasSurface>();
+                }
+            }
 
             if (mode == PartyMode.CoopMural)
             {

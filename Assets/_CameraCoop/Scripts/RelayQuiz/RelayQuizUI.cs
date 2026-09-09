@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CameraCoop.Party;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -85,6 +86,7 @@ namespace CameraCoop
         [SerializeField] private Text setupInfoLabel;
         [SerializeField] private Text handoverLabel;
         [SerializeField] private Text wordLabel;
+        [SerializeField] private Text drawingInstructionLabel;
         [SerializeField] private Text observeLabel;
         [SerializeField] private Text guessHintLabel;
         [SerializeField] private Text revealLabel;
@@ -107,6 +109,7 @@ namespace CameraCoop
         private bool onlineModeStarted;
         private int onlineStartSignal;
         private RelayQuizState onlineState;
+        private RelayQuizTextRole onlineTextRole;
         private bool onlineSetupNoticeActive;
         private float onlineSetupNoticeUntil;
         private string onlineSetupNotice = string.Empty;
@@ -152,6 +155,7 @@ namespace CameraCoop
                 && galleryButton != null && restartButton != null && resumeButton != null
                 && answerField != null && answerFocusButton != null
                 && setupInfoLabel != null && handoverLabel != null && wordLabel != null
+                && drawingInstructionLabel != null
                 && observeLabel != null && guessHintLabel != null && revealLabel != null
                 && pauseLabel != null && timerLabel != null;
         }
@@ -287,6 +291,7 @@ namespace CameraCoop
                 + "\n다른 사람은 화면에서 눈을 떼고, 준비되면 손으로 준비를 누르세요";
             // 비공개 제시어는 VisibleWord가 막는다. 다른 상태에서는 빈 문자열이다.
             wordLabel.text = logic.VisibleWord;
+            drawingInstructionLabel.text = "캔버스 위에서 핀치를 유지해 그려보세요";
             observeLabel.text = "직전 그림을 기억하세요 · 곧 빈 캔버스로 바뀝니다";
             guessHintLabel.text = "손으로 입력창을 선택하고 키보드로 답을 적으세요 · 제출은 손 버튼입니다";
             revealLabel.text = BuildRevealText(logic);
@@ -335,10 +340,15 @@ namespace CameraCoop
                 : available && view.state == RelayQuizState.Setup && onlineStatus.Length > 0);
             setupRoot.SetActive(showingNotice || showingStatus);
             handoverRoot.SetActive(!showingNotice && (waiting || acting && view.state == RelayQuizState.Handover));
+            bool promptText = acting && view.referenceKind == RelayQuizReferenceKind.PromptText
+                && !string.IsNullOrEmpty(view.privatePrompt);
             wordRevealRoot.SetActive(!showingNotice && acting && view.state == RelayQuizState.WordReveal);
-            SetDrawingHud(!showingNotice && acting && view.state == RelayQuizState.Drawing);
+            bool drawing = !showingNotice && acting && view.state == RelayQuizState.Drawing;
+            SetDrawingHud(drawing);
             observeRoot.SetActive(false);
-            guessRoot.SetActive(!showingNotice && acting && view.state == RelayQuizState.Guessing);
+            bool textEntry = acting && view.state == RelayQuizState.Guessing
+                && view.textRole != RelayQuizTextRole.None && !view.localAnswerSubmitted;
+            guessRoot.SetActive(!showingNotice && textEntry);
             revealRoot.SetActive(!showingNotice && available && view.state == RelayQuizState.Reveal);
             galleryRoot.SetActive(!showingNotice && available && view.state == RelayQuizState.Gallery);
             pauseShieldRoot.SetActive(shield);
@@ -354,7 +364,8 @@ namespace CameraCoop
             galleryButton.SetInteractable(available && view.isHost && !view.transferPending);
             restartButton.SetInteractable(available && view.isHost && !view.transferPending);
             resumeButton.SetInteractable(pauseStage == RelayQuizPauseStage.ResumeReady);
-            answerActive = acting && view.state == RelayQuizState.Guessing;
+            answerActive = textEntry;
+            onlineTextRole = textEntry ? view.textRole : RelayQuizTextRole.None;
             if (!answerActive) ReleaseAnswerFocus();
             string rosterInfo = "Steam 4인 · " + view.rosterCount + "/" + OnlineRelayQuizProtocol.PlayerCount + "명 연결"
                 + (onlineStatus.Length > 0 ? " · " + onlineStatus : string.Empty)
@@ -365,12 +376,15 @@ namespace CameraCoop
             setupInfoLabel.text = onlineSetupNoticeActive ? onlineSetupNotice
                 : view.aborted ? abortNotice : rosterInfo;
             handoverLabel.text = view.transferPending ? "최종 데이터를 전송하는 중입니다"
-                : view.active ? "내 차례입니다\n준비되면 " + (useWorldLobbyActions ? "내 ReadyPad에서 준비하세요" : "손으로 준비를 눌러주세요")
+                : view.active ? HandoverInstruction(view) + "\n준비되면 "
+                    + (useWorldLobbyActions ? "내 ReadyPad에서 준비하세요" : "손으로 준비를 눌러주세요")
                     : "다른 플레이어 차례입니다 · 잠시 기다려주세요";
-            wordLabel.text = available ? view.word : string.Empty;
-            revealLabel.text = available && view.state == RelayQuizState.Reveal
-                ? "제시어: " + view.word + "\n제출한 답: " + (string.IsNullOrEmpty(view.answer) ? "(빈 답)" : view.answer)
-                    + "\n" + (view.correct ? "정답입니다" : "오답입니다") : string.Empty;
+            wordLabel.text = promptText ? view.privatePrompt
+                : available && view.state == RelayQuizState.WordReveal ? view.word : string.Empty;
+            drawingInstructionLabel.text = drawing && promptText
+                ? "비공개 전달 문구: " + view.privatePrompt + " · 이 글만 보고 그리세요"
+                : "캔버스 위에서 핀치를 유지해 그려보세요";
+            revealLabel.text = available && view.state == RelayQuizState.Reveal ? RevealInstruction(view) : string.Empty;
             pauseLabel.text = hidden ? "창을 다시 활성화해주세요"
                 : !view.active ? "다른 플레이어가 일시정지했습니다"
                 : pauseStage == RelayQuizPauseStage.ResumeReady ? "일시정지 · 손 또는 mouse로 계속을 눌러주세요"
@@ -518,11 +532,47 @@ namespace CameraCoop
             SetTyping(focused);
             bool composing = compositionLength > 0;
             submitButton.SetInteractable(!composing);
-            guessHintLabel.text = composing
-                ? "글자 조합을 마친 뒤 제출하세요"
-                : focused
-                    ? "키보드로 답을 적고 손으로 제출을 누르세요 · Enter는 제출하지 않습니다"
-                    : "손으로 입력창을 선택하고 키보드로 답을 적으세요 · 제출은 손 버튼입니다";
+            guessHintLabel.text = TextInstruction(onlineTextRole, focused, composing);
+        }
+
+        private static string HandoverInstruction(OnlineRelayQuizView view)
+        {
+            if (!view.hasSelectedMode) return "내 차례입니다";
+            if (view.selectedMode == PartyMode.PictureTelephone)
+                return view.textRole == RelayQuizTextRole.PictureDescription ? "앞 그림을 글로 설명할 차례입니다"
+                    : view.textRole == RelayQuizTextRole.FinalGuess ? "마지막 그림의 답을 적을 차례입니다"
+                    : "비공개 제시문을 그림으로 표현할 차례입니다";
+            if (view.selectedMode == PartyMode.DrawingWordChain)
+                return view.textRole == RelayQuizTextRole.ChainLabel ? "내 그림의 단어를 비공개로 적을 차례입니다"
+                    : "직전 그림에서 이어지는 단어를 그림으로 표현할 차례입니다";
+            return "내 차례입니다";
+        }
+
+        private static string TextInstruction(RelayQuizTextRole role, bool focused, bool composing)
+        {
+            if (composing) return "글자 조합을 마친 뒤 제출하세요";
+            string task = role == RelayQuizTextRole.PictureDescription ? "그림을 설명하는 글"
+                : role == RelayQuizTextRole.FinalGuess ? "마지막 답"
+                : role == RelayQuizTextRole.ChainLabel ? "내 그림의 단어" : "답";
+            return focused ? "키보드 입력: " + task + " · 손으로 제출하세요 · Enter는 제출하지 않습니다"
+                : "입력할 내용: " + task + " · 다른 사람에게는 보이지 않습니다";
+        }
+
+        private static string RevealInstruction(OnlineRelayQuizView view)
+        {
+            if (view.hasSelectedMode && view.selectedMode == PartyMode.PictureTelephone)
+            {
+                string description = view.revealedTexts != null && view.revealedTexts.Length > 1
+                    && !string.IsNullOrEmpty(view.revealedTexts[1]) ? view.revealedTexts[1] : "(빈 설명)";
+                string answer = string.IsNullOrEmpty(view.answer) ? "(빈 답)" : view.answer;
+                return "그림·글 릴레이 완료\n제시어: " + view.word + "\n그림 설명: " + description
+                    + "\n최종 답: " + answer + "\n" + (view.correct ? "정답입니다" : "오답입니다");
+            }
+            if (view.hasSelectedMode && view.selectedMode == PartyMode.DrawingWordChain)
+                return "그림 끝말잇기 완료\n" + (view.chainSucceeded ? "모든 단어가 이어졌습니다" : "이어지지 않은 단어가 있습니다");
+            return "제시어: " + view.word + "\n제출한 답: "
+                + (string.IsNullOrEmpty(view.answer) ? "(빈 답)" : view.answer)
+                + "\n" + (view.correct ? "정답입니다" : "오답입니다");
         }
 
         // pause·상태 이탈에서 미완료 조합을 취소하고 확정 문자열만 남긴다.
@@ -594,10 +644,11 @@ namespace CameraCoop
             if (button != null) button.gameObject.SetActive(active);
         }
 
-        // Answers can come from another player, so never let Unity parse their markup.
         private void DisableRevealRichText()
         {
             if (revealLabel != null) revealLabel.supportRichText = false;
+            if (wordLabel != null) wordLabel.supportRichText = false;
+            if (drawingInstructionLabel != null) drawingInstructionLabel.supportRichText = false;
         }
 
         private void RefreshKeyboardSubscription()

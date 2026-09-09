@@ -60,11 +60,18 @@ namespace CameraCoop
         public string status = string.Empty;
         public string word = string.Empty;
         public string answer = string.Empty;
+        public string[] revealedTexts = Array.Empty<string>();
+        public RelayQuizTextRole textRole;
+        public RelayQuizReferenceKind referenceKind;
+        public string privatePrompt = string.Empty;
+        public bool localAnswerSubmitted;
+        public bool chainSucceeded;
         public bool correct;
         public string drawingId = string.Empty;
         public int drawingOwnerSlot = -1;
         public int drawingRevision;
         public OnlineRelayQuizGalleryEntry[] gallery = Array.Empty<OnlineRelayQuizGalleryEntry>();
+        public OnlineRelayQuizGalleryEntry[] visibleDrawings = Array.Empty<OnlineRelayQuizGalleryEntry>();
         public int payloadRevision;
         [NonSerialized] public CanvasDrawingData drawing;
         [NonSerialized] public CanvasDrawingData referenceDrawing;
@@ -72,5 +79,21 @@ namespace CameraCoop
         public bool CanSeeDrawing => !aborted && !string.IsNullOrEmpty(drawingId)
             && active && (state == RelayQuizState.Handover || state == RelayQuizState.ObservePrevious
                 || state == RelayQuizState.Drawing || state == RelayQuizState.Guessing);
+
+        public bool CanSeeSlotDrawing(int slot)
+        {
+            bool sharedDrawingPhase = selectedMode == PartyMode.RelayCopy
+                || selectedMode == PartyMode.DrawingWordChain
+                    && referenceKind != RelayQuizReferenceKind.OwnDrawing;
+            if (aborted || !hasSelectedMode || !sharedDrawingPhase
+                || transitionPhase != PartyTransitionPhase.InGame || localSlot < 0
+                || localSlot >= rosterCount || slot < 0 || slot >= rosterCount || ownerSlot < 0
+                || ownerSlot >= rosterCount || state == RelayQuizState.Setup) return false;
+            if (state == RelayQuizState.Reveal || state == RelayQuizState.Gallery) return true;
+            int first = Math.Max(0, ownerSlot - 1);
+            int second = Math.Max(1, ownerSlot);
+            if (localSlot == 0) return slot <= second;
+            return (localSlot == first || localSlot == second) && (slot == first || slot == second);
+        }
     }
 }

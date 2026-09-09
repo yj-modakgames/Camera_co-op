@@ -44,12 +44,14 @@ namespace CameraCoop.Tests
         private readonly string[] answers = new string[4];
         private readonly int[] captures = new int[4];
         private readonly int[] answerCaptures = new int[4];
+        private string sourceWord;
         private LoopbackTransport hostTransport;
         private OnlineRelayQuizSession host;
 
         [SetUp]
         public void SetUp()
         {
+            sourceWord = Secret;
             for (int i = 0; i < 4; i++)
             {
                 int value = i;
@@ -103,6 +105,30 @@ namespace CameraCoop.Tests
             Assert.That(type.GetField("transitionPhase"), Is.Not.Null);
             Assert.That(type.GetField("sceneReadyMask"), Is.Not.Null);
             Assert.That(OnlineRelayQuizProtocol.Version, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void PacketContractAcceptsAppendedModesAndRejectsUnknownMode()
+        {
+            foreach (PartyMode mode in new[] { PartyMode.PictureTelephone, PartyMode.DrawingWordChain })
+            {
+                byte[] bytes = OnlineRelayQuizProtocol.Encode(new OnlineRelayQuizPacket
+                {
+                    sequence = 1,
+                    kind = "view",
+                    payload = "{}",
+                    selectedMode = (int)mode
+                });
+                Assert.That(OnlineRelayQuizProtocol.TryDecode(bytes, out _), Is.True, mode.ToString());
+            }
+            byte[] unknown = OnlineRelayQuizProtocol.Encode(new OnlineRelayQuizPacket
+            {
+                sequence = 1,
+                kind = "view",
+                payload = "{}",
+                selectedMode = 5
+            });
+            Assert.That(OnlineRelayQuizProtocol.TryDecode(unknown, out _), Is.False);
         }
 
         [Test]
@@ -491,6 +517,117 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void SlotVisibilityMatrixUsesFirstObserverAndOnlyAdjacentActivePair()
+        {
+            string[][] masks =
+            {
+                new[] { "1100", "1100", "0000", "0000" },
+                new[] { "1100", "1100", "0000", "0000" },
+                new[] { "1110", "0110", "0110", "0000" },
+                new[] { "1111", "0000", "0011", "0011" }
+            };
+            var view = new OnlineRelayQuizView { rosterCount = 4, state = RelayQuizState.Drawing,
+                hasSelectedMode = true, selectedMode = PartyMode.RelayCopy,
+                transitionPhase = PartyTransitionPhase.InGame };
+            for (int turn = 0; turn < 4; turn++)
+            for (int viewer = 0; viewer < 4; viewer++)
+            for (int canvas = 0; canvas < 4; canvas++)
+            {
+                view.ownerSlot = turn;
+                view.localSlot = viewer;
+                Assert.That(view.CanSeeSlotDrawing(canvas), Is.EqualTo(masks[turn][viewer][canvas] == '1'),
+                    "turn " + turn + " viewer " + viewer + " canvas " + canvas);
+            }
+            view.aborted = true;
+            Assert.That(view.CanSeeSlotDrawing(3), Is.False);
+            view.aborted = false;
+            view.selectedMode = PartyMode.MemoryCopy;
+            Assert.That(view.CanSeeSlotDrawing(3), Is.False);
+        }
+
+        [Test]
+        public void LiveDrawingsReachOnlyCurrentPairAndFirstPlayerAcrossTheRound()
+        {
+            StartDrawing();
+            host.PublishLiveDrawing(drawings[0]);
+            Pump();
+            Assert.That(Session(1).View.visibleDrawings.Length, Is.EqualTo(1));
+            Assert.That(Session(1).View.visibleDrawings[0].drawing, Is.Not.Null);
+            Assert.That(Session(2).View.visibleDrawings, Is.Empty);
+            Assert.That(Session(3).View.visibleDrawings, Is.Empty);
+
+            CompleteDrawing(0);
+            ReadyAndEnterTurn(1);
+            Session(1).PublishLiveDrawing(drawings[1]);
+            Pump();
+            AssertVisibleOwners(0, 0, 1);
+            AssertVisibleOwners(2);
+            AssertVisibleOwners(3);
+
+            CompleteDrawing(1);
+            ReadyAndEnterTurn(2);
+            Session(2).PublishLiveDrawing(drawings[2]);
+            Pump();
+            AssertVisibleOwners(0, 0, 1, 2);
+            AssertVisibleOwners(1, 1, 2);
+            AssertVisibleOwners(2, 1);
+            AssertVisibleOwners(3);
+            Assert.That(Session(1).View.referenceDrawing, Is.Null, "spectating must not grant a new reference/handover");
+            Assert.That(Session(2).View.referenceDrawing, Is.Not.Null);
+
+            CompleteDrawing(2);
+            ReadyAndEnterTurn(3);
+            AssertVisibleOwners(0, 0, 1, 2);
+            AssertVisibleOwners(1);
+            AssertVisibleOwners(2, 2);
+            AssertVisibleOwners(3, 2);
+            Assert.That(Field<Dictionary<string, CanvasDrawingData>>(Session(1), "privateCache"), Is.Empty);
+        }
+
+        [Test]
+        public void LiveSnapshotRejectsWrongOwnerStaleTurnAndInvalidDrawingAndDeduplicates()
+        {
+            StartDrawing();
+            Session(2).PublishLiveDrawing(drawings[2]);
+            Pump();
+            AssertVisibleOwners(0);
+            var chunk = new OnlineRelayQuizChunk { id = "live-r" + host.View.roundId + "-t1-o0-v1",
+                index = 0, count = 1, total = 1, data = "AA==" };
+            OnlineRelayQuizPacket forged = ClientPacket(2, "live-drawing", JsonUtility.ToJson(chunk), ownerSlot: 0);
+            hostWires[1].Send(OnlineRelayQuizProtocol.Encode(forged));
+            host.Tick(0f);
+            AssertVisibleOwners(0);
+            host.PublishLiveDrawing(new CanvasDrawingData { strokes = new CanvasStrokeData[OnlineRelayQuizProtocol.MaxStrokes + 1] });
+            AssertVisibleOwners(1);
+            host.PublishLiveDrawing(drawings[0]);
+            Pump();
+            int messages = hostWires[0].Received.Count;
+            host.PublishLiveDrawing(drawings[0]);
+            Assert.That(hostWires[0].Received.Count, Is.EqualTo(messages));
+
+            CompleteDrawing(0);
+            ReadyAndEnterTurn(1);
+            Assert.That(OnlineRelayQuizProtocol.TryDrawingBytes(drawings[1], 3, out byte[] bytes), Is.True);
+            chunk.id = "live-r" + host.View.roundId + "-t2-o1-v1";
+            chunk.total = bytes.Length;
+            chunk.data = Convert.ToBase64String(bytes);
+            OnlineRelayQuizPacket stale = ClientPacket(1, "live-drawing", JsonUtility.ToJson(chunk), ownerSlot: 1);
+            stale.turnId--;
+            hostWires[0].Send(OnlineRelayQuizProtocol.Encode(stale));
+            host.Tick(0f);
+            AssertVisibleOwners(0, 0);
+            Assert.That(host.View.aborted, Is.False);
+        }
+
+        private void AssertVisibleOwners(int recipient, params int[] owners)
+        {
+            OnlineRelayQuizGalleryEntry[] entries = Session(recipient).View.visibleDrawings;
+            Assert.That(Array.ConvertAll(entries, entry => entry.ownerSlot), Is.EqualTo(owners), "viewer " + recipient);
+            foreach (OnlineRelayQuizGalleryEntry entry in entries)
+                Assert.That(entry.drawing, Is.Not.Null, "viewer " + recipient + " drawing " + entry.ownerSlot);
+        }
+
+        [Test]
         public void CompletedDrawingsRouteOnlyP1ToP2ThenP2ToP3ThenP3ToP4()
         {
             StartDrawing();
@@ -571,8 +708,173 @@ namespace CameraCoop.Tests
             Pump();
             Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Reveal));
             Assert.That(host.View.answer, Is.EqualTo(Secret));
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.word, Is.EqualTo(Secret));
             Assert.That(answerCaptures[2], Is.Zero);
             Assert.That(answerCaptures[3], Is.EqualTo(1));
+        }
+
+        [Test]
+        public void PictureTelephoneFourPlayersCompletesWithoutLeakingIntermediateHistory()
+        {
+            sourceWord = "우주선";
+            StartDrawing(PartyMode.PictureTelephone);
+            AssertOnlyPrivatePrompt(0, sourceWord);
+            Assert.That(host.View.word, Is.Empty);
+
+            CompleteDrawing(0);
+            Assert.That(Session(1).View.referenceDrawing, Is.Not.Null);
+            Assert.That(Session(2).View.referenceDrawing, Is.Null);
+            Assert.That(Session(3).View.referenceDrawing, Is.Null);
+            AssertNoSharedDrawings();
+
+            EnterTextTurn(1, RelayQuizTextRole.PictureDescription);
+            answers[1] = "달 기지";
+            int[] marks = TrafficMarks();
+            Session(1).Execute(RelayQuizAction.Submit, Session(1).View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
+            Assert.That(host.View.ownerSlot, Is.EqualTo(2));
+            AssertOnlyPrivatePrompt(2, answers[1]);
+            AssertHostTrafficTextExposure(marks, answers[1], 2);
+            Assert.That(Session(2).View.referenceDrawing, Is.Null, "C must receive B text, not A drawing");
+            AssertNoSharedDrawings();
+
+            Session(2).Execute(RelayQuizAction.Ready, Session(2).View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.WordReveal));
+            AssertOnlyPrivatePrompt(2, answers[1]);
+            host.Tick(5f);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Drawing));
+            AssertOnlyPrivatePrompt(2, answers[1]);
+            Session(2).PublishLiveDrawing(drawings[2]);
+            Pump();
+            AssertNoSharedDrawings();
+
+            CompleteDrawing(2);
+            EnterTextTurn(3, RelayQuizTextRole.FinalGuess);
+            answers[3] = sourceWord;
+            Session(3).Execute(RelayQuizAction.Submit, Session(3).View.generation);
+            Pump();
+
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Reveal));
+            Assert.That(host.View.correct, Is.True);
+            Assert.That(captures, Is.EqualTo(new[] { 1, 0, 1, 0 }));
+            Assert.That(answerCaptures, Is.EqualTo(new[] { 0, 1, 0, 1 }));
+            for (int slot = 0; slot < 4; slot++)
+            {
+                OnlineRelayQuizView view = Session(slot).View;
+                Assert.That(view.word, Is.EqualTo(sourceWord));
+                Assert.That(view.answer, Is.EqualTo(sourceWord));
+                Assert.That(view.revealedTexts, Is.EqualTo(new[] { string.Empty, "달 기지", string.Empty, sourceWord }));
+            }
+            host.Execute(RelayQuizAction.OpenGallery, host.View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Gallery));
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.gallery.Length, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void DrawingWordChainFourPlayersCompletesAndKeepsEveryLabelPrivate()
+        {
+            sourceWord = "사과";
+            StartDrawing(PartyMode.DrawingWordChain);
+            AssertOnlyPrivatePrompt(0, sourceWord);
+            CompleteWordChainDrawings();
+            answers[0] = "사과";
+            answers[1] = "과자";
+            answers[2] = "자동차";
+            answers[3] = "차표";
+
+            for (int slot = 0; slot < 4; slot++)
+            {
+                EnterTextTurn(slot, RelayQuizTextRole.ChainLabel);
+                Assert.That(Session(slot).View.referenceDrawing, Is.Not.Null);
+                int[] marks = TrafficMarks();
+                Session(slot).Execute(RelayQuizAction.Submit, Session(slot).View.generation);
+                Pump();
+                AssertHostTrafficTextExposure(marks, answers[slot], -1);
+                AssertAllPublicTextHidden();
+            }
+
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Reveal));
+            Assert.That(host.View.correct, Is.True);
+            Assert.That(host.View.chainSucceeded, Is.True);
+            Assert.That(captures, Is.EqualTo(new[] { 1, 1, 1, 1 }));
+            Assert.That(answerCaptures, Is.EqualTo(new[] { 1, 1, 1, 1 }));
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.localAnswerSubmitted, Is.True);
+            host.Execute(RelayQuizAction.OpenGallery, host.View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Gallery));
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.gallery.Length, Is.EqualTo(4));
+            AssertAllPublicTextHidden();
+        }
+
+        [Test]
+        public void DrawingWordChainBrokenLinkFailsWithoutPublishingLabels()
+        {
+            sourceWord = "사과";
+            StartDrawing(PartyMode.DrawingWordChain);
+            CompleteWordChainDrawings();
+            answers[0] = "사과";
+            answers[1] = "과자";
+            answers[2] = "기차";
+            answers[3] = "차표";
+            SubmitWordChainLabels();
+
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Reveal));
+            Assert.That(host.View.correct, Is.False);
+            Assert.That(host.View.chainSucceeded, Is.False);
+            AssertAllPublicTextHidden();
+        }
+
+        [Test]
+        public void WordChainRejectsWrongOwnerStaleDrawingPhaseAndDuplicateTextSubmissions()
+        {
+            sourceWord = "사과";
+            StartDrawing(PartyMode.DrawingWordChain);
+            CompleteDrawing(0);
+            EnterWordChainDrawing(1);
+            int drawingRevision = host.View.revision;
+            int drawingTurn = host.View.turnId;
+            CompleteDrawing(1);
+            EnterWordChainDrawing(2);
+            CompleteDrawing(2);
+            EnterWordChainDrawing(3);
+            CompleteDrawing(3);
+            answers[0] = "사과";
+            answers[1] = "과자";
+
+            EnterTextTurn(0, RelayQuizTextRole.ChainLabel);
+            Session(2).Execute(RelayQuizAction.Submit, Session(2).View.generation);
+            Pump();
+            Assert.That(host.View.ownerSlot, Is.Zero);
+            Assert.That(answerCaptures[2], Is.Zero);
+            host.Execute(RelayQuizAction.Submit, host.View.generation);
+            Pump();
+
+            EnterTextTurn(1, RelayQuizTextRole.ChainLabel);
+            OnlineRelayQuizPacket stale = ClientPacket(1, "action",
+                JsonUtility.ToJson(new ActionFixture { action = RelayQuizAction.Submit }), 1);
+            stale.turnId = drawingTurn;
+            stale.revision = drawingRevision;
+            hostWires[0].Send(OnlineRelayQuizProtocol.Encode(stale));
+            host.Tick(0f);
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Guessing));
+            Assert.That(answerCaptures[1], Is.Zero);
+
+            Session(1).Execute(RelayQuizAction.Submit, Session(1).View.generation);
+            byte[] duplicate = clientTransports[0].SentToHost[clientTransports[0].SentToHost.Count - 1];
+            Pump();
+            hostWires[0].Send(duplicate);
+            host.Tick(0f);
+            Assert.That(answerCaptures[1], Is.EqualTo(1));
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
+            Assert.That(host.View.ownerSlot, Is.EqualTo(2));
         }
 
         [Test]
@@ -803,7 +1105,7 @@ namespace CameraCoop.Tests
 
         private OnlineRelayQuizSession NewSession(LoopbackTransport transport, int sourceSlot)
         {
-            return new OnlineRelayQuizSession(transport, HostId, () => Secret,
+            return new OnlineRelayQuizSession(transport, HostId, () => sourceWord,
                 () => { captures[sourceSlot]++; return drawings[sourceSlot]; },
                 () => { answerCaptures[sourceSlot]++; return answers[sourceSlot]; }, 3);
         }
@@ -914,6 +1216,100 @@ namespace CameraCoop.Tests
                 Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Drawing));
             }
             else Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Guessing));
+        }
+
+        private void EnterWordChainDrawing(int slot)
+        {
+            Session(slot).Execute(RelayQuizAction.Ready, Session(slot).View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.ObservePrevious));
+            Assert.That(Session(slot).View.referenceDrawing, Is.Not.Null);
+            host.Tick(5f);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Drawing));
+            Assert.That(Session(slot).View.referenceDrawing, Is.Not.Null);
+        }
+
+        private void CompleteWordChainDrawings()
+        {
+            CompleteDrawing(0);
+            for (int slot = 1; slot < 4; slot++)
+            {
+                EnterWordChainDrawing(slot);
+                Session(slot).PublishLiveDrawing(drawings[slot]);
+                Pump();
+                if (slot == 1)
+                {
+                    AssertVisibleOwners(0, 0, 1);
+                    AssertVisibleOwners(1, 0);
+                    AssertVisibleOwners(2);
+                    AssertVisibleOwners(3);
+                }
+                CompleteDrawing(slot);
+            }
+            Assert.That(host.View.ownerSlot, Is.Zero);
+            Assert.That(host.View.referenceKind, Is.EqualTo(RelayQuizReferenceKind.OwnDrawing));
+            Assert.That(host.View.referenceDrawing, Is.Not.Null);
+            AssertNoSharedDrawings();
+        }
+
+        private void EnterTextTurn(int slot, RelayQuizTextRole role)
+        {
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Handover));
+            Assert.That(host.View.ownerSlot, Is.EqualTo(slot));
+            Session(slot).Execute(RelayQuizAction.Ready, Session(slot).View.generation);
+            Pump();
+            Assert.That(host.View.state, Is.EqualTo(RelayQuizState.Guessing));
+            Assert.That(Session(slot).View.textRole, Is.EqualTo(role));
+            for (int other = 0; other < 4; other++)
+                if (other != slot) Assert.That(Session(other).View.textRole, Is.EqualTo(RelayQuizTextRole.None));
+        }
+
+        private void SubmitWordChainLabels()
+        {
+            for (int slot = 0; slot < 4; slot++)
+            {
+                EnterTextTurn(slot, RelayQuizTextRole.ChainLabel);
+                Session(slot).Execute(RelayQuizAction.Submit, Session(slot).View.generation);
+                Pump();
+            }
+        }
+
+        private void AssertOnlyPrivatePrompt(int recipient, string expected)
+        {
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.privatePrompt,
+                    Is.EqualTo(slot == recipient ? expected : string.Empty), "recipient " + slot);
+        }
+
+        private void AssertNoSharedDrawings()
+        {
+            for (int slot = 0; slot < 4; slot++)
+                Assert.That(Session(slot).View.visibleDrawings, Is.Empty, "recipient " + slot);
+        }
+
+        private void AssertAllPublicTextHidden()
+        {
+            for (int slot = 0; slot < 4; slot++)
+            {
+                OnlineRelayQuizView view = Session(slot).View;
+                Assert.That(view.word, Is.Empty, "word recipient " + slot);
+                Assert.That(view.answer, Is.Empty, "answer recipient " + slot);
+                Assert.That(view.privatePrompt, Is.Empty, "prompt recipient " + slot);
+                Assert.That(view.revealedTexts, Is.Empty, "revealed recipient " + slot);
+            }
+        }
+
+        private void AssertHostTrafficTextExposure(int[] marks, string expected, int allowedSlot)
+        {
+            for (int client = 0; client < 3; client++)
+            {
+                bool contains = false;
+                for (int index = marks[client]; index < hostWires[client].Received.Count; index++)
+                    contains |= Encoding.UTF8.GetString(hostWires[client].Received[index]).Contains(expected);
+                Assert.That(contains, Is.EqualTo(client + 1 == allowedSlot),
+                    "host traffic recipient " + (client + 1));
+            }
         }
 
         private int[] TrafficMarks()

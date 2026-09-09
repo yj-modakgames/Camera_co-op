@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using CameraCoop;
+using CameraCoop.Party;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -112,6 +113,7 @@ namespace CameraCoop.Tests
             Assert.AreEqual(RelayQuizState.ObservePrevious, harness.Logic.State);
             harness.Expire(5f);
             Assert.AreEqual(RelayQuizState.Drawing, harness.Logic.State);
+            Assert.AreEqual(RelayQuizReferenceKind.PreviousDrawing, harness.Logic.CurrentReferenceKind);
             harness.Logic.CompleteDrawing(harness.Generation);
 
             Assert.AreEqual(2, harness.Logic.Records.Count);
@@ -613,6 +615,237 @@ namespace CameraCoop.Tests
 
             CollectionAssert.AllItemsAreUnique(drawn, "재시작해도 덱의 추출 위치를 유지해 한 바퀴 안에서 중복되지 않는다.");
             CollectionAssert.AreEquivalent(new[] { "가", "나", "다", "라" }, drawn);
+        }
+
+        [Test]
+        public void ConfigureMode_AcceptsRelayModesOnlyDuringSetup()
+        {
+            var harness = new Harness();
+
+            Assert.IsFalse(harness.Logic.ConfigureMode(PartyMode.CoopMural, harness.Generation));
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.PictureTelephone, harness.Generation));
+            Assert.AreEqual(PartyMode.PictureTelephone, harness.Logic.Mode);
+
+            int stale = harness.Generation;
+            harness.Begin(4);
+            Assert.IsFalse(harness.Logic.ConfigureMode(PartyMode.DrawingWordChain, stale));
+            Assert.AreEqual(PartyMode.PictureTelephone, harness.Logic.Mode);
+        }
+
+        [Test]
+        public void PictureTelephone_FourPlayersFollowPrivateAlternatingTrace()
+        {
+            var harness = new Harness();
+            harness.NextWord = "사과";
+            harness.NextDrawing = MakeDrawing(0.1f);
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.PictureTelephone, harness.Generation));
+            harness.Begin(4);
+
+            harness.Ready();
+            Assert.AreEqual(RelayQuizReferenceKind.PromptText, harness.Logic.CurrentReferenceKind);
+            Assert.AreEqual("사과", harness.Logic.GetPrivatePromptFor(0));
+            Assert.AreEqual(string.Empty, harness.Logic.GetPrivatePromptFor(1));
+            harness.Expire(5f);
+            Assert.AreEqual("사과", harness.Logic.GetPrivatePromptFor(0));
+            Assert.IsTrue(harness.Logic.CompleteDrawing(harness.Generation));
+
+            Assert.AreEqual(RelayQuizReferenceKind.PreviousDrawing, harness.Logic.CurrentReferenceKind);
+            Assert.AreEqual(0, harness.Logic.ReferenceDrawingOwner);
+            harness.Ready();
+            Assert.AreEqual(RelayQuizTextRole.PictureDescription, harness.Logic.CurrentTextRole);
+            Assert.IsNotNull(harness.Logic.GetDrawingReferenceFor(1));
+            Assert.IsNull(harness.Logic.GetDrawingReferenceFor(0));
+            harness.NextAnswer = "빨간 사과";
+            Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+            Assert.IsFalse(harness.Logic.AnswerSubmitted);
+            Assert.IsFalse(harness.Logic.AnswerCorrect);
+
+            Assert.AreEqual(2, harness.Logic.PlayerIndex);
+            Assert.AreEqual(RelayQuizReferenceKind.PromptText, harness.Logic.CurrentReferenceKind);
+            Assert.AreEqual("빨간 사과", harness.Logic.GetPrivatePromptFor(2));
+            Assert.AreEqual(string.Empty, harness.Logic.GetPrivatePromptFor(1));
+            Assert.IsNull(harness.Logic.GetDrawingReferenceFor(2));
+            Assert.IsNull(harness.Logic.PreviousDrawing);
+            harness.Ready();
+            harness.Expire(5f);
+            Assert.AreEqual("빨간 사과", harness.Logic.GetPrivatePromptFor(2));
+            harness.NextDrawing = MakeDrawing(0.6f);
+            Assert.IsTrue(harness.Logic.CompleteDrawing(harness.Generation));
+
+            Assert.AreEqual(3, harness.Logic.PlayerIndex);
+            Assert.AreEqual(2, harness.Logic.ReferenceDrawingOwner);
+            harness.Ready();
+            Assert.AreEqual(RelayQuizTextRole.FinalGuess, harness.Logic.CurrentTextRole);
+            Assert.AreEqual(0.6f,
+                harness.Logic.GetDrawingReferenceFor(3).strokes[0].xy[0], 0.0001f);
+            harness.NextAnswer = "사과";
+            Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+
+            Assert.AreEqual(RelayQuizState.Reveal, harness.Logic.State);
+            Assert.IsTrue(harness.Logic.AnswerSubmitted);
+            Assert.IsTrue(harness.Logic.AnswerCorrect);
+            Assert.AreEqual(string.Empty, harness.Logic.SubmittedAnswer);
+            Assert.AreEqual(2, harness.Logic.TextSubmissionCount);
+            Assert.IsFalse(harness.Logic.HasSubmittedText(0));
+            Assert.IsTrue(harness.Logic.HasSubmittedText(1));
+            Assert.IsFalse(harness.Logic.HasSubmittedText(2));
+            Assert.IsTrue(harness.Logic.HasSubmittedText(3));
+            Assert.AreEqual("빨간 사과", harness.Logic.GetPrivateSubmittedTextFor(1));
+            Assert.AreEqual("사과", harness.Logic.GetPrivateSubmittedTextFor(3));
+        }
+
+        [TestCase(2, RelayQuizReferenceKind.PreviousDrawing)]
+        [TestCase(3, RelayQuizReferenceKind.PromptText)]
+        public void PictureTelephone_ShortPartiesKeepLastPlayerAsFinalTextRole(
+            int players, RelayQuizReferenceKind finalReference)
+        {
+            var harness = new Harness();
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.PictureTelephone, harness.Generation));
+            harness.Begin(players);
+            harness.PlayDrawingTurn();
+
+            if (players == 3)
+            {
+                harness.Ready();
+                harness.NextAnswer = "사과 그림";
+                Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+            }
+
+            Assert.AreEqual(players - 1, harness.Logic.PlayerIndex);
+            Assert.AreEqual(finalReference, harness.Logic.CurrentReferenceKind);
+            harness.Ready();
+            Assert.AreEqual(RelayQuizState.Guessing, harness.Logic.State);
+            Assert.AreEqual(RelayQuizTextRole.FinalGuess, harness.Logic.CurrentTextRole);
+            Assert.IsTrue(harness.Logic.IsTextEntryRequiredFor(players - 1));
+        }
+
+        [Test]
+        public void PictureTelephone_DescriptionTimeoutAdvancesWithoutJudging()
+        {
+            var harness = new Harness();
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.PictureTelephone, harness.Generation));
+            harness.Begin(4);
+            harness.PlayDrawingTurn();
+            harness.Ready();
+
+            harness.Expire(30f);
+
+            Assert.AreEqual(RelayQuizState.Handover, harness.Logic.State);
+            Assert.AreEqual(2, harness.Logic.PlayerIndex);
+            Assert.AreEqual(1, harness.AnswerCalls);
+            Assert.IsTrue(harness.Logic.HasSubmittedText(1));
+            Assert.IsFalse(harness.Logic.AnswerSubmitted);
+        }
+
+        [Test]
+        public void DrawingWordChain_DrawsEveryoneThenCollectsPrivateOwnLabels()
+        {
+            var harness = new Harness();
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.DrawingWordChain, harness.Generation));
+            harness.Begin(4);
+
+            for (int slot = 0; slot < 4; slot++)
+            {
+                Assert.AreEqual(slot, harness.Logic.PlayerIndex);
+                Assert.AreEqual(slot == 0 ? RelayQuizReferenceKind.None : RelayQuizReferenceKind.PreviousDrawing,
+                    harness.Logic.CurrentReferenceKind);
+                harness.Ready();
+                Assert.AreEqual(slot == 0 ? RelayQuizState.WordReveal : RelayQuizState.ObservePrevious,
+                    harness.Logic.State);
+                if (slot > 0)
+                {
+                    Assert.AreEqual(slot - 1, harness.Logic.ReferenceDrawingOwner);
+                    Assert.IsNotNull(harness.Logic.GetDrawingReferenceFor(slot));
+                }
+                harness.Expire(999f);
+                Assert.AreEqual(slot == 0 ? RelayQuizReferenceKind.PromptText : RelayQuizReferenceKind.PreviousDrawing,
+                    harness.Logic.CurrentReferenceKind);
+                harness.NextDrawing = MakeDrawing(0.1f + slot * 0.2f);
+                Assert.IsTrue(harness.Logic.CompleteDrawing(harness.Generation));
+            }
+
+            Assert.AreEqual(4, harness.Logic.Records.Count);
+            Assert.AreEqual(0, harness.Logic.PlayerIndex);
+            Assert.AreEqual(RelayQuizReferenceKind.OwnDrawing, harness.Logic.CurrentReferenceKind);
+
+            string[] labels = { " 사과 ", "과자", "자동차", "차표" };
+            for (int slot = 0; slot < labels.Length; slot++)
+            {
+                Assert.AreEqual(slot, harness.Logic.PlayerIndex);
+                Assert.AreEqual(slot, harness.Logic.ReferenceDrawingOwner);
+                Assert.IsNotNull(harness.Logic.GetDrawingReferenceFor(slot));
+                harness.Ready();
+                Assert.AreEqual(RelayQuizTextRole.ChainLabel, harness.Logic.CurrentTextRole);
+                Assert.AreEqual(string.Empty, harness.Logic.SubmittedAnswer);
+                harness.NextAnswer = labels[slot];
+                Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+                Assert.IsTrue(harness.Logic.HasSubmittedText(slot));
+            }
+
+            Assert.AreEqual(RelayQuizState.Reveal, harness.Logic.State);
+            Assert.IsTrue(harness.Logic.AnswerSubmitted);
+            Assert.IsTrue(harness.Logic.AnswerCorrect);
+            Assert.IsTrue(harness.Logic.ChainSucceeded);
+            Assert.AreEqual(4, harness.Logic.TextSubmissionCount);
+            Assert.AreEqual(string.Empty, harness.Logic.SubmittedAnswer);
+            for (int slot = 0; slot < labels.Length; slot++)
+                Assert.AreEqual(labels[slot], harness.Logic.GetPrivateSubmittedTextFor(slot));
+        }
+
+        [TestCase("사과", "나무")]
+        [TestCase("사과", "")]
+        [TestCase("신념", "연필")]
+        [TestCase("apple", "egg")]
+        public void DrawingWordChain_RejectsBrokenEmptyDueumAndNonHangulLinks(
+            string first, string second)
+        {
+            var harness = new Harness();
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.DrawingWordChain, harness.Generation));
+            harness.Begin(2);
+            harness.PlayDrawingTurn();
+            harness.PlayDrawingTurn();
+
+            harness.Ready();
+            harness.NextAnswer = first;
+            Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+            harness.Ready();
+            harness.NextAnswer = second;
+            Assert.IsTrue(harness.Logic.SubmitAnswer(harness.Generation));
+
+            Assert.IsFalse(harness.Logic.ChainSucceeded);
+            Assert.IsTrue(harness.Logic.AnswerSubmitted);
+        }
+
+        [Test]
+        public void DrawingWordChain_TextTimeoutSubmitsEmptyAndRestartClearsPrivateState()
+        {
+            var harness = new Harness();
+            Assert.IsTrue(harness.Logic.ConfigureMode(PartyMode.DrawingWordChain, harness.Generation));
+            harness.Begin(2);
+            harness.PlayDrawingTurn();
+            harness.PlayDrawingTurn();
+
+            harness.NextAnswer = "사과";
+            harness.Ready();
+            harness.Expire(30f);
+            Assert.AreEqual(1, harness.Logic.PlayerIndex);
+            Assert.AreEqual(1, harness.AnswerCalls);
+            Assert.IsTrue(harness.Logic.HasSubmittedText(0));
+
+            harness.NextAnswer = string.Empty;
+            harness.Ready();
+            harness.Expire(30f);
+            Assert.AreEqual(RelayQuizState.Reveal, harness.Logic.State);
+            Assert.IsFalse(harness.Logic.ChainSucceeded);
+            Assert.AreEqual(2, harness.AnswerCalls);
+
+            Assert.IsTrue(harness.Logic.OpenGallery(harness.Generation));
+            Assert.IsTrue(harness.Logic.Restart(harness.Generation));
+            Assert.AreEqual(PartyMode.DrawingWordChain, harness.Logic.Mode);
+            Assert.AreEqual(0, harness.Logic.TextSubmissionCount);
+            Assert.IsFalse(harness.Logic.HasSubmittedText(0));
+            Assert.IsFalse(harness.Logic.HasSubmittedText(1));
+            Assert.IsFalse(harness.Logic.ChainSucceeded);
         }
 
         // ---- 단어 데이터 (docs/09 §9) ----

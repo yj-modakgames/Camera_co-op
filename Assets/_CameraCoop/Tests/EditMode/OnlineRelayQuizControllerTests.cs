@@ -23,6 +23,54 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void SlotDrawingsHideUnauthorizedBoardsAndClearPresentationsOnTurnChange()
+        {
+            OnlineRelayQuizController controller = CreateObject("relay visibility controller")
+                .AddComponent<OnlineRelayQuizController>();
+            var bindings = new PartySceneBindings
+            {
+                RelayDrawingRoots = new GameObject[4],
+                RelayDrawingPresenters = new CanvasDrawingPresenter[4],
+                RelayDrawingSurfaces = new CanvasSurface[4]
+            };
+            for (int slot = 0; slot < 4; slot++)
+            {
+                GameObject board = CreateObject("slot " + slot);
+                bindings.RelayDrawingRoots[slot] = board;
+                bindings.RelayDrawingPresenters[slot] = board.AddComponent<CanvasDrawingPresenter>();
+                bindings.RelayDrawingSurfaces[slot] = board.AddComponent<CanvasSurface>();
+            }
+            SetField(controller, "relaySceneBindings", bindings);
+            var drawing = new CanvasDrawingData();
+            var view = new OnlineRelayQuizView
+            {
+                localSlot = 1, ownerSlot = 2, rosterCount = 4,
+                hasSelectedMode = true, selectedMode = PartyMode.RelayCopy,
+                transitionPhase = PartyTransitionPhase.InGame, state = RelayQuizState.Drawing,
+                visibleDrawings = new[] { new OnlineRelayQuizGalleryEntry { ownerSlot = 2, drawing = drawing } }
+            };
+            controller.ApplyRelaySlotDrawings(view, true);
+            Assert.That(bindings.RelayDrawingRoots[0].activeSelf, Is.False);
+            Assert.That(bindings.RelayDrawingRoots[1].activeSelf, Is.True);
+            Assert.That(bindings.RelayDrawingRoots[2].activeSelf, Is.True);
+            Assert.That(bindings.RelayDrawingRoots[3].activeSelf, Is.False);
+            view.ownerSlot = 3;
+            controller.ApplyRelaySlotDrawings(view, true);
+            foreach (GameObject board in bindings.RelayDrawingRoots) Assert.That(board.activeSelf, Is.False);
+            CanvasDrawingData[] applied = (CanvasDrawingData[])typeof(OnlineRelayQuizController)
+                .GetField("appliedSlotDrawings", InstanceFlags).GetValue(controller);
+            Assert.That(applied, Is.All.Null);
+            view.ownerSlot = 2;
+            view.localSlot = 2;
+            view.active = true;
+            controller.ApplyRelaySlotDrawings(view, true);
+            Assert.That(bindings.RelayDrawingRoots[1].activeSelf, Is.True);
+            Assert.That(bindings.RelayDrawingRoots[2].activeSelf, Is.False, "editable local paper must not overlap its preview");
+            controller.ApplyRelaySlotDrawings(view, false);
+            foreach (GameObject board in bindings.RelayDrawingRoots) Assert.That(board.activeSelf, Is.False);
+        }
+
+        [Test]
         public void CoordinatorCallbacksRouteOnlyTheCurrentlyBoundGamePort()
         {
             OnlineRelayQuizController controller = CreateObject("persistent online controller")
@@ -52,19 +100,21 @@ namespace CameraCoop.Tests
             Assert.That(gallery.SlotCount, Is.Zero);
         }
 
-        [Test]
-        public void BindingPrivateGameSceneConfiguresExactlyThreeGallerySlots()
+        [TestCase(PartyMode.RelayCopy, 3)]
+        [TestCase(PartyMode.PictureTelephone, 2)]
+        [TestCase(PartyMode.DrawingWordChain, 4)]
+        public void BindingPrivateGameSceneConfiguresModeGallerySlots(PartyMode mode, int count)
         {
             OnlineRelayQuizController controller = CreateObject("gallery binding controller")
                 .AddComponent<OnlineRelayQuizController>();
             RelayQuizGallery gallery = CreateObject("persistent gallery").AddComponent<RelayQuizGallery>();
             SetField(controller, "relayQuizGallery", gallery);
-            var port = new FakeGamePort(PartyMode.RelayCopy, CreateObject("relay gallery port"));
+            var port = new FakeGamePort(mode, CreateObject("relay gallery port"));
 
             ((IPartySceneCoordinatorCallbacks)controller).BindGameScene(port);
 
             Assert.That(gallery.IsReady, Is.True);
-            Assert.That(gallery.SlotCount, Is.EqualTo(PartyRoster.Capacity - 1));
+            Assert.That(gallery.SlotCount, Is.EqualTo(count));
             Assert.That(port.Bindings.ResultRoot.activeSelf, Is.False);
         }
 
@@ -360,9 +410,10 @@ namespace CameraCoop.Tests
                     Bindings.ResultViewPose = Child("Result view pose", root.transform).transform;
                     Bindings.ResultViewPose.SetPositionAndRotation(new Vector3(6f, 2f, -2f),
                         Quaternion.Euler(0f, 25f, 0f));
-                    Bindings.GalleryRoots = new GameObject[PartyRoster.Capacity - 1];
-                    Bindings.GalleryPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity - 1];
-                    Bindings.GallerySurfaces = new CanvasSurface[PartyRoster.Capacity - 1];
+                    int count = PartyModeCatalog.Get(mode).ResultDrawingCount;
+                    Bindings.GalleryRoots = new GameObject[count];
+                    Bindings.GalleryPresenters = new CanvasDrawingPresenter[count];
+                    Bindings.GallerySurfaces = new CanvasSurface[count];
                     for (int slot = 0; slot < Bindings.GalleryRoots.Length; slot++)
                     {
                         GameObject galleryRoot = Child("Gallery slot " + slot, Bindings.ResultRoot.transform);

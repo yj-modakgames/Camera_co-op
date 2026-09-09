@@ -12,7 +12,6 @@ namespace CameraCoop.Party
         private static PartyTransitionKey registeredTransitionKey;
 
         private const int RequiredActionCount = 3;
-        private const int RequiredGallerySlotCount = PartyRoster.Capacity - 1;
         private const int RequiredBrushCount = 1;
         private const int RequiredToolStationCount = 1;
 
@@ -53,6 +52,14 @@ namespace CameraCoop.Party
             if (!ValidateComponents(bindings.Brushes, "brushes", RequiredBrushCount, out error)) return false;
             if (!ValidateComponents(bindings.ToolStations, "toolStations", RequiredToolStationCount, out error)) return false;
 
+            PartyModeDefinition mode = PartyModeCatalog.Get(bindings.Mode);
+            if (mode.UsesSlotDrawingBoards)
+            {
+                if (!ValidateGameObjects(bindings.RelayDrawingRoots, "relayDrawingRoots", PartyRoster.Capacity, out error)) return false;
+                if (!ValidateComponents(bindings.RelayDrawingPresenters, "relayDrawingPresenters", PartyRoster.Capacity, out error)) return false;
+                if (!ValidateComponents(bindings.RelayDrawingSurfaces, "relayDrawingSurfaces", PartyRoster.Capacity, out error)) return false;
+            }
+
             if (bindings.Mode == PartyMode.CoopMural)
             {
                 if (!ValidateGameObject(bindings.ResultRoot, "resultRoot", out error)) return false;
@@ -66,9 +73,9 @@ namespace CameraCoop.Party
                 if (!ValidateComponent(bindings.ReferenceSurface, "referenceSurface", out error)) return false;
                 if (!ValidateGameObject(bindings.ResultRoot, "resultRoot", out error)) return false;
                 if (!ValidateTransform(bindings.ResultViewPose, "resultViewPose", out error)) return false;
-                if (!ValidateGameObjects(bindings.GalleryRoots, "galleryRoots", RequiredGallerySlotCount, out error)) return false;
-                if (!ValidateComponents(bindings.GalleryPresenters, "galleryPresenters", RequiredGallerySlotCount, out error)) return false;
-                if (!ValidateComponents(bindings.GallerySurfaces, "gallerySurfaces", RequiredGallerySlotCount, out error)) return false;
+                if (!ValidateGameObjects(bindings.GalleryRoots, "galleryRoots", mode.ResultDrawingCount, out error)) return false;
+                if (!ValidateComponents(bindings.GalleryPresenters, "galleryPresenters", mode.ResultDrawingCount, out error)) return false;
+                if (!ValidateComponents(bindings.GallerySurfaces, "gallerySurfaces", mode.ResultDrawingCount, out error)) return false;
             }
 
             error = string.Empty;

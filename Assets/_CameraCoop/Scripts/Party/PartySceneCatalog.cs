@@ -41,15 +41,27 @@ namespace CameraCoop.Party
             "CoopMural",
             "Assets/_CameraCoop/Scenes/CoopMural.unity");
 
+        private static readonly PartySceneDefinition PictureTelephone = new PartySceneDefinition(
+            PartyMode.PictureTelephone,
+            "PictureTelephone",
+            "Assets/_CameraCoop/Scenes/PictureTelephone.unity");
+
+        private static readonly PartySceneDefinition DrawingWordChain = new PartySceneDefinition(
+            PartyMode.DrawingWordChain,
+            "DrawingWordChain",
+            "Assets/_CameraCoop/Scenes/DrawingWordChain.unity");
+
         private static readonly ReadOnlyCollection<PartySceneDefinition> Definitions =
-            Array.AsReadOnly(new[] { RelayCopy, MemoryCopy, CoopMural });
+            Array.AsReadOnly(new[] { RelayCopy, MemoryCopy, CoopMural, PictureTelephone, DrawingWordChain });
 
         private static readonly ReadOnlyCollection<string> ScenePaths = Array.AsReadOnly(new[]
         {
             LobbyScenePath,
             RelayCopy.ScenePath,
             MemoryCopy.ScenePath,
-            CoopMural.ScenePath
+            CoopMural.ScenePath,
+            PictureTelephone.ScenePath,
+            DrawingWordChain.ScenePath
         });
 
         public static IReadOnlyList<string> BuildScenePaths => ScenePaths;
@@ -66,6 +78,12 @@ namespace CameraCoop.Party
                     return true;
                 case PartyMode.CoopMural:
                     definition = Definitions[2];
+                    return true;
+                case PartyMode.PictureTelephone:
+                    definition = Definitions[3];
+                    return true;
+                case PartyMode.DrawingWordChain:
+                    definition = Definitions[4];
                     return true;
                 default:
                     definition = null;

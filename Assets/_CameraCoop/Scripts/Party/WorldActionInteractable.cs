@@ -18,7 +18,9 @@ namespace CameraCoop.Party
         CameraPrevious = 10,
         CameraNext = 11,
         CameraPreview = 12,
-        ReturnToLobby = 13
+        ReturnToLobby = 13,
+        SelectPictureTelephone = 14,
+        SelectDrawingWordChain = 15
     }
 
     public sealed class WorldActionInteractable : HandInteractable

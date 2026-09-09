@@ -48,7 +48,7 @@ namespace CameraCoop.Tests
         }
 
         [Test]
-        public void LobbyOwnsPersistentRuntimeAndFourPracticeStationsOnly()
+        public void LobbyOwnsPersistentRuntimeAndOneSharedPracticeBoard()
         {
             Scene scene = EditorSceneManager.OpenScene(PartySceneCatalog.LobbyScenePath, OpenSceneMode.Single);
             GameObject runtimeRoot = scene.GetRootGameObjects().Single(item => item.name == "RuntimeRoot");
@@ -62,8 +62,22 @@ namespace CameraCoop.Tests
             Assert.That(FindAll<Camera>(scene), Has.Length.EqualTo(1));
             Assert.That(FindAll<EventSystem>(scene), Has.Length.EqualTo(1));
             Assert.That(Find(scene, "ModeSelectorRoot").activeSelf, Is.False);
+            WorldActionInteractable[] modeActions = FindAll<WorldActionInteractable>(scene)
+                .Where(action => action.Action == PartyWorldAction.SelectRelayCopy
+                    || action.Action == PartyWorldAction.SelectMemoryCopy
+                    || action.Action == PartyWorldAction.SelectCoopMural
+                    || action.Action == PartyWorldAction.SelectPictureTelephone
+                    || action.Action == PartyWorldAction.SelectDrawingWordChain).ToArray();
+            Assert.That(modeActions, Has.Length.EqualTo(PartyModeCatalog.All.Count));
+            Assert.That(modeActions.SelectMany(action => action.GetComponentsInChildren<TextMesh>(true))
+                .Any(label => label.text.Contains("PICTURE TELEPHONE") && label.text.Contains("DRAW > TEXT")), Is.True);
+            Assert.That(modeActions.SelectMany(action => action.GetComponentsInChildren<TextMesh>(true))
+                .Any(label => label.text.Contains("DRAWING WORD CHAIN") && label.text.Contains("PRIVATE NAMES")), Is.True);
             Assert.That(FindAll<Transform>(scene).Count(item =>
-                item.name.StartsWith("PracticeEasel_", StringComparison.Ordinal)), Is.EqualTo(PartyRoster.Capacity));
+                item.name.StartsWith("PracticeEasel_", StringComparison.Ordinal)), Is.Zero);
+            Assert.That(FindAll<Transform>(scene).Count(item => item.name == "GestureTutorialBoard"), Is.EqualTo(1));
+            Assert.That(FindAll<Transform>(scene).Count(item => item.name.StartsWith("BayRug_", StringComparison.Ordinal)), Is.Zero);
+            Assert.That(Find(scene, "GestureTutorialBoard").transform.lossyScale.x, Is.GreaterThanOrEqualTo(12f));
             Assert.That(runtimeRoot.transform.IsChildOf(lobbyRoot.transform), Is.False);
         }
 
@@ -81,6 +95,8 @@ namespace CameraCoop.Tests
         [TestCase(PartyMode.RelayCopy)]
         [TestCase(PartyMode.MemoryCopy)]
         [TestCase(PartyMode.CoopMural)]
+        [TestCase(PartyMode.PictureTelephone)]
+        [TestCase(PartyMode.DrawingWordChain)]
         public void GameSceneHasExactAdapterAndNoPersistentOwnerDuplicates(PartyMode mode)
         {
             Assert.That(PartySceneCatalog.TryGet(mode, out PartySceneDefinition definition), Is.True);
@@ -101,7 +117,6 @@ namespace CameraCoop.Tests
             Assert.That(FindAll<ToolState>(scene), Is.Empty);
         }
 
-        [TestCase(PartyMode.RelayCopy)]
         [TestCase(PartyMode.MemoryCopy)]
         public void PrivateScenesKeepThreeRemotePaperShellsGeometryOnly(PartyMode mode)
         {
@@ -121,16 +136,41 @@ namespace CameraCoop.Tests
         }
 
         [TestCase(PartyMode.RelayCopy)]
+        [TestCase(PartyMode.DrawingWordChain)]
+        public void SequentialDrawingInteriorsHaveFourPlayerBoardsAndLowDividers(PartyMode mode)
+        {
+            PartySceneCatalog.TryGet(mode, out PartySceneDefinition definition);
+            Scene scene = EditorSceneManager.OpenScene(definition.ScenePath, OpenSceneMode.Single);
+            PartySceneBindings bindings = FindAll<PartyGameSceneAdapter>(scene).Single().Bindings;
+            Assert.That(bindings.RelayDrawingRoots, Has.Length.EqualTo(4));
+            Assert.That(bindings.RelayDrawingSurfaces, Has.Length.EqualTo(4));
+            Assert.That(bindings.RelayDrawingPresenters, Has.Length.EqualTo(4));
+            Assert.That(Find(scene, "Ceiling"), Is.Not.Null);
+            for (int slot = 0; slot < 4; slot++)
+            {
+                Assert.That(bindings.RelayDrawingSurfaces[slot].transform.position,
+                    Is.EqualTo(bindings.SlotDocks[slot].position));
+                Assert.That(bindings.RelayDrawingSurfaces[slot].GetComponent<HandCanvasInteractable>(), Is.Null);
+            }
+            for (int divider = 0; divider < 3; divider++)
+                Assert.That(Find(scene, "PrivacyDivider_" + divider).GetComponent<Renderer>().bounds.max.y,
+                    Is.LessThan(1.2f));
+        }
+
+        [TestCase(PartyMode.RelayCopy)]
         [TestCase(PartyMode.MemoryCopy)]
-        public void PrivateScenesBindThreeReadOnlyGallerySlotsAndResultViewPose(PartyMode mode)
+        [TestCase(PartyMode.PictureTelephone)]
+        [TestCase(PartyMode.DrawingWordChain)]
+        public void PrivateScenesBindExactReadOnlyGallerySlotsAndResultViewPose(PartyMode mode)
         {
             PartySceneCatalog.TryGet(mode, out PartySceneDefinition definition);
             Scene scene = EditorSceneManager.OpenScene(definition.ScenePath, OpenSceneMode.Single);
             PartySceneBindings bindings = FindAll<PartyGameSceneAdapter>(scene).Single().Bindings;
 
-            Assert.That(bindings.GalleryRoots, Has.Length.EqualTo(PartyRoster.Capacity - 1));
-            Assert.That(bindings.GalleryPresenters, Has.Length.EqualTo(PartyRoster.Capacity - 1));
-            Assert.That(bindings.GallerySurfaces, Has.Length.EqualTo(PartyRoster.Capacity - 1));
+            int count = PartyModeCatalog.Get(mode).ResultDrawingCount;
+            Assert.That(bindings.GalleryRoots, Has.Length.EqualTo(count));
+            Assert.That(bindings.GalleryPresenters, Has.Length.EqualTo(count));
+            Assert.That(bindings.GallerySurfaces, Has.Length.EqualTo(count));
             Assert.That(bindings.ResultViewPose, Is.Not.Null);
             Assert.That(bindings.ResultViewPose.IsChildOf(bindings.ResultRoot.transform), Is.True);
             Assert.That(bindings.GallerySurfaces.All(surface =>
@@ -139,6 +179,8 @@ namespace CameraCoop.Tests
 
         [TestCase(PartyMode.RelayCopy)]
         [TestCase(PartyMode.MemoryCopy)]
+        [TestCase(PartyMode.PictureTelephone)]
+        [TestCase(PartyMode.DrawingWordChain)]
         public void PrivateResultGalleryFitsProductionCameraWithReadableSlotsAndReturnControl(PartyMode mode)
         {
             PartySceneCatalog.TryGet(mode, out PartySceneDefinition definition);
@@ -177,10 +219,9 @@ namespace CameraCoop.Tests
                 TextMesh[] slotLabels = FindAll<TextMesh>(scene)
                     .Where(label => label.transform.IsChildOf(bindings.ResultRoot.transform)
                         && label.text.StartsWith("PLAYER ", StringComparison.Ordinal)).ToArray();
-                Assert.That(slotLabels, Has.Length.EqualTo(PartyRoster.Capacity - 1));
+                Assert.That(slotLabels, Has.Length.EqualTo(PartyModeCatalog.Get(mode).ResultDrawingCount));
                 Assert.That(slotLabels.All(label => label.characterSize >= 0.024f), Is.True);
-                string expectedSubtitle = mode == PartyMode.MemoryCopy
-                    ? "MEMORY COPY · 5 SECOND LOOK" : "RELAY COPY · PRIVATE HANDOFF";
+                string expectedSubtitle = PartyModeCatalog.Get(mode).DisplayName;
                 Assert.That(bindings.ResultRoot.GetComponentsInChildren<TextMesh>(true)
                     .Count(label => label.text == expectedSubtitle), Is.EqualTo(1));
 

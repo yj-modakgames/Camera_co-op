@@ -35,6 +35,13 @@ namespace CameraCoop
         private readonly List<OnlineRelayQuizGalleryEntry> records = new List<OnlineRelayQuizGalleryEntry>(3);
         private readonly Dictionary<string, OnlineRelayQuizDrawingTransfer> clientTransfers = new Dictionary<string, OnlineRelayQuizDrawingTransfer>(StringComparer.Ordinal);
         private readonly Dictionary<string, CanvasDrawingData> privateCache = new Dictionary<string, CanvasDrawingData>(StringComparer.Ordinal);
+        private readonly string[,] sentVisibleDrawingIds = new string[OnlineRelayQuizProtocol.PlayerCount, OnlineRelayQuizProtocol.PlayerCount];
+        private OnlineRelayQuizGalleryEntry liveDrawing;
+        private OnlineRelayQuizDrawingTransfer liveReceiving;
+        private string liveReceivingId;
+        private int liveRevision;
+        private byte[] lastLiveBytes;
+        private int lastLiveViewRevision;
         private int queuedBytes;
         private bool queueOverflow;
         private volatile bool disposed;
@@ -456,6 +463,10 @@ namespace CameraCoop
                 case "final-drawing":
                     if (packet.ownerSlot == senderSlot) ReceiveFinalDrawing(senderSlot, packet);
                     break;
+                case "live-drawing":
+                    if (packet.ownerSlot == senderSlot && senderSlot == CurrentOwnerSlot)
+                        ReceiveLiveDrawing(packet);
+                    break;
                 case "final-answer":
                     if (packet.ownerSlot == senderSlot) ReceiveFinalAnswer(senderSlot, packet);
                     break;
@@ -506,8 +517,8 @@ namespace CameraCoop
                 OnlineRelayQuizCapture capture = OnlineRelayQuizProtocol.Read<OnlineRelayQuizCapture>(packet.payload);
                 if (capture != null && packet.ownerSlot == localSlot) CaptureFinal(capture);
             }
-            else if (packet.kind == "prepare-drawing") ReceivePrivateDrawing(packet, false);
-            else if (packet.kind == "gallery-drawing") ReceivePrivateDrawing(packet, true);
+            else if (packet.kind == "prepare-drawing" || packet.kind == "gallery-drawing"
+                || packet.kind == "visible-drawing") ReceivePrivateDrawing(packet);
         }
 
         private void ReceiveWelcome(OnlineRelayQuizPacket packet)
@@ -752,6 +763,11 @@ namespace CameraCoop
             if (transitionPhase != PartyTransitionPhase.LoadingGame || modeStarted) return;
             if (selectedMode != PartyMode.CoopMural)
             {
+                if (!logic.ConfigureMode(selectedMode, logic.PhaseGeneration))
+                {
+                    BeginReturningToLobby("Selected mode could not be configured");
+                    return;
+                }
                 logic.SetPlayerCount(partySize, logic.PhaseGeneration);
                 if (!logic.StartGame(logic.PhaseGeneration))
                 {
@@ -841,8 +857,8 @@ namespace CameraCoop
                 BeginFinal();
                 return;
             }
-            else if (action == RelayQuizAction.Submit && senderSlot == partySize - 1
-                && senderSlot == owner && logic.State == RelayQuizState.Guessing)
+            else if (action == RelayQuizAction.Submit && senderSlot == owner
+                && logic.State == RelayQuizState.Guessing)
             {
                 BeginFinal();
                 return;
@@ -925,6 +941,64 @@ namespace CameraCoop
             else SendToSlot(finalOwnerSlot, "capture", capture, finalOwnerSlot);
         }
 
+        public void PublishLiveDrawing(CanvasDrawingData drawing)
+        {
+            if (disposed || View.aborted || !View.active || View.state != RelayQuizState.Drawing
+                || View.paused || View.transferPending || !View.hasSelectedMode
+                || View.selectedMode != PartyMode.RelayCopy
+                    && View.selectedMode != PartyMode.DrawingWordChain
+                || !OnlineRelayQuizProtocol.TryDrawingBytes(drawing, brushes, out byte[] bytes)) return;
+            bool unchanged = lastLiveViewRevision == View.revision && lastLiveBytes != null
+                && lastLiveBytes.Length == bytes.Length;
+            for (int index = 0; unchanged && index < bytes.Length; index++)
+                unchanged = bytes[index] == lastLiveBytes[index];
+            if (unchanged) return;
+            lastLiveViewRevision = View.revision;
+            lastLiveBytes = bytes;
+            string id = "live-r" + View.roundId + "-t" + View.turnId + "-o" + localSlot + "-v" + ++liveRevision;
+            if (IsHost) SetLiveDrawing(id, localSlot, drawing);
+            else SendChunksToHost("live-drawing", id, bytes, localSlot);
+        }
+
+        private void ReceiveLiveDrawing(OnlineRelayQuizPacket packet)
+        {
+            if (selectedMode != PartyMode.RelayCopy && selectedMode != PartyMode.DrawingWordChain
+                || logic.State != RelayQuizState.Drawing
+                || Pending || logic.Paused) return;
+            OnlineRelayQuizChunk chunk = OnlineRelayQuizProtocol.Read<OnlineRelayQuizChunk>(packet.payload);
+            string prefix = "live-r" + roundId + "-t" + CurrentTurnId + "-o" + CurrentOwnerSlot + "-v";
+            if (chunk == null || string.IsNullOrEmpty(chunk.id) || chunk.id.Length > 128
+                || !chunk.id.StartsWith(prefix, StringComparison.Ordinal)) return;
+            if (liveReceivingId != chunk.id)
+            {
+                if (chunk.index != 0) return;
+                liveReceivingId = chunk.id;
+                liveReceiving = new OnlineRelayQuizDrawingTransfer();
+            }
+            if (!liveReceiving.Add(chunk, out byte[] bytes))
+            {
+                liveReceiving = null;
+                liveReceivingId = null;
+                return;
+            }
+            if (bytes == null) return;
+            liveReceiving = null;
+            liveReceivingId = null;
+            if (OnlineRelayQuizProtocol.TryReadDrawing(bytes, brushes, out CanvasDrawingData drawing))
+                SetLiveDrawing(chunk.id, CurrentOwnerSlot, drawing);
+        }
+
+        private void SetLiveDrawing(string id, int owner, CanvasDrawingData drawing)
+        {
+            liveDrawing = new OnlineRelayQuizGalleryEntry
+            {
+                drawingId = id,
+                ownerSlot = owner,
+                drawing = CanvasDrawingData.DeepCopy(drawing)
+            };
+            Publish();
+        }
+
         private void CaptureFinal(OnlineRelayQuizCapture capture)
         {
             if (capture == null || capture.ownerSlot != localSlot || capture.transferId == lastCapturedTransferId
@@ -991,8 +1065,8 @@ namespace CameraCoop
 
         private void ReceiveFinalAnswer(int senderSlot, OnlineRelayQuizPacket packet)
         {
-            if (!finalPending || logic.State != RelayQuizState.Guessing || senderSlot != finalOwnerSlot
-                || senderSlot != partySize - 1) return;
+            if (!finalPending || logic.State != RelayQuizState.Guessing
+                || senderSlot != finalOwnerSlot) return;
             OnlineRelayQuizCommand command = OnlineRelayQuizProtocol.Read<OnlineRelayQuizCommand>(packet.payload);
             if (command == null || !command.complete || command.text == null
                 || command.text.Length > OnlineRelayQuizProtocol.MaxAnswerCharacters) return;
@@ -1016,27 +1090,57 @@ namespace CameraCoop
                     drawing = CanvasDrawingData.DeepCopy(finalDrawing)
                 };
                 records.Add(entry);
+                liveDrawing = null;
+                liveReceiving = null;
+                liveReceivingId = null;
                 finalPending = false;
                 finalReceiving = null;
                 finalDrawing = null;
                 finalTransferId = null;
                 finalOwnerSlot = -1;
                 AdvanceRevision();
-                PrepareDrawing(entry, logic.PlayerIndex);
+                PublishOrPrepareCurrentReference();
                 return;
             }
             if (logic.State != RelayQuizState.Guessing || finalAnswer == null
                 || !logic.SubmitAnswer(logic.PhaseGeneration)) return;
             finalPending = false;
+            finalAnswer = null;
             finalTransferId = null;
             finalOwnerSlot = -1;
             AdvanceRevision();
-            Publish();
+            PublishOrPrepareCurrentReference();
+        }
+
+        private void PublishOrPrepareCurrentReference()
+        {
+            int destination = logic.PlayerIndex;
+            int owner = logic.ReferenceDrawingOwner;
+            if (owner < 0 || logic.GetDrawingReferenceFor(destination) == null)
+            {
+                Publish();
+                return;
+            }
+            OnlineRelayQuizGalleryEntry entry = records.FindLast(candidate => candidate.ownerSlot == owner);
+            if (entry == null)
+            {
+                Abort("private 그림 참조를 찾을 수 없습니다 · 새 초대가 필요합니다");
+                return;
+            }
+            if (destination == 0)
+            {
+                Publish();
+                return;
+            }
+            PrepareDrawing(entry, destination);
         }
 
         private void PrepareDrawing(OnlineRelayQuizGalleryEntry entry, int destinationSlot)
         {
-            if (entry == null || destinationSlot <= entry.ownerSlot
+            bool ownDrawing = entry != null
+                && logic.CurrentReferenceKind == RelayQuizReferenceKind.OwnDrawing
+                && destinationSlot == entry.ownerSlot;
+            if (entry == null || !ownDrawing && destinationSlot <= entry.ownerSlot
                 || destinationSlot >= OnlineRelayQuizProtocol.PlayerCount)
             {
                 Abort("private 그림 수신자를 결정할 수 없습니다 · 새 초대가 필요합니다");
@@ -1068,10 +1172,10 @@ namespace CameraCoop
             Publish();
         }
 
-        private void ReceivePrivateDrawing(OnlineRelayQuizPacket packet, bool gallery)
+        private void ReceivePrivateDrawing(OnlineRelayQuizPacket packet)
         {
             OnlineRelayQuizChunk chunk = OnlineRelayQuizProtocol.Read<OnlineRelayQuizChunk>(packet.payload);
-            if (chunk == null || !IsAuthorizedDrawing(chunk.id, gallery, packet.ownerSlot)) return;
+            if (chunk == null || !IsAuthorizedDrawing(chunk.id, packet.kind, packet.ownerSlot)) return;
             if (!clientTransfers.TryGetValue(chunk.id, out OnlineRelayQuizDrawingTransfer transfer))
             {
                 transfer = new OnlineRelayQuizDrawingTransfer();
@@ -1092,7 +1196,7 @@ namespace CameraCoop
             privateCache[chunk.id] = drawing;
             AttachPrivatePayloads(View);
             View.payloadRevision++;
-            if (!gallery)
+            if (packet.kind == "prepare-drawing")
             {
                 SendToHost("prepared-ack", new OnlineRelayQuizPreparedAck
                 {
@@ -1104,10 +1208,17 @@ namespace CameraCoop
             }
         }
 
-        private bool IsAuthorizedDrawing(string id, bool gallery, int ownerSlot)
+        private bool IsAuthorizedDrawing(string id, string kind, int ownerSlot)
         {
             if (string.IsNullOrEmpty(id)) return false;
-            if (!gallery) return id == View.drawingId && ownerSlot == View.drawingOwnerSlot && View.CanSeeDrawing;
+            if (kind == "prepare-drawing") return id == View.drawingId && ownerSlot == View.drawingOwnerSlot && View.CanSeeDrawing;
+            if (kind == "visible-drawing")
+            {
+                if (!View.CanSeeSlotDrawing(ownerSlot)) return false;
+                foreach (OnlineRelayQuizGalleryEntry entry in View.visibleDrawings)
+                    if (entry != null && entry.drawingId == id && entry.ownerSlot == ownerSlot) return true;
+                return false;
+            }
             if (View.state != RelayQuizState.Gallery || View.gallery == null) return false;
             foreach (OnlineRelayQuizGalleryEntry entry in View.gallery)
                 if (entry != null && entry.drawingId == id && entry.ownerSlot == ownerSlot) return true;
@@ -1141,13 +1252,30 @@ namespace CameraCoop
                 || next.rosterCount > OnlineRelayQuizProtocol.PlayerCount
                 || next.roster == null || next.roster.Length != OnlineRelayQuizProtocol.PlayerCount
                 || (next.word?.Length ?? 0) > 128
-                || (next.answer?.Length ?? 0) > OnlineRelayQuizProtocol.MaxAnswerCharacters) return;
+                || (next.answer?.Length ?? 0) > OnlineRelayQuizProtocol.MaxAnswerCharacters
+                || (next.privatePrompt?.Length ?? 0) > OnlineRelayQuizProtocol.MaxAnswerCharacters
+                || next.revealedTexts == null
+                || next.revealedTexts.Length > OnlineRelayQuizProtocol.PlayerCount
+                || !Enum.IsDefined(typeof(RelayQuizTextRole), next.textRole)
+                || !Enum.IsDefined(typeof(RelayQuizReferenceKind), next.referenceKind)) return;
+            foreach (string text in next.revealedTexts)
+                if ((text?.Length ?? 0) > OnlineRelayQuizProtocol.MaxAnswerCharacters) return;
             bool reset = next.rosterGeneration != View.rosterGeneration || next.roundId != View.roundId
                 || next.modeGeneration != View.modeGeneration;
             if (reset) ClearPrivateCache();
             if (next.state != RelayQuizState.Gallery) next.gallery = Array.Empty<OnlineRelayQuizGalleryEntry>();
-            if (localSlot != 0) next.word = string.Empty;
-            if (next.state != RelayQuizState.Reveal && next.state != RelayQuizState.Gallery)
+            if (next.visibleDrawings == null) next.visibleDrawings = Array.Empty<OnlineRelayQuizGalleryEntry>();
+            foreach (OnlineRelayQuizGalleryEntry entry in next.visibleDrawings)
+                if (entry == null || !next.CanSeeSlotDrawing(entry.ownerSlot)) return;
+            bool result = next.state == RelayQuizState.Reveal || next.state == RelayQuizState.Gallery;
+            bool pictureResult = result && next.hasSelectedMode
+                && next.selectedMode == PartyMode.PictureTelephone;
+            bool legacy = next.hasSelectedMode && (next.selectedMode == PartyMode.RelayCopy
+                || next.selectedMode == PartyMode.MemoryCopy);
+            if (localSlot != 0 && !pictureResult && !(result && legacy)) next.word = string.Empty;
+            if (!legacy && !pictureResult) next.answer = string.Empty;
+            if (!pictureResult) next.revealedTexts = Array.Empty<string>();
+            if (!result)
             {
                 next.answer = string.Empty;
                 next.correct = false;
@@ -1174,6 +1302,8 @@ namespace CameraCoop
         {
             var allowed = new HashSet<string>(StringComparer.Ordinal);
             if (next.CanSeeDrawing && !string.IsNullOrEmpty(next.drawingId)) allowed.Add(next.drawingId);
+            foreach (OnlineRelayQuizGalleryEntry entry in next.visibleDrawings)
+                if (entry != null && next.CanSeeSlotDrawing(entry.ownerSlot)) allowed.Add(entry.drawingId);
             if (next.state == RelayQuizState.Gallery && next.gallery != null)
                 foreach (OnlineRelayQuizGalleryEntry entry in next.gallery)
                     if (entry != null && !string.IsNullOrEmpty(entry.drawingId)) allowed.Add(entry.drawingId);
@@ -1198,6 +1328,10 @@ namespace CameraCoop
             foreach (OnlineRelayQuizGalleryEntry entry in view.gallery)
                 if (entry != null && privateCache.TryGetValue(entry.drawingId, out CanvasDrawingData drawing))
                     entry.drawing = drawing;
+            foreach (OnlineRelayQuizGalleryEntry entry in view.visibleDrawings)
+                if (entry != null && view.CanSeeSlotDrawing(entry.ownerSlot)
+                    && privateCache.TryGetValue(entry.drawingId, out CanvasDrawingData drawing))
+                    entry.drawing = drawing;
         }
 
         private OnlineRelayQuizView BuildView(int recipientSlot)
@@ -1208,7 +1342,9 @@ namespace CameraCoop
             OnlineRelayQuizGalleryEntry current = CurrentPrivateDrawing(recipientSlot);
             OnlineRelayQuizGalleryEntry[] gallery = logic.State == RelayQuizState.Gallery
                 ? BuildGallery(recipientSlot == 0) : Array.Empty<OnlineRelayQuizGalleryEntry>();
-            return new OnlineRelayQuizView
+            bool result = logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery;
+            bool legacy = selectedMode == PartyMode.RelayCopy || selectedMode == PartyMode.MemoryCopy;
+            var view = new OnlineRelayQuizView
             {
                 state = logic.State,
                 generation = logic.PhaseGeneration,
@@ -1242,12 +1378,20 @@ namespace CameraCoop
                 hasTimer = logic.HasTimer && !Pending,
                 remaining = Pending ? 0f : logic.RemainingSeconds,
                 status = string.IsNullOrEmpty(transitionStatus) ? rosterStatus[RosterCount] : transitionStatus,
-                word = recipientSlot == 0 && (logic.State == RelayQuizState.WordReveal
-                    || logic.State == RelayQuizState.Drawing) ? secretWord : string.Empty,
-                answer = logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery
-                    ? logic.SubmittedAnswer : string.Empty,
-                correct = (logic.State == RelayQuizState.Reveal || logic.State == RelayQuizState.Gallery)
-                    && logic.AnswerCorrect,
+                word = legacy && (result || recipientSlot == 0
+                    && (logic.State == RelayQuizState.WordReveal || logic.State == RelayQuizState.Drawing))
+                    || selectedMode == PartyMode.PictureTelephone && result ? secretWord : string.Empty,
+                answer = legacy && result ? logic.SubmittedAnswer
+                    : selectedMode == PartyMode.PictureTelephone && result
+                        ? logic.GetPrivateSubmittedTextFor(partySize - 1) : string.Empty,
+                revealedTexts = selectedMode == PartyMode.PictureTelephone && result
+                    ? BuildRevealedTexts() : Array.Empty<string>(),
+                textRole = active ? logic.CurrentTextRole : RelayQuizTextRole.None,
+                referenceKind = logic.CurrentReferenceKind,
+                privatePrompt = active ? logic.GetPrivatePromptFor(recipientSlot) : string.Empty,
+                localAnswerSubmitted = logic.HasSubmittedText(recipientSlot),
+                chainSucceeded = result && logic.ChainSucceeded,
+                correct = result && logic.AnswerCorrect,
                 drawingId = current?.drawingId ?? string.Empty,
                 drawingOwnerSlot = current?.ownerSlot ?? -1,
                 drawingRevision = current?.revision ?? 0,
@@ -1255,17 +1399,33 @@ namespace CameraCoop
                 referenceDrawing = recipientSlot == 0 ? current?.drawing : null,
                 gallery = gallery
             };
+            var visible = new List<OnlineRelayQuizGalleryEntry>();
+            foreach (OnlineRelayQuizGalleryEntry entry in records)
+                if (view.CanSeeSlotDrawing(entry.ownerSlot)) visible.Add(VisibleDescriptor(entry, recipientSlot == 0));
+            if (liveDrawing != null && liveDrawing.ownerSlot == owner && view.CanSeeSlotDrawing(owner)
+                && recipientSlot != owner)
+                visible.Add(VisibleDescriptor(liveDrawing, recipientSlot == 0));
+            view.visibleDrawings = visible.ToArray();
+            return view;
+        }
+
+        private static OnlineRelayQuizGalleryEntry VisibleDescriptor(OnlineRelayQuizGalleryEntry entry, bool includeDrawing)
+        {
+            OnlineRelayQuizGalleryEntry descriptor = entry.CopyDescriptor();
+            if (includeDrawing) descriptor.drawing = entry.drawing;
+            return descriptor;
         }
 
         private OnlineRelayQuizGalleryEntry CurrentPrivateDrawing(int recipientSlot)
         {
-            if (records.Count == 0 || recipientSlot != logic.PlayerIndex || logic.PlayerIndex <= 0) return null;
+            if (records.Count == 0 || recipientSlot != logic.PlayerIndex
+                || logic.GetDrawingReferenceFor(recipientSlot) == null) return null;
             if (logic.State != RelayQuizState.Handover && logic.State != RelayQuizState.ObservePrevious
                 && logic.State != RelayQuizState.Drawing && logic.State != RelayQuizState.Guessing) return null;
             if (selectedMode == PartyMode.MemoryCopy && logic.PlayerIndex < partySize - 1
                 && logic.State == RelayQuizState.Drawing) return null;
-            OnlineRelayQuizGalleryEntry entry = records[records.Count - 1];
-            return entry.ownerSlot == recipientSlot - 1 ? entry : null;
+            int owner = logic.ReferenceDrawingOwner;
+            return records.FindLast(entry => entry.ownerSlot == owner);
         }
 
         private OnlineRelayQuizGalleryEntry[] BuildGallery(bool includeDrawing)
@@ -1276,6 +1436,14 @@ namespace CameraCoop
                 result[i] = records[i].CopyDescriptor();
                 if (includeDrawing) result[i].drawing = records[i].drawing;
             }
+            return result;
+        }
+
+        private string[] BuildRevealedTexts()
+        {
+            var result = new string[partySize];
+            for (int slot = 0; slot < partySize; slot++)
+                result[slot] = logic.GetPrivateSubmittedTextFor(slot);
             return result;
         }
 
@@ -1292,7 +1460,21 @@ namespace CameraCoop
             publishElapsed = 0f;
             View = BuildView(0);
             for (int slot = 1; slot < RosterCount; slot++)
-                SendToSlot(slot, "view", BuildView(slot), CurrentOwnerSlot);
+            {
+                OnlineRelayQuizView view = BuildView(slot);
+                SendToSlot(slot, "view", view, CurrentOwnerSlot);
+                for (int owner = 0; owner < OnlineRelayQuizProtocol.PlayerCount; owner++)
+                    if (!view.CanSeeSlotDrawing(owner)) sentVisibleDrawingIds[slot, owner] = null;
+                foreach (OnlineRelayQuizGalleryEntry descriptor in view.visibleDrawings)
+                {
+                    if (sentVisibleDrawingIds[slot, descriptor.ownerSlot] == descriptor.drawingId) continue;
+                    OnlineRelayQuizGalleryEntry source = liveDrawing?.drawingId == descriptor.drawingId
+                        ? liveDrawing : records.Find(entry => entry.drawingId == descriptor.drawingId);
+                    if (source == null || !OnlineRelayQuizProtocol.TryDrawingBytes(source.drawing, brushes, out byte[] bytes)) continue;
+                    SendChunksToSlot(slot, "visible-drawing", source.drawingId, bytes, source.ownerSlot);
+                    sentVisibleDrawingIds[slot, descriptor.ownerSlot] = source.drawingId;
+                }
+            }
         }
 
         private void SendGalleryDrawings()
@@ -1461,6 +1643,13 @@ namespace CameraCoop
         private void ClearRoundPayloads()
         {
             records.Clear();
+            liveDrawing = null;
+            liveReceiving = null;
+            liveReceivingId = null;
+            liveRevision = 0;
+            lastLiveBytes = null;
+            lastLiveViewRevision = 0;
+            Array.Clear(sentVisibleDrawingIds, 0, sentVisibleDrawingIds.Length);
             finalDrawing = null;
             finalAnswer = null;
             finalTransferId = null;

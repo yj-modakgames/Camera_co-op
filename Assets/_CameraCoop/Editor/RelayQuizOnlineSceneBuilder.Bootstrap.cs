@@ -262,7 +262,6 @@ namespace CameraCoop.EditorTools
             SetField(core.PersonalCanvas, "drawingController", core.Drawing);
             SetField(core.PersonalCanvas, "carriedLocalPosition", new Vector3(0f, 0.25f, 0.85f));
             SetField(core.PersonalCanvas, "carriedLocalEulerAngles", new Vector3(8f, 180f, 0f));
-            Frame(localPaper.transform, "PersonalPaperFrame", new Vector2(4.65f, 3.05f), context.Red);
 
             Color[] palette = { Red, Blue, Green, Yellow, new Color(0.08f, 0.09f, 0.12f), Paper };
             SetColorArray(core.ToolState, "palette", palette);

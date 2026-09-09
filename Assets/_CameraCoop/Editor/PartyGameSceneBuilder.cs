@@ -95,6 +95,9 @@ namespace CameraCoop.EditorTools
                 ToolStations = new[] { rackStation }
             };
 
+            if (PartyModeCatalog.Get(definition.Mode).UsesSlotDrawingBoards)
+                BuildRelayDrawingBoards(root.transform, palette, bindings);
+
             WorldActionInteractable returnAction = definition.Mode == PartyMode.CoopMural
                 ? BuildMural(root.transform, palette, bindings)
                 : BuildPrivateModePresentation(root.transform, definition.Mode, palette, bindings);
@@ -113,14 +116,31 @@ namespace CameraCoop.EditorTools
         private static void BuildEnvironment(Transform root, PartyMode mode, Palette palette)
         {
             Material accent = mode == PartyMode.RelayCopy ? palette.Red
-                : mode == PartyMode.MemoryCopy ? palette.Blue : palette.Green;
+                : mode == PartyMode.MemoryCopy ? palette.Blue : mode == PartyMode.CoopMural ? palette.Green
+                    : mode == PartyMode.PictureTelephone ? palette.Yellow : palette.Accent;
             Cube("Floor", root, new Vector3(0f, -0.12f, 1f), new Vector3(24f, 0.24f, 16f), palette.Floor);
             Cube("NorthBackdrop", root, new Vector3(0f, 3f, 8.8f), new Vector3(24f, 6f, 0.25f), palette.Wall);
-            Cube("WestRail", root, new Vector3(-12f, 0.55f, 1f), new Vector3(0.3f, 1.1f, 16f), accent);
-            Cube("EastRail", root, new Vector3(12f, 0.55f, 1f), new Vector3(0.3f, 1.1f, 16f), accent);
-            string title = mode == PartyMode.RelayCopy ? "RELAY COPY · PRIVATE HANDOFF"
-                : mode == PartyMode.MemoryCopy ? "MEMORY COPY · 5 SECOND LOOK"
-                : "COOP MURAL · FOUR PUBLIC LAYERS";
+            Cube("WestHull", root, new Vector3(-12f, 3f, 1f), new Vector3(0.3f, 6f, 16f), palette.Wall);
+            Cube("EastHull", root, new Vector3(12f, 3f, 1f), new Vector3(0.3f, 6f, 16f), palette.Wall);
+            Cube("SouthHull", root, new Vector3(0f, 3f, -7f), new Vector3(24f, 6f, 0.3f), palette.Wall);
+            Cube("Ceiling", root, new Vector3(0f, 6f, 1f), new Vector3(24f, 0.25f, 16f), palette.Dark);
+            for (int index = 0; index < 5; index++)
+            {
+                float z = -5.6f + index * 3.4f;
+                Cube("CeilingRib_" + index, root, new Vector3(0f, 5.65f, z),
+                    new Vector3(23.8f, 0.3f, 0.3f), accent);
+                Cube("HullStripWest_" + index, root, new Vector3(-11.75f, 3f, z),
+                    new Vector3(0.18f, 5.5f, 0.3f), accent);
+                Cube("HullStripEast_" + index, root, new Vector3(11.75f, 3f, z),
+                    new Vector3(0.18f, 5.5f, 0.3f), accent);
+            }
+            if (PartyModeCatalog.Get(mode).UsesSlotDrawingBoards)
+            {
+                for (int divider = 0; divider < 3; divider++)
+                    Cube("PrivacyDivider_" + divider, root, new Vector3(-5.35f + divider * 5.35f, 0.45f, -3f),
+                        new Vector3(0.15f, 0.9f, 4.2f), palette.Wall);
+            }
+            string title = PartyModeCatalog.Get(mode).DisplayName + " · INDOOR DRAWING ROOM";
             Label(title, root, new Vector3(0f, 4.75f, 8.55f), 0.56f, Color.white);
             Label("FIST: DRAW   PINCH RELEASE: SELECT   OPEN HAND: REARM", root,
                 new Vector3(0f, 4.05f, 8.5f), 0.22f, Color.white);
@@ -132,6 +152,29 @@ namespace CameraCoop.EditorTools
             light.type = LightType.Directional;
             light.color = new Color(0.9f, 0.94f, 1f);
             light.intensity = 1.25f;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.38f, 0.43f, 0.55f);
+        }
+
+        private static void BuildRelayDrawingBoards(Transform root, Palette palette, PartySceneBindings bindings)
+        {
+            bindings.RelayDrawingRoots = new GameObject[PartyRoster.Capacity];
+            bindings.RelayDrawingPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
+            bindings.RelayDrawingSurfaces = new CanvasSurface[PartyRoster.Capacity];
+            Material[] colors = { palette.Red, palette.Blue, palette.Green, palette.Yellow };
+            for (int slot = 0; slot < PartyRoster.Capacity; slot++)
+            {
+                Transform board = Group("RelayDrawingBoard_" + slot, root);
+                Vector3 position = bindings.SlotDocks[slot].position;
+                GameObject surface = Quad("RelayDrawingSurface_" + slot, board, position,
+                    new Vector3(4.8f, 3f, 1f), palette.Paper, Quaternion.identity);
+                FrameAt(board, "RelayDrawingFrame_" + slot, position + new Vector3(0f, 0f, 0.1f),
+                    new Vector2(5f, 3.2f), colors[slot], Quaternion.identity);
+                bindings.RelayDrawingRoots[slot] = board.gameObject;
+                bindings.RelayDrawingSurfaces[slot] = surface.AddComponent<CanvasSurface>();
+                bindings.RelayDrawingPresenters[slot] = Presenter("RelayDrawingPresenter_" + slot, board, palette);
+                board.gameObject.SetActive(false);
+            }
         }
 
         private static void BuildSlots(Transform root, PartyMode mode, Palette palette, Transform[] spawns,

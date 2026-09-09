@@ -61,6 +61,8 @@ namespace CameraCoop.Party
         private INetTransport boundTransport;
         private PartyPoseSession poseSession;
         private PartyPracticeDrawingSession practiceSession;
+        private readonly PartyPracticeDrawingLayerSnapshot[] renderedPracticeLayers =
+            new PartyPracticeDrawingLayerSnapshot[PartyRoster.Capacity];
         private IPartyGameScenePort activeScenePort;
         private PartyLobbyScenePort activeLobbyPort;
         private CoopMuralSession muralSession;
@@ -253,6 +255,7 @@ namespace CameraCoop.Party
             if (activeScenePort != null) UnbindScenePort(activeScenePort);
             if (activeLobbyPort != null && !ReferenceEquals(activeLobbyPort, port)) UnbindLobbyPort(activeLobbyPort);
             activeLobbyPort = port;
+            Array.Clear(renderedPracticeLayers, 0, renderedPracticeLayers.Length);
             playerSpawnPointsBySlot = port.SlotSpawns;
             remoteAvatarPresenters = port.AvatarPresenters;
             avatarRootsBySlot = ToTransforms(port.AvatarRoots);
@@ -305,8 +308,12 @@ namespace CameraCoop.Party
             for (int slot = 0; slot < PartyRoster.Capacity; slot++)
             {
                 PartyPracticeDrawingLayerSnapshot layer = view.Layers[slot];
-                port.PracticeLayerRoots[slot].SetActive(view.Configured && layer.Occupied);
-                if (view.Configured && layer.Occupied && layer.Drawing != null)
+                bool visible = view.Configured && layer.Occupied
+                    && (port.PracticeDrawing == null || slot != view.LocalSlot);
+                port.PracticeLayerRoots[slot].SetActive(visible);
+                if (ReferenceEquals(renderedPracticeLayers[slot], layer)) continue;
+                renderedPracticeLayers[slot] = layer;
+                if (visible && layer.Drawing != null)
                     port.PracticeLayerPresenters[slot].Show(layer.Drawing, port.PracticeLayerSurfaces[slot]);
                 else port.PracticeLayerPresenters[slot].ClearPresentation();
             }
@@ -409,6 +416,8 @@ namespace CameraCoop.Party
                 case PartyWorldAction.SelectRelayCopy:
                 case PartyWorldAction.SelectMemoryCopy:
                 case PartyWorldAction.SelectCoopMural:
+                case PartyWorldAction.SelectPictureTelephone:
+                case PartyWorldAction.SelectDrawingWordChain:
                     return gateway.IsHost && view != null && !view.aborted && view.state == RelayQuizState.Setup
                         && view.transitionPhase == PartyTransitionPhase.SelectingMode
                         && !view.modeStarted && view.rosterLocked
@@ -447,6 +456,8 @@ namespace CameraCoop.Party
                 case PartyWorldAction.SelectRelayCopy: return gateway.SelectMode(PartyMode.RelayCopy);
                 case PartyWorldAction.SelectMemoryCopy: return gateway.SelectMode(PartyMode.MemoryCopy);
                 case PartyWorldAction.SelectCoopMural: return gateway.SelectMode(PartyMode.CoopMural);
+                case PartyWorldAction.SelectPictureTelephone: return gateway.SelectMode(PartyMode.PictureTelephone);
+                case PartyWorldAction.SelectDrawingWordChain: return gateway.SelectMode(PartyMode.DrawingWordChain);
                 case PartyWorldAction.StartSelectedMode: return gateway.StartSelectedMode();
                 case PartyWorldAction.CarryCanvas: return personalCanvas.TryCarry(gateway.LocalIdentity);
                 case PartyWorldAction.DockCanvas:
@@ -518,15 +529,16 @@ namespace CameraCoop.Party
             if (relayController == null && gateway == null) return Fail("relayController", out error);
             if (readyPadsBySlot == null || readyPadsBySlot.Length != PartyRoster.Capacity)
                 return Fail("readyPadsBySlot[4]", out error);
-            const int actionCount = (int)PartyWorldAction.ReturnToLobby;
+            int actionCount = Enum.GetValues(typeof(PartyWorldAction)).Length - 1;
             if (worldActions == null || worldActions.Length != actionCount)
                 return Fail("one worldActions entry for every lobby PartyWorldAction", out error);
-            var foundActions = new bool[actionCount];
+            var foundActions = new bool[Enum.GetValues(typeof(PartyWorldAction)).Length];
             for (int index = 0; index < worldActions.Length; index++)
             {
                 WorldActionInteractable action = worldActions[index];
                 int value = action != null ? (int)action.Action : -1;
-                if (value < 0 || value >= actionCount || foundActions[value])
+                if (value < 0 || value >= foundActions.Length || action.Action == PartyWorldAction.ReturnToLobby
+                    || foundActions[value])
                     return Fail("unique worldActions entries", out error);
                 foundActions[value] = true;
             }
@@ -652,8 +664,6 @@ namespace CameraCoop.Party
         private void UpdateCanvasMovement(OnlineRelayQuizView view)
         {
             bool onlineGate = view.connected && !view.aborted && !view.paused && !view.transferPending;
-            // 로비 연습은 내 자리에서 내 종이에 그리는 로컬 동작이다. roster가 다 차기(view.connected)를
-            // 기다리면 혼자 host했을 때 종이 자체가 안 켜진다. 연습만 정원 조건에서 뺀다.
             bool lobbyGate = !view.aborted && !view.paused && !view.transferPending;
             bool lobbyPractice = lobbyGate && view.state == RelayQuizState.Setup && !view.modeStarted
                 && view.localSlot >= 0 && view.localSlot < PartyRoster.Capacity
@@ -666,7 +676,8 @@ namespace CameraCoop.Party
             bool writable = lobbyPractice || onlineGate && authoritativeDrawingContext
                 && (coop && muralSession != null && muralSession.View.CanLocalWrite
                     || !coop && view.active && view.state == RelayQuizState.Drawing);
-            if (localWritableCanvasRoot != null) localWritableCanvasRoot.SetActive(writable);
+            bool sharedPractice = lobbyPractice && activeLobbyPort != null && activeLobbyPort.PracticeDrawing != null;
+            if (localWritableCanvasRoot != null) localWritableCanvasRoot.SetActive(writable && !sharedPractice);
             bool carried = writable && personalCanvas != null && personalCanvas.State == PersonalCanvasPlacementState.Carried;
             if (inputModeManager != null)
             {
@@ -749,7 +760,7 @@ namespace CameraCoop.Party
             if (practiceSession == null)
             {
                 practiceSession = new PartyPracticeDrawingSession(boundTransport,
-                    () => drawingController != null ? drawingController.ExportDrawing() : new CanvasDrawingData(), boundBrushCount);
+                    () => PracticeDrawingSource != null ? PracticeDrawingSource.SnapshotDrawing() : new CanvasDrawingData(), boundBrushCount);
                 if (activeLobbyPort != null) practiceSession.ViewChanged += ApplyPracticeView;
             }
             if (!practiceSession.View.Configured
@@ -757,11 +768,13 @@ namespace CameraCoop.Party
                 || practiceSession.View.TransitionGeneration != view.transitionGeneration)
                 practiceSession.Configure(view.sessionId, view.rosterGeneration, view.transitionGeneration,
                     view.localSlot, view.roster);
-            uint revision = drawingController != null ? drawingController.DrawingRevision : 0;
+            uint revision = PracticeDrawingSource != null ? PracticeDrawingSource.DrawingRevision : 0;
             practiceSession.Tick(nowSeconds, revision > int.MaxValue ? int.MaxValue : (int)revision,
                 view.transitionPhase == PartyTransitionPhase.Lobby
                     ? PartyPracticeDrawingPhase.Lobby : PartyPracticeDrawingPhase.SelectingMode);
         }
+        private DrawingController PracticeDrawingSource => activeLobbyPort != null && activeLobbyPort.PracticeDrawing != null
+            ? activeLobbyPort.PracticeDrawing : drawingController;
         private void TickPose(float nowSeconds)
         {
             if (poseSession == null || localPlayerRoot == null) return;

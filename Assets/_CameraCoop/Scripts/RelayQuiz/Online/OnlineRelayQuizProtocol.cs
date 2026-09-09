@@ -122,7 +122,7 @@ namespace CameraCoop
                     && packet.payload != null && (packet.sessionId == null || packet.sessionId.Length <= 64)
                     && packet.rosterGeneration >= 0 && packet.roundId >= 0 && packet.turnId >= 0
                     && packet.ownerSlot >= -1 && packet.ownerSlot < PlayerCount && packet.revision >= 0
-                    && packet.selectedMode >= -1 && packet.selectedMode <= 2
+                    && packet.selectedMode >= -1 && packet.selectedMode <= 4
                     && packet.modeGeneration >= 0 && packet.startSignal >= 0
                     && packet.transitionGeneration >= 0
                     && Party.PartyTransitionPhaseRules.IsDefined(

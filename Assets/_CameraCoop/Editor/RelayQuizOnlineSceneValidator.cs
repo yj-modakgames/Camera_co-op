@@ -61,18 +61,24 @@ namespace CameraCoop.EditorTools
             if (port.LobbyWorldRoot != lobbyRoot)
                 return Fail("PartyLobbyScenePort must reference LobbyWorldRoot exactly.", out error);
 
-            if (FindNamed(scene, "PracticeEasel_").Length != PartyRoster.Capacity)
-                return Fail("Lobby requires exactly four public practice easels.", out error);
+            if (FindNamed(scene, "PracticeLayer_").Length != PartyRoster.Capacity
+                || FindNamed(scene, "GestureTutorialBoard").Length != 1
+                || FindNamed(scene, "PracticeEasel_").Length != 0)
+                return Fail("Lobby requires one shared practice board with four owner layers.", out error);
             if (FindAll<WorldReadyPadInteractable>(scene).Length != PartyRoster.Capacity)
                 return Fail("Lobby requires exactly four ReadyPads.", out error);
-            if (FindAll<WorldActionInteractable>(scene).Length != (int)PartyWorldAction.ReturnToLobby)
+            WorldActionInteractable[] actions = FindAll<WorldActionInteractable>(scene);
+            if (actions.Length != Enum.GetValues(typeof(PartyWorldAction)).Length - 1
+                || actions.Any(action => action.Action == PartyWorldAction.ReturnToLobby)
+                || actions.Select(action => action.Action).Distinct().Count() != actions.Length)
                 return Fail("Lobby requires the exact PartyWorldAction catalog.", out error);
 
             string[] required =
             {
                 "CameraStation", "GestureTutorialStation", "BrushRack", "EraserStation",
                 "JumpObstaclePath", "Action_Host", "Action_Invite", "Action_Leave",
-                "Action_StartSelectedMode", "ModeSelectorRoot", "PublicPracticeEasels",
+                "Action_StartSelectedMode", "Action_SelectPictureTelephone", "Action_SelectDrawingWordChain",
+                "ModeSelectorRoot", "SharedPracticeLayers",
                 "ScratchBoardDrawing"
             };
             foreach (string name in required)
@@ -100,7 +106,7 @@ namespace CameraCoop.EditorTools
         {
             EditorBuildSettingsScene[] settings = EditorBuildSettings.scenes;
             if (settings.Length < PartySceneCatalog.BuildScenePaths.Count)
-                return Fail("Build Settings does not contain the four catalog Scenes.", out error);
+                return Fail("Build Settings does not contain every catalog Scene.", out error);
             for (int index = 0; index < PartySceneCatalog.BuildScenePaths.Count; index++)
             {
                 if (!settings[index].enabled || settings[index].path != PartySceneCatalog.BuildScenePaths[index])

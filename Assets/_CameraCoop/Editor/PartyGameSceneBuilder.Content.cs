@@ -26,13 +26,18 @@ namespace CameraCoop.EditorTools
                 new Vector2(5.05f, 3.25f), palette.Accent, Quaternion.Euler(0f, 180f, 0f));
             Label(mode == PartyMode.CoopMural ? "ACTIVE OWNER LAYER" : "YOUR PRIVATE PAPER",
                 paperRoot, position + new Vector3(0f, 2f, 0f), 0.28f, Color.white);
+            if (PartyModeCatalog.Get(mode).UsesSlotDrawingBoards)
+            {
+                foreach (Transform child in paperRoot) child.localPosition -= position;
+                paperRoot.position = position;
+            }
             paperRoot.gameObject.SetActive(false);
             return paperRoot.gameObject;
         }
 
         private static void BuildRemotePaperShells(Transform root, PartyMode mode, Palette palette)
         {
-            if (mode == PartyMode.CoopMural) return;
+            if (mode != PartyMode.MemoryCopy) return;
             Transform shells = Group("RemoteBlankPaperShells", root);
             for (int slot = 1; slot < PartyRoster.Capacity; slot++)
             {
@@ -96,28 +101,36 @@ namespace CameraCoop.EditorTools
         private static WorldActionInteractable BuildPrivateModePresentation(Transform root, PartyMode mode, Palette palette,
             PartySceneBindings bindings)
         {
-            Transform reference = Group(mode == PartyMode.MemoryCopy ? "FiveSecondObservationPedestal" : "ContinuousReferencePedestal", root);
+            string referenceName = mode == PartyMode.MemoryCopy ? "FiveSecondObservationPedestal"
+                : mode == PartyMode.RelayCopy ? "ContinuousReferencePedestal" : "AuthorizedReferencePedestal";
+            Transform reference = Group(referenceName, root);
             Vector3 referencePosition = mode == PartyMode.MemoryCopy ? new Vector3(-6.5f, 2f, 1.4f) : new Vector3(-7.5f, 2f, 2f);
             GameObject referenceSurfaceObject = Quad("AuthorizedReferenceSurface", reference, referencePosition,
                 new Vector3(4.2f, 2.6f, 1f), palette.Paper, Quaternion.Euler(0f, 180f, 0f));
             bindings.ReferenceSurface = referenceSurfaceObject.AddComponent<CanvasSurface>();
             referenceSurfaceObject.SetActive(false);
             bindings.ReferencePresenter = Presenter("AuthorizedReferencePresenter", reference, palette);
-            Label(mode == PartyMode.MemoryCopy ? "LOOK · HIDES AT 5.0s" : "REFERENCE · ACTIVE SLOT ONLY",
+            string referenceLabel = mode == PartyMode.MemoryCopy ? "LOOK · HIDES AT 5.0s"
+                : mode == PartyMode.PictureTelephone ? "AUTHORIZED PICTURE ONLY"
+                : mode == PartyMode.DrawingWordChain ? "PREVIOUS / OWN PICTURE ONLY"
+                : "REFERENCE · ACTIVE SLOT ONLY";
+            Label(referenceLabel,
                 reference, referencePosition + new Vector3(0f, 1.75f, 0f), 0.27f, Color.white);
 
             GameObject result = new GameObject("ResultGalleryRoot");
             result.transform.SetParent(root, false);
             result.AddComponent<ResultPresentationIsolation>();
             result.SetActive(false);
-            bindings.GalleryRoots = new GameObject[PartyRoster.Capacity - 1];
-            bindings.GalleryPresenters = new CanvasDrawingPresenter[PartyRoster.Capacity - 1];
-            bindings.GallerySurfaces = new CanvasSurface[PartyRoster.Capacity - 1];
+            int galleryCount = PartyModeCatalog.Get(mode).ResultDrawingCount;
+            bindings.GalleryRoots = new GameObject[galleryCount];
+            bindings.GalleryPresenters = new CanvasDrawingPresenter[galleryCount];
+            bindings.GallerySurfaces = new CanvasSurface[galleryCount];
             Cube("ResultBackdrop", result.transform, new Vector3(0f, 2.35f, 3.55f),
                 new Vector3(11.5f, 5.15f, 0.2f), palette.Dark);
-            for (int index = 0; index < PartyRoster.Capacity - 1; index++)
+            for (int index = 0; index < galleryCount; index++)
             {
-                Vector3 galleryPosition = new Vector3(-3.2f + index * 3.2f, 2.2f, 3.3f);
+                float spacing = galleryCount == 4 ? 3f : 3.2f;
+                Vector3 galleryPosition = new Vector3((index - (galleryCount - 1) * 0.5f) * spacing, 2.2f, 3.3f);
                 GameObject frame = new GameObject("ReadOnlyResultSlot_" + index);
                 frame.transform.SetParent(result.transform, false);
                 GameObject surfaceObject = Quad("ReadOnlyResultSurface_" + index, frame.transform, galleryPosition,
@@ -129,7 +142,7 @@ namespace CameraCoop.EditorTools
                 bindings.GalleryPresenters[index] = Presenter("ResultGalleryPresenter_" + index, frame.transform, palette);
             }
             Label("FINAL RESULT GALLERY", result.transform, new Vector3(0f, 4.75f, 3.25f), 0.42f, Color.white);
-            Label(mode == PartyMode.MemoryCopy ? "MEMORY COPY · 5 SECOND LOOK" : "RELAY COPY · PRIVATE HANDOFF",
+            Label(PartyModeCatalog.Get(mode).DisplayName,
                 result.transform, new Vector3(0f, 4.28f, 3.2f), 0.27f, Color.white);
             bindings.ResultViewPose = Marker("ResultViewPose", result.transform,
                 new Vector3(0f, 0f, -1.5f), 0f);

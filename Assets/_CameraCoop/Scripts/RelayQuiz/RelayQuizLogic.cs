@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CameraCoop.Game;
+using CameraCoop.Party;
 
 namespace CameraCoop
 {
@@ -15,6 +16,22 @@ namespace CameraCoop
         Guessing,
         Reveal,
         Gallery
+    }
+
+    public enum RelayQuizTextRole
+    {
+        None,
+        PictureDescription,
+        FinalGuess,
+        ChainLabel
+    }
+
+    public enum RelayQuizReferenceKind
+    {
+        None,
+        PromptText,
+        PreviousDrawing,
+        OwnDrawing
     }
 
     // 한 턴의 완성 그림 기록 (docs/09 §8). 제시어는 넣지 않는다.
@@ -61,10 +78,14 @@ namespace CameraCoop
         private readonly Func<CanvasDrawingData> drawingSource;
         private readonly Func<string> answerSource;
         private readonly List<RelayTurnRecord> records = new List<RelayTurnRecord>();
+        private readonly string[] submittedTexts = new string[MaxPlayers];
 
         private RelayQuizState state = RelayQuizState.Setup;
+        private PartyMode mode = PartyMode.RelayCopy;
         private int playerCount = MinPlayers;
         private int playerIndex;
+        private int textSubmissionCount;
+        private bool collectingChainLabels;
         private int phaseGeneration = 1;   // 0은 기본값 충돌을 피해 쓰지 않는다
         private int stateSerial = 1;       // 상태 진입에만 증가. pause는 올리지 않는다
         private float remaining;
@@ -89,6 +110,7 @@ namespace CameraCoop
         }
 
         public RelayQuizState State { get { return state; } }
+        public PartyMode Mode { get { return mode; } }
         public int PlayerCount { get { return playerCount; } }
         public int PlayerIndex { get { return playerIndex; } }
         public int PhaseGeneration { get { return phaseGeneration; } }
@@ -97,9 +119,66 @@ namespace CameraCoop
         public bool HasTimer { get { return hasTimer; } }
         public float RemainingSeconds { get { return hasTimer ? remaining : 0f; } }
         public IReadOnlyList<RelayTurnRecord> Records { get { return records; } }
-        public string SubmittedAnswer { get { return submittedAnswer; } }
+        public string SubmittedAnswer { get { return IsLegacyRelay ? submittedAnswer : string.Empty; } }
         public bool AnswerCorrect { get { return answerCorrect; } }
         public bool AnswerSubmitted { get { return answerSubmitted; } }
+        public bool ChainSucceeded
+        {
+            get { return mode == PartyMode.DrawingWordChain && answerSubmitted && answerCorrect; }
+        }
+        public int TextSubmissionCount { get { return textSubmissionCount; } }
+        public RelayQuizTextRole CurrentTextRole
+        {
+            get
+            {
+                if (state != RelayQuizState.Guessing) return RelayQuizTextRole.None;
+                if (mode == PartyMode.DrawingWordChain) return RelayQuizTextRole.ChainLabel;
+                if (mode == PartyMode.PictureTelephone && !IsLastPlayer)
+                    return RelayQuizTextRole.PictureDescription;
+                return RelayQuizTextRole.FinalGuess;
+            }
+        }
+        public RelayQuizReferenceKind CurrentReferenceKind
+        {
+            get
+            {
+                if (state == RelayQuizState.Handover)
+                {
+                    if (mode == PartyMode.DrawingWordChain && collectingChainLabels)
+                        return RelayQuizReferenceKind.OwnDrawing;
+                    if (playerIndex == 0) return RelayQuizReferenceKind.None;
+                    if (mode == PartyMode.PictureTelephone && playerIndex % 2 == 0)
+                        return RelayQuizReferenceKind.PromptText;
+                    return RelayQuizReferenceKind.PreviousDrawing;
+                }
+                if (state == RelayQuizState.WordReveal) return RelayQuizReferenceKind.PromptText;
+                if (state == RelayQuizState.ObservePrevious) return RelayQuizReferenceKind.PreviousDrawing;
+                if (state == RelayQuizState.Drawing)
+                {
+                    if (mode == PartyMode.PictureTelephone
+                        || mode == PartyMode.DrawingWordChain && playerIndex == 0)
+                        return RelayQuizReferenceKind.PromptText;
+                    if (mode == PartyMode.DrawingWordChain)
+                        return RelayQuizReferenceKind.PreviousDrawing;
+                    if (mode == PartyMode.RelayCopy && playerIndex > 0)
+                        return RelayQuizReferenceKind.PreviousDrawing;
+                    return RelayQuizReferenceKind.None;
+                }
+                if (state != RelayQuizState.Guessing) return RelayQuizReferenceKind.None;
+                if (mode == PartyMode.DrawingWordChain) return RelayQuizReferenceKind.OwnDrawing;
+                if (mode == PartyMode.PictureTelephone && playerIndex > 0 && playerIndex % 2 == 0)
+                    return RelayQuizReferenceKind.PromptText;
+                return RelayQuizReferenceKind.PreviousDrawing;
+            }
+        }
+        public int ReferenceDrawingOwner
+        {
+            get
+            {
+                if (CurrentReferenceKind == RelayQuizReferenceKind.PreviousDrawing) return playerIndex - 1;
+                return CurrentReferenceKind == RelayQuizReferenceKind.OwnDrawing ? playerIndex : -1;
+            }
+        }
 
         // 제시어는 첫 WordReveal과 결과 Reveal에서만 노출한다 (docs/09 §2).
         public bool IsWordVisible
@@ -107,14 +186,61 @@ namespace CameraCoop
             get { return state == RelayQuizState.WordReveal || state == RelayQuizState.Reveal; }
         }
 
-        public string VisibleWord { get { return IsWordVisible ? secretWord : string.Empty; } }
+        public string VisibleWord
+        {
+            get
+            {
+                if (state == RelayQuizState.Reveal) return secretWord;
+                if (state != RelayQuizState.WordReveal) return string.Empty;
+                return mode == PartyMode.PictureTelephone && playerIndex > 0
+                    ? submittedTexts[playerIndex - 1] ?? string.Empty
+                    : secretWord;
+            }
+        }
 
         public bool IsLastPlayer { get { return playerIndex >= playerCount - 1; } }
 
         // 관찰·답변자가 보는 직전 그림. 없으면 null.
         public CanvasDrawingData PreviousDrawing
         {
-            get { return records.Count == 0 ? null : records[records.Count - 1].drawing; }
+            get
+            {
+                if (mode == PartyMode.PictureTelephone || mode == PartyMode.DrawingWordChain)
+                    return GetDrawingReferenceFor(playerIndex);
+                return records.Count == 0 ? null : records[records.Count - 1].drawing;
+            }
+        }
+
+        public string GetPrivatePromptFor(int slot)
+        {
+            if (slot != playerIndex || CurrentReferenceKind != RelayQuizReferenceKind.PromptText)
+                return string.Empty;
+            return mode == PartyMode.PictureTelephone && playerIndex > 0
+                ? submittedTexts[playerIndex - 1] ?? string.Empty
+                : secretWord;
+        }
+
+        public CanvasDrawingData GetDrawingReferenceFor(int slot)
+        {
+            if (slot != playerIndex || ReferenceDrawingOwner < 0) return null;
+            for (int i = records.Count - 1; i >= 0; i--)
+                if (records[i].playerIndex == ReferenceDrawingOwner) return records[i].drawing;
+            return null;
+        }
+
+        public bool IsTextEntryRequiredFor(int slot)
+        {
+            return slot == playerIndex && state == RelayQuizState.Guessing;
+        }
+
+        public bool HasSubmittedText(int slot)
+        {
+            return slot >= 0 && slot < playerCount && submittedTexts[slot] != null;
+        }
+
+        public string GetPrivateSubmittedTextFor(int slot)
+        {
+            return HasSubmittedText(slot) ? submittedTexts[slot] : string.Empty;
         }
 
         // 자동 pause 정책 (docs/09 §7). Setup은 시작 전이라 숨길 제시어도 멈출 타이머도 없어
@@ -134,6 +260,14 @@ namespace CameraCoop
             return true;
         }
 
+        public bool ConfigureMode(PartyMode selectedMode, int captureGeneration)
+        {
+            if (!CanAct(captureGeneration) || state != RelayQuizState.Setup
+                || !IsRelayMode(selectedMode)) return false;
+            mode = selectedMode;
+            return true;
+        }
+
         public bool StartGame(int captureGeneration)
         {
             if (!CanAct(captureGeneration) || state != RelayQuizState.Setup) return false;
@@ -146,6 +280,24 @@ namespace CameraCoop
         public bool ConfirmReady(int captureGeneration)
         {
             if (!CanAct(captureGeneration) || state != RelayQuizState.Handover) return false;
+            if (mode == PartyMode.DrawingWordChain)
+            {
+                if (collectingChainLabels)
+                    EnterState(RelayQuizState.Guessing, timings.guessSeconds);
+                else if (playerIndex == 0)
+                    EnterState(RelayQuizState.WordReveal, timings.wordRevealSeconds);
+                else
+                    EnterState(RelayQuizState.ObservePrevious, timings.observeSeconds);
+                return true;
+            }
+            if (mode == PartyMode.PictureTelephone)
+            {
+                if (playerIndex == 0 || !IsLastPlayer && playerIndex % 2 == 0)
+                    EnterState(RelayQuizState.WordReveal, timings.wordRevealSeconds);
+                else
+                    EnterState(RelayQuizState.Guessing, timings.guessSeconds);
+                return true;
+            }
             if (playerIndex == 0)
             {
                 EnterState(RelayQuizState.WordReveal, timings.wordRevealSeconds);
@@ -249,14 +401,40 @@ namespace CameraCoop
                 drawingIndex = records.Count,
                 drawing = CanvasDrawingData.DeepCopy(drawing)
             });
+            if (mode == PartyMode.DrawingWordChain && IsLastPlayer)
+            {
+                collectingChainLabels = true;
+                playerIndex = 0;
+                EnterState(RelayQuizState.Handover, 0f);
+                return;
+            }
             playerIndex++;
             EnterState(RelayQuizState.Handover, 0f);
         }
 
         private void CommitAnswer()
         {
-            submittedAnswer = answerSource != null ? (answerSource() ?? string.Empty) : string.Empty;
-            answerCorrect = GuessJudge.IsMatch(secretWord, submittedAnswer);
+            string answer = answerSource != null ? (answerSource() ?? string.Empty) : string.Empty;
+            submittedTexts[playerIndex] = answer;
+            textSubmissionCount++;
+
+            if (mode == PartyMode.PictureTelephone && !IsLastPlayer)
+            {
+                playerIndex++;
+                EnterState(RelayQuizState.Handover, 0f);
+                return;
+            }
+            if (mode == PartyMode.DrawingWordChain && !IsLastPlayer)
+            {
+                playerIndex++;
+                EnterState(RelayQuizState.Handover, 0f);
+                return;
+            }
+
+            submittedAnswer = answer;
+            answerCorrect = mode == PartyMode.DrawingWordChain
+                ? IsValidWordChain()
+                : GuessJudge.IsMatch(secretWord, submittedAnswer);
             answerSubmitted = true;
             EnterState(RelayQuizState.Reveal, 0f);
         }
@@ -268,11 +446,46 @@ namespace CameraCoop
             playerIndex = 0;
             secretWord = string.Empty;
             submittedAnswer = string.Empty;
+            Array.Clear(submittedTexts, 0, submittedTexts.Length);
+            textSubmissionCount = 0;
+            collectingChainLabels = false;
             answerCorrect = false;
             answerSubmitted = false;
             paused = false;
             hasTimer = false;
             remaining = 0f;
+        }
+
+        private bool IsLegacyRelay
+        {
+            get { return mode == PartyMode.RelayCopy || mode == PartyMode.MemoryCopy; }
+        }
+
+        private static bool IsRelayMode(PartyMode selectedMode)
+        {
+            return selectedMode == PartyMode.RelayCopy || selectedMode == PartyMode.MemoryCopy
+                || selectedMode == PartyMode.PictureTelephone || selectedMode == PartyMode.DrawingWordChain;
+        }
+
+        private bool IsValidWordChain()
+        {
+            for (int i = 0; i < playerCount; i++)
+            {
+                string word = (submittedTexts[i] ?? string.Empty).Trim();
+                if (word.Length == 0 || !IsHangulSyllable(word[0])
+                    || !IsHangulSyllable(word[word.Length - 1])) return false;
+                if (i > 0)
+                {
+                    string previous = submittedTexts[i - 1].Trim();
+                    if (previous[previous.Length - 1] != word[0]) return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsHangulSyllable(char value)
+        {
+            return value >= '\uAC00' && value <= '\uD7A3';
         }
 
         private void EnterState(RelayQuizState next, float duration)

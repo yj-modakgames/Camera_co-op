@@ -89,8 +89,11 @@ namespace CameraCoop.Tests
             Assert.That(controller.TryExecute(PartyWorldAction.SelectRelayCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectMemoryCopy), Is.True);
             Assert.That(controller.TryExecute(PartyWorldAction.SelectCoopMural), Is.True);
+            Assert.That(controller.TryExecute(PartyWorldAction.SelectPictureTelephone), Is.True);
+            Assert.That(controller.TryExecute(PartyWorldAction.SelectDrawingWordChain), Is.True);
             CollectionAssert.AreEqual(
-                new[] { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural },
+                new[] { PartyMode.RelayCopy, PartyMode.MemoryCopy, PartyMode.CoopMural,
+                    PartyMode.PictureTelephone, PartyMode.DrawingWordChain },
                 gateway.SelectedModes);
             Assert.That(gateway.StartCalls, Is.EqualTo(1));
             gateway.View.transitionPhase = PartyTransitionPhase.LoadingGame;
@@ -189,6 +192,86 @@ namespace CameraCoop.Tests
             Assert.That(placement.CanvasTarget, Is.SameAs(lobbyPaper.transform));
             Assert.That(gameSurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.Zero);
             Assert.That(lobbySurface.GetComponentsInChildren<LineRenderer>(true).Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SharedPracticeUsesBoardSourceWithoutDuplicatingLocalStrokesAndSurvivesGameReturn()
+        {
+            var gateway = new FakeGateway { Host = true, LocalPlayerId = "p1", View = TwoPlayerLobbyView() };
+            PartyWorldController controller = CreateController(gateway);
+            LobbyFixture lobby = CreateLobbyPort("shared lobby");
+            GameObject runtime = CreateObject("shared drawing", lobby.Port.LobbyWorldRoot.transform);
+            runtime.SetActive(false);
+            ToolState tools = runtime.AddComponent<ToolState>();
+            HandPointer pointer = runtime.AddComponent<HandPointer>();
+            CanvasSurface surface = lobby.Port.PracticeLayerSurfaces[0];
+            SetPrivate(pointer, "inputSource", HandPointerInputSource.HandRouter);
+            SetPrivate(pointer, "canvasSurface", surface);
+            SetPrivate(pointer, "toolState", tools);
+            SetPrivate(pointer, "practiceBoard", true);
+            DrawingController drawing = runtime.AddComponent<DrawingController>();
+            SetPrivate(drawing, "handPointer", pointer);
+            SetPrivate(drawing, "toolState", tools);
+            SetPrivate(drawing, "canvasSurface", surface);
+            runtime.SetActive(true);
+            lobby.Port.PracticeDrawing = drawing;
+            var data = new CanvasDrawingData
+            {
+                strokes = new[]
+                {
+                    new CanvasStrokeData
+                    {
+                        strokeId = 1, order = 0, brushId = 0, widthNormalized = 0.05f,
+                        colorArgb = unchecked((int)0xff00ff00), xy = new[] { 0.1f, 0.1f, 0.9f, 0.9f }
+                    }
+                }
+            };
+            Assert.That(drawing.LoadDrawing(data), Is.True, "solo drawing exists before joining a session");
+            GameObject privatePaper = CreateObject("unused lobby private paper");
+            SetPrivate(controller, "localWritableCanvasRoot", privatePaper);
+            controller.BindLobbyPort(lobby.Port);
+            var transport = new TrackingTransport(true, "p1");
+            transport.AddFakePeer("p2", "P2");
+            using var relay = new OnlineRelayQuizSession(transport, "p1", () => "camera",
+                () => new CanvasDrawingData(), () => string.Empty, 3);
+            controller.BindNetwork(relay, transport, 3);
+            controller.TickRuntime(0f);
+            var practice = (PartyPracticeDrawingSession)GetField(controller, "practiceSession");
+            Assert.That(practice.View.Layers[0].Drawing.strokes.Length, Is.EqualTo(1));
+            Assert.That(privatePaper.activeSelf, Is.False, "the shared lobby has no private drawing paper");
+            Assert.That(lobby.PracticeRoots[0].activeSelf, Is.False);
+            Assert.That(lobby.PracticePresenters[0].transform.childCount, Is.Zero,
+                "the local controller already renders its own strokes");
+
+            Assert.That(practice.View.Apply(1, 1, data), Is.True);
+            var changed = (Action<PartyPracticeDrawingView>)typeof(PartyPracticeDrawingSession)
+                .GetField("ViewChanged", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(practice);
+            changed(practice.View);
+            Transform remoteStroke = lobby.PracticePresenters[1].transform.GetChild(0);
+            changed(practice.View);
+            Assert.That(lobby.PracticePresenters[1].transform.GetChild(0), Is.SameAs(remoteStroke),
+                "unchanged remote layers must not rebuild when another player draws");
+
+            drawing.ClearAll();
+            controller.TickRuntime(0.2f);
+            Assert.That(practice.View.Layers[0].Drawing.strokes, Is.Empty);
+            Assert.That(lobby.PracticePresenters[1].transform.GetChild(0), Is.SameAs(remoteStroke),
+                "CLEAR removes only the local player's layer");
+            Assert.That(drawing.LoadDrawing(data), Is.True);
+            controller.UnbindLobbyPort(lobby.Port);
+            lobby.Port.SetLobbyVisible(false);
+            Assert.That(drawing.gameObject.activeInHierarchy, Is.False);
+            gateway.View.transitionPhase = PartyTransitionPhase.InGame;
+            gateway.View.transitionGeneration = 2;
+            controller.TickRuntime(1f);
+            Assert.That(practice.View.Configured, Is.False);
+            lobby.Port.SetLobbyVisible(true);
+            controller.BindLobbyPort(lobby.Port);
+            gateway.View.transitionPhase = PartyTransitionPhase.Lobby;
+            gateway.View.transitionGeneration = 3;
+            controller.TickRuntime(2f);
+            Assert.That(practice.View.Layers[0].Drawing.strokes.Length, Is.EqualTo(1));
+            Assert.That(drawing.Surface, Is.SameAs(surface));
         }
 
         [Test]
@@ -649,9 +732,9 @@ namespace CameraCoop.Tests
             ScratchBoardClearButton[] scratchClears = Resources.FindObjectsOfTypeAll<ScratchBoardClearButton>()
                 .Where(item => item != null && item.gameObject.scene == scene).ToArray();
 
-            // 13 action + 4 ReadyPad + 3 WidthControl + ERASER + CLEAR = 22, 여기에 현재 색 칩 INK 라벨 1개.
-            Assert.That(billboards, Has.Length.EqualTo(23));
-            Assert.That(actions, Has.Length.EqualTo(13));
+            Assert.That(billboards, Has.Length.EqualTo(
+                actions.Length + pads.Length + labeledStations.Length + scratchClears.Length + 1));
+            Assert.That(actions, Has.Length.EqualTo(Enum.GetValues(typeof(PartyWorldAction)).Length - 1));
             Assert.That(pads, Has.Length.EqualTo(4));
             Assert.That(labeledStations, Has.Length.EqualTo(4));
             Assert.That(scratchClears, Has.Length.EqualTo(1));

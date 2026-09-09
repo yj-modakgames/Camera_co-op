@@ -17,19 +17,18 @@ namespace CameraCoop.EditorTools
         {
             var layout = new PresentationLayout();
             // 이 판은 FinalizeLobbySplit에서 로비 낙서판(GestureTutorialBoard)이 된다.
-            // 서쪽 벽 판은 yaw -90이라야 Quad 정면(local -Z)이 동쪽(플레이어)을 향하고 좌우가 뒤집히지 않는다.
             Transform reference = Group("ReferenceHowToPanel", core.WorldRoot.transform);
-            Quaternion westFacing = Quaternion.Euler(0f, -90f, 0f);
-            Cube("ReferencePanelBack", reference, new Vector3(-13.72f, 2f, 0f), new Vector3(0.12f, 3.2f, 4.4f), context.Dark);
-            GameObject previewSurfaceObject = Quad("ReferenceSurface", reference, new Vector3(-13.55f, 2f, 0f),
-                new Vector3(3.6f, 2.4f, 1f), context.Paper, westFacing);
+            Quaternion boardFacing = Quaternion.identity;
+            Cube("ReferencePanelBack", reference, new Vector3(0f, 2.7f, 7.75f), new Vector3(16.6f, 4.6f, 0.2f), context.Dark);
+            GameObject previewSurfaceObject = Quad("ReferenceSurface", reference, new Vector3(0f, 2.7f, 7.6f),
+                new Vector3(16f, 4f, 1f), context.Paper, boardFacing);
             layout.PreviewSurface = previewSurfaceObject.AddComponent<CanvasSurface>();
             GameObject previewPresenterObject = new GameObject("ReferenceDrawingPresenter");
             previewPresenterObject.transform.SetParent(reference, false);
             layout.PreviewPresenter = previewPresenterObject.AddComponent<CanvasDrawingPresenter>();
             ConfigurePresenter(layout.PreviewPresenter, context);
             Label("Fist: draw   Open hand: stop   Pinch release: press a button", reference,
-                new Vector3(-13.45f, 3.45f, 0f), 0.2f, Color.white, false, westFacing);
+                new Vector3(0f, 0.45f, 7.45f), 0.2f, Color.white, false, boardFacing);
 
             Transform mural = Group("CoopMuralBoard", core.WorldRoot.transform);
             Cube("MuralBack", mural, new Vector3(13.72f, 2f, -0.2f), new Vector3(0.12f, 3.7f, 7.4f), context.Dark);
@@ -115,7 +114,7 @@ namespace CameraCoop.EditorTools
                 DestroyNamed(context.Scene, "RemotePaperShell_" + (index + 1));
             }
 
-            BuildLobbyPracticeWall(context, lobbyRoot.transform, out GameObject[] practiceRoots,
+            BuildLobbyPracticeWall(context, tutorial.transform, tutorialBoard, out GameObject[] practiceRoots,
                 out CanvasDrawingPresenter[] practicePresenters, out CanvasSurface[] practiceSurfaces);
             BuildJumpTutorial(context, lobbyRoot.transform);
             BuildLobbyDecor(lobbyRoot.transform);
@@ -135,12 +134,13 @@ namespace CameraCoop.EditorTools
                 root.transform.SetParent(runtimeRoot.transform, true);
             }
 
-            BuildScratchBoard(context, core, runtimeRoot.transform, tutorial.transform, tutorialBoard);
+            DrawingController practiceDrawing = BuildScratchBoard(context, core, tutorial.transform, tutorialBoard);
 
             PartyLobbyScenePort lobbyPort = onlineRuntime.GetComponent<PartyLobbyScenePort>();
             if (lobbyPort == null) lobbyPort = onlineRuntime.AddComponent<PartyLobbyScenePort>();
             lobbyPort.Configure(lobbyRoot, party.Spawns, practiceRoots, practicePresenters, practiceSurfaces,
                 party.AvatarRoots.Select(item => item.gameObject).ToArray(), party.RemotePresenters);
+            lobbyPort.PracticeDrawing = practiceDrawing;
 
             OnlineRelayQuizController online = onlineRuntime.GetComponent<OnlineRelayQuizController>();
             SetField(online, "lobbyScenePort", lobbyPort);
@@ -149,13 +149,11 @@ namespace CameraCoop.EditorTools
             SetField(online, "previewSurface", null);
         }
 
-        // 낙서판은 WorkCanvas와 완전히 따로 논다 — 자기 HandPointer·DrawingController를 갖고,
-        // 네트워크 동기화도 PartyWorldController의 rebind도 받지 않는다.
-        private static void BuildScratchBoard(Context context, CoreReferences core, Transform runtimeRoot,
+        private static DrawingController BuildScratchBoard(Context context, CoreReferences core,
             Transform station, CanvasSurface board)
         {
             var drawingObject = new GameObject("ScratchBoardDrawing");
-            drawingObject.transform.SetParent(runtimeRoot, false);
+            drawingObject.transform.SetParent(station, false);
             HandPointer pointer = drawingObject.AddComponent<HandPointer>();
             SetField(pointer, "inputSource", HandPointerInputSource.HandRouter);
             SetField(pointer, "inputModeManager", core.InputModes);
@@ -177,41 +175,32 @@ namespace CameraCoop.EditorTools
             SetField(interactable, "handPointer", pointer);
             SetObjectArray(core.HandRouter, "extraCanvases", new UnityEngine.Object[] { interactable });
 
-            // 2.5는 낙서판 뒤판(x -13.72)과 0.03 m 겹쳐 있었다. 판 동쪽으로 완전히 빼고 DOCK PAPER와도 벌린다.
-            GameObject clear = PedestalButton("ScratchBoardClear", station, new Vector3(-12.6f, 0f, 3f),
+            GameObject clear = PedestalButton("ScratchBoardClear", station, new Vector3(9f, 0f, 6.4f),
                 "SM_Gen_Prop_Button_02", context.Yellow, context.Dark);
             ScratchBoardClearButton clearButton = clear.AddComponent<ScratchBoardClearButton>();
             SetField(clearButton, "drawingController", drawing);
-            TextMesh clearLabel = Label("CLEAR", clear.transform, new Vector3(0f, 0.44f, 0f), 0.22f, Color.white, true);
+            TextMesh clearLabel = Label("CLEAR MY DRAWING", clear.transform, new Vector3(0f, 0.44f, 0f), 0.22f, Color.white, true);
             ConfigureControlLabel(clearLabel, core.PlayerCamera);
 
-            ZoneSign(station, "Practice", "PRACTICE BOARD · DRAW HERE", new Vector3(-13.4f, 3.95f, 0f), -90f,
+            ZoneSign(station, "Practice", "SHARED PRACTICE · DRAW TOGETHER", new Vector3(0f, 5.35f, 7.4f), 0f,
                 context.Accent);
+            return drawing;
         }
 
-        private static void BuildLobbyPracticeWall(Context context, Transform parent, out GameObject[] layerRoots,
+        private static void BuildLobbyPracticeWall(Context context, Transform parent, CanvasSurface sharedSurface, out GameObject[] layerRoots,
             out CanvasDrawingPresenter[] presenters, out CanvasSurface[] surfaces)
         {
-            Transform root = Group("PublicPracticeEasels", parent);
-            ZoneSign(root, "PracticeWall", "PUBLIC PRACTICE WALL", new Vector3(0f, 5.1f, 7.4f), 0f, context.Dark);
+            Transform root = Group("SharedPracticeLayers", parent);
             layerRoots = new GameObject[PartyRoster.Capacity];
             presenters = new CanvasDrawingPresenter[PartyRoster.Capacity];
             surfaces = new CanvasSurface[PartyRoster.Capacity];
-            Material[] colors = { context.Red, context.Blue, context.Green, context.Yellow };
             for (int slot = 0; slot < PartyRoster.Capacity; slot++)
             {
-                // 자리(x -9/-3/3/9)와 같은 x에 세워야 어느 이젤이 누구 것인지 읽힌다.
-                float x = -9f + slot * 6f;
-                GameObject easel = new GameObject("PracticeEasel_" + slot);
+                GameObject easel = new GameObject("PracticeLayer_" + slot);
                 easel.transform.SetParent(root, false);
-                GameObject surfaceObject = Quad("PracticeSurface_" + slot, easel.transform,
-                    new Vector3(x, 2.25f, 7.6f), new Vector3(4.2f, 2.6f, 1f), context.Paper,
-                    Quaternion.Euler(0f, 180f, 0f));
-                surfaces[slot] = surfaceObject.AddComponent<CanvasSurface>();
+                surfaces[slot] = sharedSurface;
                 presenters[slot] = easel.AddComponent<CanvasDrawingPresenter>();
                 ConfigurePresenter(presenters[slot], context);
-                FrameAt(easel.transform, "PracticeFrame_" + slot, new Vector3(x, 2.25f, 7.47f),
-                    new Vector2(4.45f, 2.85f), colors[slot], Quaternion.Euler(0f, 180f, 0f));
                 layerRoots[slot] = easel;
             }
         }

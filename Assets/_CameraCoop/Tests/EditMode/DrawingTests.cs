@@ -122,6 +122,25 @@ namespace CameraCoop.Tests
         }
 
         [Test]
+        public void SnapshotKeepsActiveStrokeOpenAndOmitsUnfinishedDots()
+        {
+            using (var drawing = new DrawingFixture())
+            {
+                drawing.Start("Left", .1f, .2f);
+                drawing.Start("Right", .4f, .5f);
+                drawing.Move("Left", .2f, .2f);
+                CanvasDrawingData snapshot = drawing.Controller.SnapshotDrawing();
+                Assert.That(snapshot.strokes.Length, Is.EqualTo(1));
+                drawing.Move("Left", .3f, .2f);
+                drawing.Move("Right", .5f, .5f);
+                CanvasDrawingData completed = drawing.Controller.ExportDrawing();
+                Assert.That(completed.strokes.Length, Is.EqualTo(2));
+                Assert.That(completed.strokes[0].xy.Length, Is.EqualTo(6));
+                Assert.That(snapshot.strokes[0].xy.Length, Is.EqualTo(4));
+            }
+        }
+
+        [Test]
         public void Export_FinalizesBothHandsInStartOrderAndCopiesEveryArray()
         {
             using (var drawing = new DrawingFixture())

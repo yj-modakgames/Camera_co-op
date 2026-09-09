@@ -26,7 +26,7 @@ namespace CameraCoop.EditorTools
                     if (!TryValidateScene(definition.ScenePath, mode, out string error))
                         throw new InvalidOperationException(mode + ": " + error);
                 }
-                Debug.Log("[PartyGameSceneValidator] PASS: all four catalog Scenes and additive ownership rules are valid.");
+                Debug.Log("[PartyGameSceneValidator] PASS: all catalog Scenes and additive ownership rules are valid.");
             }
             finally
             {
@@ -155,8 +155,9 @@ namespace CameraCoop.EditorTools
             out string error)
         {
             GameObject[] shells = FindNamed(scene, "RemotePaperShell_");
-            if (shells.Length != PartyRoster.Capacity - 1)
-                return Fail(mode + " requires three remote blank paper shells.", out error);
+            int requiredShells = mode == PartyMode.MemoryCopy ? PartyRoster.Capacity - 1 : 0;
+            if (shells.Length != requiredShells)
+                return Fail(mode + " requires " + requiredShells + " remote blank paper shells.", out error);
             foreach (GameObject shell in shells)
             {
                 if (shell.GetComponentInChildren<CanvasDrawingPresenter>(true) != null
@@ -165,26 +166,27 @@ namespace CameraCoop.EditorTools
                     || shell.GetComponentInChildren<DrawingController>(true) != null)
                     return Fail(mode + " remote paper shell is not blank: " + shell.name, out error);
             }
+            int galleryCount = PartyModeCatalog.Get(mode).ResultDrawingCount;
             if (bindings.ReferencePresenter == null || bindings.ReferenceSurface == null
                 || bindings.ResultRoot == null || bindings.ResultViewPose == null
-                || bindings.GalleryRoots == null || bindings.GalleryRoots.Length != PartyRoster.Capacity - 1
-                || bindings.GalleryPresenters == null || bindings.GalleryPresenters.Length != PartyRoster.Capacity - 1
-                || bindings.GallerySurfaces == null || bindings.GallerySurfaces.Length != PartyRoster.Capacity - 1)
+                || bindings.GalleryRoots == null || bindings.GalleryRoots.Length != galleryCount
+                || bindings.GalleryPresenters == null || bindings.GalleryPresenters.Length != galleryCount
+                || bindings.GallerySurfaces == null || bindings.GallerySurfaces.Length != galleryCount)
                 return Fail(mode + " private reference/result bindings are incomplete.", out error);
             if (bindings.ResultRoot.activeSelf)
                 return Fail(mode + " result gallery must be hidden at Scene load.", out error);
             TextMesh[] resultLabels = bindings.ResultRoot.GetComponentsInChildren<TextMesh>(true)
                 .Where(label => label.text.StartsWith("PLAYER ", StringComparison.Ordinal)).ToArray();
-            if (resultLabels.Length != PartyRoster.Capacity - 1
+            if (resultLabels.Length != galleryCount
                 || resultLabels.Any(label => label.characterSize < 0.024f))
-                return Fail(mode + " result gallery requires three readable player result labels.", out error);
+                return Fail(mode + " result gallery requires " + galleryCount + " readable player result labels.", out error);
             WorldActionInteractable returnAction = bindings.ResultRoot
                 .GetComponentInChildren<WorldActionInteractable>(true);
             if (returnAction == null || returnAction.Action != PartyWorldAction.ReturnToLobby
                 || returnAction.GetComponent<Collider>() == null)
                 return Fail(mode + " result gallery requires a physical ReturnToLobby control.", out error);
-            string expectedReference = mode == PartyMode.MemoryCopy
-                ? "FiveSecondObservationPedestal" : "ContinuousReferencePedestal";
+            string expectedReference = mode == PartyMode.MemoryCopy ? "FiveSecondObservationPedestal"
+                : mode == PartyMode.RelayCopy ? "ContinuousReferencePedestal" : "AuthorizedReferencePedestal";
             if (Find(scene, expectedReference) == null)
                 return Fail(mode + " is missing " + expectedReference + ".", out error);
             if (mode == PartyMode.MemoryCopy && Find(scene, "ContinuousReferencePedestal") != null)

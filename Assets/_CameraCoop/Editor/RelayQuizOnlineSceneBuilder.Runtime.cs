@@ -110,6 +110,15 @@ namespace CameraCoop.EditorTools
         private static void ConfigureActionControls(CoreReferences core)
         {
             SetField(core.QuizUi, "useWorldLobbyActions", true);
+            Text drawingInstruction = Find(core.QuizUi.gameObject.scene, "Status").GetComponent<Text>();
+            if (drawingInstruction == null)
+                throw new InvalidOperationException("RelayQuizUI requires the drawing Status label.");
+            drawingInstruction.resizeTextForBestFit = true;
+            drawingInstruction.resizeTextMinSize = 13;
+            drawingInstruction.resizeTextMaxSize = 22;
+            drawingInstruction.horizontalOverflow = HorizontalWrapMode.Wrap;
+            drawingInstruction.verticalOverflow = VerticalWrapMode.Truncate;
+            SetField(core.QuizUi, "drawingInstructionLabel", drawingInstruction);
             string[] relayQuizFields = { "players2Button", "players3Button", "players4Button", "startButton", "readyButton" };
             foreach (string field in relayQuizFields) RemoveSerializedActionControl(core.QuizUi, field);
 

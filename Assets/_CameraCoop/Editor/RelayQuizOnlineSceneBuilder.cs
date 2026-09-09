@@ -62,7 +62,7 @@ namespace CameraCoop.EditorTools
                 PartyGameSceneBuilder.BuildAll(false);
                 ConfigureBuildSettings();
                 EditorSceneManager.OpenScene(PartySceneCatalog.LobbyScenePath, OpenSceneMode.Single);
-                Debug.Log("[RelayQuizOnlineSceneBuilder] BuildAll created the four catalog Scenes.");
+                Debug.Log("[RelayQuizOnlineSceneBuilder] BuildAll created every catalog Scene.");
             }
             finally
             {
